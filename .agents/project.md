@@ -4,7 +4,7 @@
 
 - What this repository is, in one sentence: Penaria, an open-source home system: a registry of homes, rooms and things with photos and documents, AI search, a calendar of recurring household tasks, family and guest access, and smart home control through pluggable modules (KNX first).
 - Who uses it: households that run their own instance (self-hosted OSS); module authors who add integrations.
-- Language, version and main frameworks: `services/server` is Python 3.14 (servicewright, FastAPI, dishka, Pydantic v2; later async SQLAlchemy 2, Alembic and other bedrock-python libraries), managed with uv; `services/web` is TypeScript 6 and React 19 with Vite, managed with pnpm.
+- Language, version and main frameworks: `services/server` is Python 3.15 (servicewright, FastAPI, dishka, Pydantic v2; later async SQLAlchemy 2, Alembic and other bedrock-python libraries), managed with uv; `services/web` is TypeScript 6 and React 19 with Vite, managed with pnpm.
 - Where the documentation lives: `docs/`.
 
 ## Commands

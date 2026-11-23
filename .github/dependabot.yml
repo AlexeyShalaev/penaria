@@ -26,6 +26,10 @@ updates:
       # Node: LTS majors only, moved by hand together with node-version in ci.yml.
       - dependency-name: node
         update-types: ["version-update:semver-major"]
+      # Python minors move by hand together with .python-version, requires-python, ruff, mypy
+      # and python-version in ci.yml.
+      - dependency-name: python
+        update-types: ["version-update:semver-minor"]
 
   - package-ecosystem: github-actions
     directory: /

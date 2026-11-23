@@ -3,7 +3,7 @@ name = "penaria-server"
 version = "0.0.0"
 description = "Penaria server: the core and its processes (api, worker)"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 license = "AGPL-3.0-only"
 dependencies = [
     "servicewright[dishka,fastapi,settings]>=0.15.0",
@@ -35,7 +35,7 @@ link-mode = "copy"
 
 [tool.ruff]
 line-length = 120
-target-version = "py314"
+target-version = "py315"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
@@ -49,7 +49,7 @@ ignore = ["TRY003", "ANN401"]
 known-first-party = ["penaria"]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.15"
 strict = true
 files = ["src", "tests"]
 mypy_path = ["src"]
