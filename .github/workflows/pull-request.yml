@@ -10,9 +10,8 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: pull-request-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency group: opening a pull request with a label fires "opened" and "labeled" at once,
+# and a cancelled run left as the latest result blocks the required check. A run takes seconds.
 
 jobs:
   release-notes:
