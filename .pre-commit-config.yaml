@@ -1,0 +1,56 @@
+# The same checks as `make check` and CI, run on commit. Install with `make hooks`.
+default_install_hook_types: [pre-commit, commit-msg]
+exclude: ^local/
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-ast
+      - id: check-toml
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: debug-statements
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: [--branch, master]
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.25
+    hooks:
+      - id: uv-lock
+        name: uv-lock (server)
+        files: ^services/server/(pyproject\.toml|uv\.lock)$
+        args: [--project, services/server]
+
+  - repo: local
+    hooks:
+      - id: server-ruff
+        name: ruff (server)
+        entry: bash -c 'cd services/server && uv run ruff format && uv run ruff check --fix'
+        language: system
+        files: ^services/server/.*\.py$
+        pass_filenames: false
+      - id: server-mypy
+        name: mypy and import rules (server)
+        entry: bash -c 'cd services/server && uv run mypy && uv run lint-imports'
+        language: system
+        files: ^services/server/.*\.py$
+        pass_filenames: false
+      - id: web-check
+        name: prettier, eslint, tsc (web)
+        entry: bash -c 'cd services/web && pnpm format && pnpm lint && pnpm typecheck'
+        language: system
+        files: ^services/web/
+        pass_filenames: false
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
