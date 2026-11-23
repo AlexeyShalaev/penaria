@@ -1,0 +1,72 @@
+name: Bug report
+description: Something in Penaria does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Issues are public: **do not paste personal data** — addresses, floor plans, photos of your home, inventories, tokens or passwords. Replace them with made-up values.
+
+  - type: input
+    id: version
+    attributes:
+      label: Penaria version
+      description: The image tag you run, or the version in the app's About page.
+      placeholder: "0.3.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run Penaria?
+      options:
+        - Docker Compose (all-in-one)
+        - Docker Compose (separate services)
+        - Docker Swarm
+        - Kubernetes (Helm chart)
+        - A development checkout
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - Web app
+        - API
+        - Background jobs
+        - Search and the assistant
+        - Smart home module (KNX, ...)
+        - Installation or upgrade
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The relevant lines of `docker compose logs` or `kubectl logs`, with personal data removed.
+      render: text
