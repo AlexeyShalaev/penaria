@@ -1,0 +1,16 @@
+# This repository's choices about the files of an engineering-assets hub
+# (touchmark, format v1). The file itself is the opt-in: a hub that selects this
+# repository delivers its packs as pull requests.
+#
+# packs adds packs to the ones the hub assigns; ignore keeps a path out of the
+# sync for good. A managed file edited here becomes this repository's own and
+# is never touched again.
+version: 1
+packs:
+  - agents          # AGENTS.md, project profile, review and refactoring prompts
+  - claude          # Claude Code instructions, skills, reviewer subagent, settings
+  - python-service  # backend: service, Python, testing and database guidelines
+  - workflow        # implement, new-branch, commit, pr and spec skills
+  - ai-review       # review by directions before a pull request
+  - knowledge       # what agents learned, in .agents/knowledge
+  - contributing    # CONTRIBUTING.md

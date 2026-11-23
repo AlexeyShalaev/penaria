@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  server:
+    name: Server · lint, types, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/server
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          # The interpreter of the image (services/server/Dockerfile).
+          python-version: "3.14"
+          enable-cache: true
+          cache-dependency-glob: services/server/uv.lock
+      - run: uv sync --frozen
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run mypy
+      - run: uv run lint-imports
+      - run: uv run pytest --cov --cov-report=term --cov-report=xml
+
+  web:
+    name: Web · lint, types, tests, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/web
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          # The version comes from "packageManager" in package.json.
+          package_json_file: services/web/package.json
+      - uses: actions/setup-node@v6
+        with:
+          # The Node of the image (services/web/Dockerfile).
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: services/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm test:coverage
+      # Built here too, so a broken build shows up on the pull request, not on the release tag.
+      - run: pnpm build
+
+  images:
+    name: Images · ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [server, web]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Hadolint
+        run: docker run --rm -i -v "$PWD/.hadolint.yaml:/.hadolint.yaml:ro" hadolint/hadolint hadolint --config /.hadolint.yaml - < services/${{ matrix.service }}/Dockerfile
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: services/${{ matrix.service }}
+          load: true
+          tags: penaria-${{ matrix.service }}:ci
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - name: Smoke
+        run: |
+          set -euo pipefail
+          case "${{ matrix.service }}" in
+            server) port=8000; path=/system/health/readyz ;;
+            web)    port=8080; path=/ ;;
+          esac
+          docker run -d --name smoke -p "$port:$port" "penaria-${{ matrix.service }}:ci"
+          for _ in $(seq 1 30); do
+            curl -fsS "http://127.0.0.1:$port$path" >/dev/null && { echo "up"; exit 0; }
+            sleep 2
+          done
+          docker logs smoke
+          exit 1
+
+  # The only required status check of the master ruleset; the list of jobs lives here.
+  all-checks-passed:
+    name: All checks passed
+    if: always()
+    needs: [server, web, images]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "Not passed: $RESULTS"
+              exit 1
+            fi
+          done
+          echo "All checks passed."

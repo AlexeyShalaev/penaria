@@ -1,0 +1,164 @@
+/*
+ * Design tokens: the only source of colours, sizes and shadows.
+ * Components use var(--…) only, never raw values.
+ * The dark theme overrides the colour tokens only.
+ */
+:root {
+  /* — Palette (raw shades, never used by components directly) — */
+  --sand-0: #fdfcf9;
+  --sand-50: #f6f4ef;
+  --sand-100: #eeebe3;
+  --sand-200: #e2ddd1;
+  --sand-300: #cdc6b6;
+  --sand-500: #8f8778;
+  --sand-700: #57514a;
+  --sand-900: #23211e;
+
+  --pine-50: #eaf3ef;
+  --pine-100: #d3e7de;
+  --pine-500: #2f7a62;
+  --pine-600: #24654f;
+  --pine-700: #1b4f3e;
+
+  --amber-50: #fdf3e2;
+  --amber-500: #c9821c;
+  --amber-700: #8a5508;
+  --red-50: #fcebe8;
+  --red-500: #c94a3a;
+  --red-700: #8f2a1e;
+  --blue-50: #e8f0fb;
+  --blue-500: #3a6fc4;
+  --blue-700: #234c8f;
+  --violet-50: #f0ecfb;
+  --violet-500: #7357c9;
+
+  /* — Semantic colours — */
+  --bg: var(--sand-50);
+  --bg-sunken: var(--sand-100);
+  --surface: var(--sand-0);
+  --surface-raised: #ffffff;
+  --border: var(--sand-200);
+  --border-strong: var(--sand-300);
+  --text: var(--sand-900);
+  --text-muted: var(--sand-700);
+  --text-subtle: var(--sand-500);
+  --text-on-accent: #ffffff;
+
+  --accent: var(--pine-500);
+  --accent-hover: var(--pine-600);
+  --accent-soft: var(--pine-50);
+  --accent-soft-border: var(--pine-100);
+  --accent-text: var(--pine-700);
+
+  /* Statuses: data freshness, tasks, the bus */
+  --ok: var(--pine-500);
+  --ok-soft: var(--pine-50);
+  --ok-text: var(--pine-700);
+  --warn: var(--amber-500);
+  --warn-soft: var(--amber-50);
+  --warn-text: var(--amber-700);
+  --danger: var(--red-500);
+  --danger-soft: var(--red-50);
+  --danger-text: var(--red-700);
+  --info: var(--blue-500);
+  --info-soft: var(--blue-50);
+  --info-text: var(--blue-700);
+  /* AI: everything the assistant suggested or answered */
+  --ai: var(--violet-500);
+  --ai-soft: var(--violet-50);
+
+  /* A device that is on */
+  --on: #f2b632;
+  --on-soft: #fff4d6;
+
+  /* — Typography — */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --fs-3xl: 34px;
+  --lh-tight: 1.2;
+  --lh: 1.45;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* — Spacing (step 4) — */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+
+  /* — Radii — */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-full: 999px;
+
+  /* — Shadows — */
+  --shadow-1: 0 1px 2px rgba(35, 33, 30, 0.06), 0 1px 1px rgba(35, 33, 30, 0.04);
+  --shadow-2: 0 4px 14px rgba(35, 33, 30, 0.08), 0 1px 3px rgba(35, 33, 30, 0.06);
+  --shadow-3: 0 18px 40px rgba(35, 33, 30, 0.16);
+
+  /* — Layout sizes — */
+  --tap: 44px; /* minimum tap target (HIG) */
+  --sidebar-w: 248px;
+  --content-max: 1080px;
+  --tabbar-h: 64px;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 160ms;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #161513;
+  --bg-sunken: #100f0e;
+  --surface: #1f1d1a;
+  --surface-raised: #272522;
+  --border: #34312c;
+  --border-strong: #46423b;
+  --text: #f1eee8;
+  --text-muted: #c2bcb1;
+  --text-subtle: #8d877c;
+
+  --accent: #4fae8c;
+  --accent-hover: #63c09e;
+  --accent-soft: #1b2e27;
+  --accent-soft-border: #24463a;
+  --accent-text: #8fd6bb;
+  --text-on-accent: #0f1f19;
+
+  --ok: #4fae8c;
+  --ok-soft: #1b2e27;
+  --ok-text: #8fd6bb;
+  --warn: #e0a243;
+  --warn-soft: #33281a;
+  --warn-text: #f0c47e;
+  --danger: #e2705f;
+  --danger-soft: #3a201c;
+  --danger-text: #f2a497;
+  --info: #6b9be6;
+  --info-soft: #1c2638;
+  --info-text: #a9c5f2;
+  --ai: #a58ef0;
+  --ai-soft: #262040;
+  --on: #f2b632;
+  --on-soft: #3a3020;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 18px 40px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}

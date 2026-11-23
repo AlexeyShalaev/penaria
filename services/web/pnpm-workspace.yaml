@@ -1,0 +1,3 @@
+# A standalone pnpm project; this file only allows the install scripts its dependencies need.
+allowBuilds:
+  esbuild: true

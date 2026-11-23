@@ -1,0 +1,13 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+
+# Lock files are generated: no diffs in reviews, never merged by hand.
+uv.lock linguist-generated=true -diff
+pnpm-lock.yaml linguist-generated=true -diff

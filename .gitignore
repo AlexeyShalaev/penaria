@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.import_linter_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+coverage/
+*.local
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Claude Code: personal settings and its own worktrees (ours live in local/worktrees/)
+.claude/settings.local.json
+.claude/worktrees/

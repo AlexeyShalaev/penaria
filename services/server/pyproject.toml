@@ -1,0 +1,98 @@
+[project]
+name = "penaria-server"
+version = "0.0.0"
+description = "Penaria server: the core and its processes (api, worker)"
+readme = "README.md"
+requires-python = ">=3.14"
+license = "AGPL-3.0-only"
+dependencies = [
+    "servicewright[dishka,fastapi,settings]>=0.15.0",
+]
+
+[project.scripts]
+penaria-api = "penaria.apps.api.__main__:main"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "import-linter>=2.17",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.5.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/penaria"]
+
+[tool.uv]
+link-mode = "copy"
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "B", "N", "S", "C4", "SIM", "TRY", "PERF", "RUF", "UP", "ANN", "T20", "PTH", "PLC", "PLE", "PLW"]
+ignore = ["TRY003", "ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ANN"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["penaria"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["src", "tests"]
+mypy_path = ["src"]
+explicit_package_bases = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = ["--strict-markers", "--strict-config", "--tb=short"]
+markers = [
+    "unit: fast tests without external services",
+    "integration: tests against PostgreSQL, S3, Qdrant or Temporal from scripts/tests",
+]
+
+[tool.coverage.run]
+source = ["penaria"]
+branch = true
+
+# The dependency rules between the packages, checked by `lint-imports` (make check).
+[tool.importlinter]
+root_package = "penaria"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+id = "top-level"
+name = "apps -> modules | integrations -> features -> common"
+type = "layers"
+containers = ["penaria"]
+layers = ["apps", "modules | integrations", "features", "common"]
+
+[[tool.importlinter.contracts]]
+id = "apps-independent"
+name = "apps do not import each other"
+type = "independence"
+modules = ["penaria.apps.*"]
+
+# servicewright may also appear in the features: a domain error is a ServiceError and a route
+# takes UnitScopeDep. The DI container is wired in the apps only.
+[[tool.importlinter.contracts]]
+id = "di-in-apps"
+name = "dishka only in the apps"
+type = "protected"
+protected_modules = ["dishka"]
+allowed_importers = ["penaria.apps"]
