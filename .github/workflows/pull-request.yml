@@ -1,0 +1,37 @@
+name: Pull request
+
+# The title becomes the squash commit on master, and the release notes come from the fragments a
+# pull request adds (changes/README.md). Runs again when the title or the labels change.
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  release-notes:
+    name: Title and release notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Release pull request has its notes
+        if: startsWith(github.head_ref, 'release-please--')
+        run: python3 scripts/release/notes.py check-release --version "$(jq -r '.["."]' .release-please-manifest.json)"
+
+      - name: Title is a Conventional Commit, user-visible changes have notes
+        if: ${{ !startsWith(github.head_ref, 'release-please--') }}
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/release/notes.py check-pr --title "$TITLE" --labels "$LABELS" --base "$BASE"

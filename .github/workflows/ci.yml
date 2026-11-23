@@ -69,6 +69,20 @@ jobs:
       # Built here too, so a broken build shows up on the pull request, not on the release tag.
       - run: pnpm build
 
+  scripts:
+    name: Scripts · lint, tests, release notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+      - run: uvx ruff check scripts
+      - run: uvx ruff format --check scripts
+      - run: uv run --no-project --with pytest pytest scripts -q
+      # The fragments and release-notes.json are valid, CHANGELOG.md is generated from them.
+      - run: python3 scripts/release/notes.py check
+
   images:
     name: Images · ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -110,7 +124,7 @@ jobs:
   all-checks-passed:
     name: All checks passed
     if: always()
-    needs: [server, web, images]
+    needs: [server, web, scripts, images]
     runs-on: ubuntu-latest
     steps:
       - name: Verify
