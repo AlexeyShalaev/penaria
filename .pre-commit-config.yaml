@@ -42,6 +42,18 @@ repos:
         language: system
         files: ^services/server/.*\.py$
         pass_filenames: false
+      - id: scripts-ruff
+        name: ruff (scripts)
+        entry: bash -c 'uvx ruff format scripts && uvx ruff check --fix scripts'
+        language: system
+        files: ^scripts/.*\.py$
+        pass_filenames: false
+      - id: release-notes
+        name: release notes (fragments, release-notes.json, CHANGELOG.md)
+        entry: python3 scripts/release/notes.py check
+        language: system
+        files: ^(changes/|release-notes\.json$|CHANGELOG\.md$|scripts/release/)
+        pass_filenames: false
       - id: web-check
         name: prettier, eslint, tsc (web)
         entry: bash -c 'cd services/web && pnpm format && pnpm lint && pnpm typecheck'

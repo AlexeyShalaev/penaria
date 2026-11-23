@@ -5,25 +5,24 @@
     ".": {
       "release-type": "simple",
       "package-name": "penaria",
-      "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "extra-files": [
-        {"type": "toml", "path": "services/server/pyproject.toml", "jsonpath": "$.project.version"},
-        {"type": "generic", "path": "services/server/src/penaria/__init__.py"},
-        {"type": "json", "path": "services/web/package.json", "jsonpath": "$.version"}
-      ]
+        {
+          "type": "toml",
+          "path": "services/server/pyproject.toml",
+          "jsonpath": "$.project.version"
+        },
+        {
+          "type": "generic",
+          "path": "services/server/src/penaria/__init__.py"
+        },
+        {
+          "type": "json",
+          "path": "services/web/package.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "skip-changelog": true
     }
-  },
-  "changelog-sections": [
-    {"type": "feat", "section": "Features"},
-    {"type": "fix", "section": "Bug Fixes"},
-    {"type": "perf", "section": "Performance Improvements"},
-    {"type": "revert", "section": "Reverts"},
-    {"type": "refactor", "section": "Refactoring", "hidden": true},
-    {"type": "docs", "section": "Documentation", "hidden": true},
-    {"type": "test", "section": "Tests", "hidden": true},
-    {"type": "build", "section": "Build System", "hidden": true},
-    {"type": "ci", "section": "Continuous Integration", "hidden": true},
-    {"type": "chore", "section": "Miscellaneous", "hidden": true}
-  ]
+  }
 }

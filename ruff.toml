@@ -1,0 +1,13 @@
+# Ruff for the repository's own scripts (scripts/); each service has its own settings.
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["F", "E", "W", "I", "B", "UP", "S", "SIM", "RUF", "PTH"]
+# Russian text is part of the product (en and ru everywhere), not a look-alike of Latin letters.
+ignore = ["RUF001"]
+
+[lint.per-file-ignores]
+"scripts/**/tests/**" = ["S101", "S603", "S607"]
+# notes.py runs git with fixed arguments.
+"scripts/release/notes.py" = ["S603", "S607"]

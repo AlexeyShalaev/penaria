@@ -29,6 +29,8 @@ From the root for every service, or from `services/<service>/` for one (its `Mak
 - Branch names: `<type>/<short-description>`, such as `feat/registry-entities`.
 - Worktrees: always in `local/worktrees/<short-description>` (ignored by git), never next to the clone. Remove a worktree once its pull request is merged or the work is dropped. `.agents/skills/worktree/SKILL.md` creates, lists and cleans them up.
 - Commit messages: Conventional Commits, `<type>(<scope>): <description>`. Pull requests are squash-merged, so a pull request's title is a Conventional Commit too. No AI attribution lines in commits or pull requests.
+- Release notes: a pull request that changes what users get (`feat`, `fix`, `perf`, or any breaking one) adds a fragment in `changes/` with `make change slug=<what-changed> type=<type>`, written for a person who runs Penaria at home, in `en` and `ru`; a breaking change also adds an `upgrade` fragment. A change users never notice takes the `no-changelog` label instead. `changes/README.md` has the rules; CI checks them. `CHANGELOG.md` is generated: never edit it.
+- Releases: release-please keeps a release pull request open; merging it releases one version of the whole product (every service, image and chart). The version moves by Conventional Commits: `feat` a minor, `fix` a patch, while below 1.0 a breaking change a minor too.
 - Language of pull request titles and descriptions: English.
 - Languages of the docs, of code comments and of notes for agents: English. User-facing strings are never hard-coded: the UI is internationalized from day one, with `en` and `ru` as the primary locales.
 - Where operational runbooks live: `docs/` (to be created with the deployment).
