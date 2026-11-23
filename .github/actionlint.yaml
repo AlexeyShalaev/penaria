@@ -1,0 +1,7 @@
+# actionlint settings (CI job "Workflows").
+paths:
+  .github/workflows/release-please.yml:
+    ignore:
+      # actionlint's schema of create-github-app-token@v3 predates its client-id input (app-id is deprecated).
+      - 'input "client-id" is not defined in action "actions/create-github-app-token@'
+      - 'missing input "app-id" which is required by action "actions/create-github-app-token@'

@@ -25,10 +25,10 @@ jobs:
       run:
         working-directory: services/server
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           # The interpreter of the image (services/server/Dockerfile).
           python-version: "3.15"
@@ -48,14 +48,14 @@ jobs:
       run:
         working-directory: services/web
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           # The version comes from "packageManager" in package.json.
           package_json_file: services/web/package.json
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           # The Node of the image (services/web/Dockerfile).
           node-version: 24
@@ -73,15 +73,32 @@ jobs:
     name: Scripts · lint, tests, release notes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       - run: uvx ruff check scripts
       - run: uvx ruff format --check scripts
       - run: uv run --no-project --with pytest pytest scripts -q
       # The fragments and release-notes.json are valid, CHANGELOG.md is generated from them.
       - run: python3 scripts/release/notes.py check
+
+  workflows:
+    name: Workflows · actionlint, zizmor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+      # Syntax, expressions and the shell in run: blocks (settings in .github/actionlint.yaml).
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
+      # Security of the workflows: unpinned actions, template injection, leaked credentials.
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uvx zizmor@1.33.1 --format github .github/workflows
 
   images:
     name: Images · ${{ matrix.service }}
@@ -91,7 +108,7 @@ jobs:
       matrix:
         service: [server, web]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Hadolint
@@ -124,7 +141,7 @@ jobs:
   all-checks-passed:
     name: All checks passed
     if: always()
-    needs: [server, web, scripts, images]
+    needs: [server, web, scripts, workflows, images]
     runs-on: ubuntu-latest
     steps:
       - name: Verify
