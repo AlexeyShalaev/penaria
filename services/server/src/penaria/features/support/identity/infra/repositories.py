@@ -385,6 +385,9 @@ class PostgresPendingSignInRepository:
     async def forget_expired(self, now: datetime) -> None:
         await self._session.execute(delete(PendingSignInDB).where(PendingSignInDB.expires_at <= now))
 
+    async def forget_for(self, user_id: UUID) -> None:
+        await self._session.execute(delete(PendingSignInDB).where(PendingSignInDB.user_id == user_id))
+
 
 class PostgresSetupTokenRepository:
     def __init__(self, session: AsyncSession) -> None:

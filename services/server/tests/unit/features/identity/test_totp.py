@@ -1,4 +1,5 @@
 import base64
+import hashlib
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
@@ -14,10 +15,10 @@ from penaria.features.support.identity.domain.totp import (
     code_at,
     hash_recovery_code,
     matching_step,
-    must_keep_second_factor,
     new_recovery_codes,
     new_secret_key,
     provisioning_uri,
+    second_factor_required,
     step_at,
 )
 
@@ -113,6 +114,7 @@ def test_recovery_codes_are_ten_different_codes_of_four_groups() -> None:
     codes = new_recovery_codes()
 
     assert len(set(codes)) == RECOVERY_CODE_COUNT
+    assert set("".join(codes)) <= set("0123456789abcdefghjkmnpqrstvwxyz-")
     assert all([len(group) for group in code.split("-")] == [4, 4, 4, 4] for code in codes)
 
 
@@ -153,7 +155,7 @@ def test_a_pending_sign_in_lasts_five_minutes_and_keeps_only_a_hash() -> None:
     pending, token = PendingSignIn.start(uuid4(), "ip:192.0.2.1", NOW)
 
     assert pending.expires_at == NOW + timedelta(minutes=5)
-    assert token.encode() not in pending.token_hash
+    assert pending.token_hash == hashlib.sha256(token.encode()).digest()
 
 
 @pytest.mark.parametrize(
@@ -169,7 +171,7 @@ def test_owners_and_install_admins_with_a_password_must_keep_a_second_factor(
     has_password: bool, install_admin: bool, owns_a_home: bool, required: bool
 ) -> None:
     assert (
-        must_keep_second_factor(has_password=has_password, install_admin=install_admin, owns_a_home=owns_a_home)
+        second_factor_required(has_password=has_password, install_admin=install_admin, owns_a_home=owns_a_home)
         is required
     )
 

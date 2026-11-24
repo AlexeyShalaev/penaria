@@ -50,7 +50,7 @@ Two-step sign-in: an account may add an authenticator app (TOTP: six digits, 30 
 
 ## Outgoing email
 
-An install sends email through one mailbox: password reset links, email confirmations, invitations and notices about an account (a changed password, a new passkey, two-step sign-in turned on or off, a recovery code used), in the recipient's language, as text and HTML. Until a mailbox is connected, nothing is sent: reset and invitation links are shown on screen to pass on by hand, and accounts cannot add an email.
+An install sends email through one mailbox: password reset links, email confirmations, invitations and notices about an account (a changed password, a new passkey, two-step sign-in turned on or off, a recovery code used, recovery codes renewed), in the recipient's language, as text and HTML. Until a mailbox is connected, nothing is sent: reset and invitation links are shown on screen to pass on by hand, and accounts cannot add an email.
 
 Every email is queued in PostgreSQL (`identity_mail`, its text encrypted with `PENARIA_SECRET_KEY`, since links in it open accounts) in the same transaction as the change it is about, and a loop inside every api process sends what is due within a few seconds. A temporary failure (a `4xx` reply, a connection that did not open or broke off) is tried again after 1, 5, 15 and 30 minutes; a permanent one is not. With several api replicas, each email is taken by one of them under a five-minute lease (`SELECT … FOR UPDATE SKIP LOCKED`), so none goes twice and one left by a stopped replica is taken again. Every attempt is a row of the mail log, which Settings shows with a button to send an email again while its link works; the log keeps 30 days, the text of an email only while it can be sent.
 

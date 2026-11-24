@@ -8,12 +8,8 @@ export type TotpEnrolment = Schemas['TotpEnrolmentOut']
 export const SECOND_FACTOR_KEY = ['second-factor'] as const
 
 /** Whether the account has an authenticator app, and whether it must add a second factor before owner-level work. */
-export function useSecondFactor(options: {enabled?: boolean} = {}) {
-  return useQuery({
-    queryKey: SECOND_FACTOR_KEY,
-    queryFn: () => unwrap(api.GET('/api/v1/me/second-factor')),
-    enabled: options.enabled,
-  })
+export function useSecondFactor() {
+  return useQuery({queryKey: SECOND_FACTOR_KEY, queryFn: () => unwrap(api.GET('/api/v1/me/second-factor'))})
 }
 
 /** A new secret for the authenticator app; the app is on once a code confirms it. Needs a recent sign-in. */

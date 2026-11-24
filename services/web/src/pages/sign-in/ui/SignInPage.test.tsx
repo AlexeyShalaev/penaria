@@ -74,4 +74,46 @@ describe('SignInPage', () => {
 
     expect(await screen.findByRole('heading', {name: 'Account'})).toBeVisible()
   })
+
+  it('asks for the code of an account with an authenticator app, then returns to the page asked for', async () => {
+    const calls = mockApi({
+      ...MAIL_OFF,
+      ...SIGNED_OUT,
+      'POST /api/v1/sign-in': new Response(JSON.stringify({token: 'pending', expires_at: '2026-01-01T10:05:00Z'}), {
+        status: 202,
+        headers: {'Content-Type': 'application/json'},
+      }),
+      'POST /api/v1/sign-in/second-factor': account(),
+    })
+    renderPage()
+
+    fireEvent.change(await screen.findByLabelText('Username'), {target: {value: 'owner'}})
+    fireEvent.change(screen.getByLabelText('Password'), {target: {value: 'correct horse battery'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Sign in'}))
+    expect(await screen.findByRole('heading', {name: 'Two-step sign-in'})).toBeVisible()
+    fireEvent.change(screen.getByLabelText('Code from the app'), {target: {value: '123456'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Sign in'}))
+
+    expect(await screen.findByRole('heading', {name: 'Account'})).toBeVisible()
+    expect(calls.at(-1)?.body).toEqual({token: 'pending', code: '123456'})
+  })
+
+  it('goes back to the password from the code', async () => {
+    mockApi({
+      ...MAIL_OFF,
+      ...SIGNED_OUT,
+      'POST /api/v1/sign-in': new Response(JSON.stringify({token: 'pending', expires_at: '2026-01-01T10:05:00Z'}), {
+        status: 202,
+        headers: {'Content-Type': 'application/json'},
+      }),
+    })
+    renderPage()
+
+    fireEvent.change(await screen.findByLabelText('Username'), {target: {value: 'owner'}})
+    fireEvent.change(screen.getByLabelText('Password'), {target: {value: 'correct horse battery'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Sign in'}))
+    fireEvent.click(await screen.findByRole('button', {name: 'Back'}))
+
+    expect(await screen.findByLabelText('Username')).toBeVisible()
+  })
 })

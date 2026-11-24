@@ -24,7 +24,7 @@ from penaria.features.support.identity.domain.totp import (
     Totp,
     TotpUnreadableError,
     bound_to,
-    must_keep_second_factor,
+    second_factor_required,
 )
 from penaria.features.support.identity.use_cases.postman import Postman
 
@@ -91,6 +91,16 @@ async def prove_second_factor(
             assert_never(proof)
 
 
+def method_of(proof: SecondFactorProof) -> SecondFactorMethod:
+    match proof:
+        case AppCode():
+            return SecondFactorMethod.TOTP
+        case RecoveryCode():
+            return SecondFactorMethod.RECOVERY_CODE
+        case _:
+            assert_never(proof)
+
+
 def open_secret(box: SecretBox, totp: Totp) -> str:
     try:
         return box.open(totp.sealed_secret, bound_to=bound_to(totp.user_id))
@@ -109,7 +119,7 @@ async def totp_enabled(tx: IdentityTransaction, user_id: UUID) -> Totp | None:
 
 async def must_have_second_factor(tx: IdentityTransaction, user: User) -> bool:
     """Whether the account must keep a second factor: an install admin or an owner who has a password."""
-    return must_keep_second_factor(
+    return second_factor_required(
         has_password=await tx.passwords.get(user.id) is not None,
         install_admin=user.install_admin,
         owns_a_home=await tx.grants.owns_a_home(user.id),

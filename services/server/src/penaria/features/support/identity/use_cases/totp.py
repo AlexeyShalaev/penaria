@@ -7,7 +7,6 @@ the app is turned on or the codes are renewed; only their hashes are kept.
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from urllib.parse import urlsplit
 from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
@@ -20,6 +19,7 @@ from penaria.features.support.identity.domain.mail import MailKind
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.secrets import SecretBox
 from penaria.features.support.identity.domain.sessions import CurrentSession
+from penaria.features.support.identity.domain.throttle import second_factor_key
 from penaria.features.support.identity.domain.totp import (
     ENROLMENT_TIMEOUT,
     LastSecondFactorError,
@@ -34,10 +34,10 @@ from penaria.features.support.identity.domain.totp import (
     provisioning_uri,
 )
 from penaria.features.support.identity.use_cases.account import load_user
+from penaria.features.support.identity.use_cases.attempts import attempt_succeeded, count_attempt
 from penaria.features.support.identity.use_cases.postman import Postman
 from penaria.features.support.identity.use_cases.recovery import AccountNotFoundError
 from penaria.features.support.identity.use_cases.second_factor import (
-    lacks_second_factor,
     must_have_second_factor,
     open_secret,
     totp_enabled,
@@ -72,11 +72,13 @@ class GetSecondFactor:
         async with self._uow.query() as tx:
             user = await load_user(tx, current)
             totp = await totp_enabled(tx, user.id)
+            required = await must_have_second_factor(tx, user)
+            missing = required and totp is None and not await tx.passkeys.for_user(user.id)
             return SecondFactorStatus(
                 totp_enabled_at=None if totp is None else totp.confirmed_at,
                 recovery_codes_left=None if totp is None else len(totp.recovery_codes),
-                required=await must_have_second_factor(tx, user),
-                missing=await lacks_second_factor(tx, user),
+                required=required,
+                missing=missing,
             )
 
 
@@ -103,9 +105,10 @@ class StartTotpEnrolment:
             if await totp_enabled(tx, user.id) is not None:
                 raise TotpAlreadyEnabledError("the authenticator app is on already: turn it off first to replace it")
             await tx.totp.save(Totp(user_id=user.id, sealed_secret=sealed, created_at=now))
-        host = urlsplit(self._links.origin).hostname or self._links.origin
         return TotpEnrolment(
-            secret=secret, uri=provisioning_uri(secret, user.username, host), expires_at=now + ENROLMENT_TIMEOUT
+            secret=secret,
+            uri=provisioning_uri(secret, user.username, self._links.host),
+            expires_at=now + ENROLMENT_TIMEOUT,
         )
 
 
@@ -118,6 +121,10 @@ class ConfirmTotp:
         self._postman = postman
 
     async def execute(self, current: CurrentSession, code: str) -> list[str]:
+        # Guessing the first code from a stolen session would hand over the recovery codes: limited as signing in.
+        attempts = second_factor_key(current.user_id)
+        async with self._uow.transaction() as tx:
+            await count_attempt(tx, [attempts], datetime.now(UTC))
         now = datetime.now(UTC)
         codes = new_recovery_codes()
         async with self._uow.transaction() as tx:
@@ -130,6 +137,7 @@ class ConfirmTotp:
             if totp is None or not totp.enrolment_open(now):
                 raise TotpEnrolmentNotFoundError("setting up the authenticator app took too long: start again")
             totp.use_code(open_secret(self._box, totp), code, now)
+            await attempt_succeeded(tx, attempts)
             totp.confirmed_at = now
             totp.recovery_codes = [hash_recovery_code(c) for c in codes]
             await tx.totp.save(totp)
@@ -203,7 +211,10 @@ class TurnOffTotpByOperator:
             if user is None:
                 raise AccountNotFoundError(f"no account has the username {username!r}")
             await tx.users.get_for_update(user.id)
-            if not await tx.totp.remove(user.id):
+            enabled = await totp_enabled(tx, user.id) is not None
+            # A set-up never confirmed goes too, but there was no app to turn off.
+            await tx.totp.remove(user.id)
+            if not enabled:
                 return False
             await tx.journal.append([_event("account.totp_disabled", user.id, actor=Actor.system(), by="operator")])
         return True

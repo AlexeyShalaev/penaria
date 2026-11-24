@@ -7,12 +7,15 @@ import {Button, FormActions} from '@/shared/ui'
 import styles from './TwoStep.module.css'
 
 const FILE_NAME = 'penaria-recovery-codes.txt'
+const REVOKE_AFTER_MS = 60_000
 
 /** Recovery codes just made, shown only now: to copy, download or write down before `onDone`. */
 export function RecoveryCodes(props: {codes: string[]; onDone: () => void}) {
   const {t} = useTranslation()
   const [copied, setCopied] = useState(false)
   const text = props.codes.join('\n') + '\n'
+  // Browsers offer the clipboard only on a secure page: an install opened at a plain http address has none.
+  const canCopy = typeof navigator.clipboard?.writeText === 'function'
 
   const copy = async () => {
     await navigator.clipboard.writeText(text)
@@ -25,7 +28,8 @@ export function RecoveryCodes(props: {codes: string[]; onDone: () => void}) {
     link.href = url
     link.download = FILE_NAME
     link.click()
-    URL.revokeObjectURL(url)
+    // Revoked at once, some browsers drop the download, and the codes are shown only now.
+    setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS)
   }
 
   return (
@@ -38,9 +42,11 @@ export function RecoveryCodes(props: {codes: string[]; onDone: () => void}) {
         ))}
       </ol>
       <div className={styles.buttons}>
-        <Button variant="secondary" icon={copied ? Check : Copy} onClick={() => void copy()}>
-          {t(copied ? 'twoStep.copied' : 'twoStep.copy')}
-        </Button>
+        {canCopy && (
+          <Button variant="secondary" icon={copied ? Check : Copy} onClick={() => void copy()}>
+            {t(copied ? 'twoStep.copied' : 'twoStep.copy')}
+          </Button>
+        )}
         <Button variant="secondary" icon={Download} onClick={download}>
           {t('twoStep.download')}
         </Button>

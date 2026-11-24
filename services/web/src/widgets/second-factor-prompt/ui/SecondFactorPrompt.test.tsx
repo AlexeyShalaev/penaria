@@ -3,6 +3,7 @@ import {Route} from 'react-router'
 import {describe, expect, it, vi} from 'vitest'
 
 import {mockApi} from '@/test/api'
+import {mockPasskeys} from '@/test/webauthn'
 import {renderAt} from '@/test/render'
 
 import {SecondFactorPrompt} from './SecondFactorPrompt'
@@ -48,5 +49,39 @@ describe('SecondFactorPrompt', () => {
 
     await vi.waitFor(() => expect(calls).toHaveLength(1))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('goes once a passkey is added', async () => {
+    let status: object = MISSING
+    mockPasskeys()
+    mockApi({
+      'GET /api/v1/me/second-factor': () => status,
+      'GET /api/v1/me/passkeys': [],
+      'POST /api/v1/me/passkeys/options': {
+        challenge_id: '00000000-0000-4000-8000-0000000000c1',
+        options: {
+          rp: {id: 'localhost', name: 'Penaria'},
+          user: {id: 'dXNlcg', name: 'owner', displayName: 'Alex'},
+          challenge: 'Y2hhbGxlbmdl',
+          pubKeyCredParams: [{type: 'public-key', alg: -7}],
+          excludeCredentials: [],
+        },
+      },
+      'POST /api/v1/me/passkeys': () => {
+        status = {...MISSING, missing: false}
+        return {
+          id: '00000000-0000-4000-8000-0000000000b1',
+          name: 'Passkey',
+          created_at: '2026-01-01T10:00:00Z',
+          last_used_at: null,
+        }
+      },
+    })
+    renderPrompt()
+
+    const prompt = await screen.findByRole('dialog', {name: 'Add a second step to sign in'})
+    fireEvent.click(within(prompt).getByRole('button', {name: 'Add a passkey'}))
+
+    await expect.poll(() => screen.queryByRole('dialog')).toBeNull()
   })
 })

@@ -42,9 +42,9 @@ from penaria.features.support.identity.use_cases.attempts import attempt_succeed
 from penaria.features.support.identity.use_cases.challenges import issue_challenge
 from penaria.features.support.identity.use_cases.postman import Postman
 from penaria.features.support.identity.use_cases.second_factor import (
-    AppCode,
     SecondFactorMethod,
     SecondFactorProof,
+    method_of,
     prove_second_factor,
     totp_enabled,
 )
@@ -187,7 +187,7 @@ class SignInWithSecondFactor:
         return user, token
 
     async def _journal_failure(self, pending: PendingSignIn, proof: SecondFactorProof, client: Client) -> None:
-        method = SecondFactorMethod.TOTP if isinstance(proof, AppCode) else SecondFactorMethod.RECOVERY_CODE
+        method = method_of(proof)
         async with self._uow.transaction() as tx:
             await tx.journal.append(
                 [

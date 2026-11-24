@@ -57,14 +57,25 @@ class ReauthenticateWithPassword:
         """``proof`` is needed, and only used, while the account's authenticator app is on."""
         async with self._uow.query() as tx:
             asks_code = await totp_enabled(tx, current.user_id) is not None
-        if asks_code and proof is None:
+        if not asks_code:
+            await self._with_password(current, password)
+        elif proof is None:
             raise SecondFactorCodeRequiredError("enter a code of your authenticator app, or a recovery code, too")
+        else:
+            await self._with_password_and_code(current, password, proof)
+
+    async def _with_password(self, current: CurrentSession, password: str) -> None:
         checked = await check_current_password(self._uow, self._hasher, current, password)
-        if not asks_code or proof is None:
-            async with self._uow.transaction() as tx:
-                await checked.still_current(tx)
-                await _confirmed(tx, current, datetime.now(UTC))
-            return
+        async with self._uow.transaction() as tx:
+            await tx.users.get_for_update(current.user_id)
+            # Turned on since it was looked at: the password alone no longer does.
+            if await totp_enabled(tx, current.user_id) is not None:
+                raise SecondFactorCodeRequiredError("enter a code of your authenticator app, or a recovery code, too")
+            await checked.still_current(tx)
+            await _confirmed(tx, current, datetime.now(UTC))
+
+    async def _with_password_and_code(self, current: CurrentSession, password: str, proof: SecondFactorProof) -> None:
+        checked = await check_current_password(self._uow, self._hasher, current, password)
         # The password was right: it is forgiven even if the code that follows is wrong, which counts apart.
         async with self._uow.transaction() as tx:
             await tx.users.get_for_update(current.user_id)

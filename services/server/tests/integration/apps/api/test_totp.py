@@ -1,5 +1,7 @@
 """The second factor through the HTTP API: an authenticator app with recovery codes (sign-in.md, 4.3)."""
 
+import asyncio
+import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -8,13 +10,14 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from servicewright.adapters.dishka import DishkaContainer
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from penaria.apps.api.settings import Settings
 from penaria.apps.cli.__main__ import parse, reset
 from penaria.apps.cli.settings import Settings as CliSettings
 from penaria.features.support.identity.domain.totp import code_at, step_at
-from penaria.features.support.identity.infra.orm import PendingSignInDB, TotpDB
+from penaria.features.support.identity.infra.fernet import FernetSecretBox
+from penaria.features.support.identity.infra.orm import PendingSignInDB, TotpDB, UserDB
 from tests.authenticator import Authenticator
 from tests.integration.apps.api.test_people import age_sign_ins, invite, join, make_home, member, ok
 from tests.integration.apps.api.test_recovery import FRESH, RESET_LINK, confirm_email, connect, deliver, journal
@@ -49,7 +52,11 @@ async def password_step(client: httpx.AsyncClient, password: str = OWNER["passwo
     response = await client.post("/sign-in", json={"username": "owner", "password": password})
     assert response.status_code == 202, response.text
     assert "set-cookie" not in response.headers
-    return dict(response.json())
+    body = dict(response.json())
+    assert body.keys() == {"token", "expires_at"}
+    expires_in = datetime.fromisoformat(body["expires_at"]) - datetime.now(UTC)
+    assert timedelta(minutes=4) < expires_in <= timedelta(minutes=5)
+    return body
 
 
 @pytest.fixture
@@ -99,7 +106,9 @@ async def test_the_secret_and_the_recovery_codes_are_not_stored_as_they_are(
     assert row is not None
     assert row.secret.startswith("pnr1:")
     assert secret not in row.secret
-    assert not set(codes) & set(row.recovery_codes)
+    assert sorted(row.recovery_codes) == sorted(
+        hashlib.sha256(code.replace("-", "").encode()).hexdigest() for code in codes
+    )
 
 
 async def test_a_wrong_first_code_turns_nothing_on(api: httpx.AsyncClient) -> None:
@@ -265,7 +274,9 @@ async def test_wrong_codes_make_the_account_wait_from_any_address(
     for index in range(5):
         client = from_address(new_client, app, f"192.0.2.{20 + index}")
         pending = await password_step(client)
-        wrong = await client.post("/sign-in/second-factor", json={"token": pending["token"], "code": "000000"})
+        wrong = await client.post(
+            "/sign-in/second-factor", json={"token": pending["token"], "code": now_code(secret, 3)}
+        )
         assert wrong.json()["code"] == "wrong_code"
     client = from_address(new_client, app, "192.0.2.99")
     pending = await password_step(client)
@@ -283,7 +294,7 @@ async def test_wrong_codes_make_the_address_wait(
     client = from_address(new_client, app, ADDRESS)
     tokens = [(await password_step(client))["token"] for _ in range(6)]
     for token in tokens[:5]:
-        await client.post("/sign-in/second-factor", json={"token": token, "code": "000000"})
+        await client.post("/sign-in/second-factor", json={"token": token, "code": now_code(secret, 3)})
     # The account's own count is forgiven, as by a sign-in elsewhere; the address keeps its count.
     async with (await uow_of(container)).transaction() as tx:
         await tx.failures.clear(f"second-factor:{(await ok(await api.get('/me')))['id']}")
@@ -556,3 +567,265 @@ async def test_invitations_of_other_roles_need_no_second_factor(api: httpx.Async
     token = await invite(api, ids["home"], "admin")
 
     assert token
+
+
+async def test_a_set_up_started_again_replaces_the_first(api: httpx.AsyncClient) -> None:
+    first = await ok(await api.post("/me/totp"))
+    second = await ok(await api.post("/me/totp"))
+
+    stale = await api.post("/me/totp:confirm", json={"code": now_code(first["secret"])})
+    fresh = await api.post("/me/totp:confirm", json={"code": now_code(second["secret"])})
+
+    assert (stale.status_code, stale.json()["code"]) == (400, "wrong_code")
+    assert fresh.status_code == 200
+
+
+async def test_wrong_first_codes_make_the_account_wait(api: httpx.AsyncClient) -> None:
+    started = await ok(await api.post("/me/totp"))
+    wrong = [
+        (await api.post("/me/totp:confirm", json={"code": now_code(started["secret"], 3)})).json()["code"]
+        for _ in range(5)
+    ]
+
+    blocked = await api.post("/me/totp:confirm", json={"code": now_code(started["secret"])})
+
+    assert wrong == ["wrong_code"] * 5
+    assert (blocked.status_code, blocked.json()["code"]) == (429, "too_many_attempts")
+
+
+async def test_a_right_code_forgives_the_accounts_wrong_ones(
+    secret: str, new_client: NewClient, app: FastAPI, container: DishkaContainer
+) -> None:
+    # Each attempt from an address of its own, so only the account's count is at stake.
+    clients = [from_address(new_client, app, f"198.51.100.{index}") for index in range(10)]
+    for client in clients[:4]:
+        pending = await password_step(client)
+        await client.post("/sign-in/second-factor", json={"token": pending["token"], "code": now_code(secret, 3)})
+    pending = await password_step(clients[4])
+    await ok(
+        await clients[4].post("/sign-in/second-factor", json={"token": pending["token"], "code": now_code(secret)})
+    )
+    await forget_used_codes(container)
+    for client in clients[5:9]:
+        pending = await password_step(client)
+        await client.post("/sign-in/second-factor", json={"token": pending["token"], "code": now_code(secret, 3)})
+    pending = await password_step(clients[9])
+
+    response = await clients[9].post(
+        "/sign-in/second-factor", json={"token": pending["token"], "code": now_code(secret)}
+    )
+
+    assert response.status_code == 200, response.text
+
+
+async def test_a_pending_sign_in_of_an_account_disabled_meanwhile_opens_nothing(
+    secret: str, anonymous: httpx.AsyncClient, container: DishkaContainer
+) -> None:
+    pending = await password_step(anonymous)
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(update(UserDB).values(disabled_at=datetime.now(UTC)))
+
+    response = await anonymous.post(
+        "/sign-in/second-factor", json={"token": pending["token"], "code": now_code(secret)}
+    )
+
+    assert (response.status_code, response.json()["code"]) == (401, "second_factor_expired")
+    assert (await anonymous.get("/me")).status_code == 401
+
+
+async def test_a_pending_sign_in_whose_app_was_turned_off_meanwhile_opens_nothing(
+    secret: str, anonymous: httpx.AsyncClient, container: DishkaContainer
+) -> None:
+    pending = await password_step(anonymous)
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(delete(TotpDB))
+
+    response = await anonymous.post(
+        "/sign-in/second-factor", json={"token": pending["token"], "code": now_code(secret)}
+    )
+
+    assert (response.status_code, response.json()["code"]) == (401, "second_factor_expired")
+
+
+@pytest.mark.parametrize("change", ["reset", "change", "sign_out_elsewhere"])
+async def test_a_pending_sign_in_ends_with_the_password_or_the_other_sessions(
+    api: httpx.AsyncClient, secret: str, anonymous: httpx.AsyncClient, settings: Settings, change: str
+) -> None:
+    pending = await password_step(anonymous)
+    if change == "reset":
+        printed = await reset(
+            CliSettings.model_validate({"database": settings.database, "public_url": PUBLIC_URL}),
+            parse(["users", "reset", "owner"]),
+        )
+        [token] = RESET_LINK.findall(printed)
+        await ok(await api.post("/password-reset", json={"token": token, "new_password": FRESH}), 204)
+    elif change == "change":
+        body = {"current_password": OWNER["password"], "new_password": FRESH}
+        await ok(await api.post("/me/password", json=body), 204)
+    else:
+        await ok(await api.post("/me/sessions:revoke-others"))
+
+    response = await anonymous.post(
+        "/sign-in/second-factor", json={"token": pending["token"], "code": now_code(secret)}
+    )
+
+    assert (response.status_code, response.json()["code"]) == (401, "second_factor_expired")
+
+
+async def test_the_same_code_at_once_from_two_sign_ins_opens_one_session(secret: str, new_client: NewClient) -> None:
+    first, second = new_client(), new_client()
+    tokens = [(await password_step(first))["token"], (await password_step(second))["token"]]
+    code = now_code(secret)
+
+    answers = await asyncio.gather(
+        first.post("/sign-in/second-factor", json={"token": tokens[0], "code": code}),
+        second.post("/sign-in/second-factor", json={"token": tokens[1], "code": code}),
+    )
+
+    assert sorted(answer.status_code for answer in answers) == [200, 400]
+
+
+async def test_one_pending_sign_in_sent_twice_at_once_opens_one_session(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    _, codes = await enrol(api)
+    client = new_client()
+    token = (await password_step(client))["token"]
+
+    answers = await asyncio.gather(
+        client.post("/sign-in/second-factor", json={"token": token, "recovery_code": codes[0]}),
+        client.post("/sign-in/second-factor", json={"token": token, "recovery_code": codes[1]}),
+    )
+
+    assert sorted(answer.status_code for answer in answers) == [200, 401]
+    assert (await ok(await api.get("/me/second-factor")))["recovery_codes_left"] == 9
+
+
+async def test_a_secret_that_does_not_open_leaves_the_recovery_codes(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    secret, codes = await enrol(api)
+    # Sealed with a key the install does not have, as after PENARIA_SECRET_KEY changed without its retired key.
+    sealed = FernetSecretBox.of("another-secret-key-of-at-least-32-characters").seal(
+        secret, bound_to=f"totp/{(await ok(await api.get('/me')))['id']}"
+    )
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(update(TotpDB).values(secret=sealed, last_used_step=None))
+    client = new_client()
+
+    refused = await client.post(
+        "/sign-in/second-factor", json={"token": (await password_step(client))["token"], "code": now_code(secret)}
+    )
+    recovered = await client.post(
+        "/sign-in/second-factor", json={"token": (await password_step(client))["token"], "recovery_code": codes[0]}
+    )
+
+    assert (refused.status_code, refused.json()["code"]) == (409, "totp_unreadable")
+    assert recovered.status_code == 200
+
+
+async def test_wrong_codes_when_confirming_it_is_you_make_the_account_wait(
+    api: httpx.AsyncClient, secret: str, container: DishkaContainer
+) -> None:
+    await age_sign_ins(container)
+    password = OWNER["password"]
+    wrong = [
+        (await api.post("/me/reauthenticate", json={"password": password, "code": now_code(secret, 3)})).json()["code"]
+        for _ in range(5)
+    ]
+
+    blocked = await api.post("/me/reauthenticate", json={"password": password, "code": now_code(secret)})
+
+    assert wrong == ["wrong_code"] * 5
+    assert (blocked.status_code, blocked.json()["code"]) == (429, "too_many_attempts")
+
+
+async def test_a_wrong_password_with_a_right_code_is_a_wrong_password(
+    api: httpx.AsyncClient, secret: str, container: DishkaContainer
+) -> None:
+    await age_sign_ins(container)
+
+    response = await api.post("/me/reauthenticate", json={"password": "not the password", "code": now_code(secret)})
+
+    assert (response.status_code, response.json()["code"]) == (400, "wrong_password")
+    assert (await ok(await api.get("/me/second-factor")))["totp_enabled"] is True
+
+
+async def test_how_the_second_factor_was_proved_is_journalled(
+    api: httpx.AsyncClient, container: DishkaContainer, new_client: NewClient
+) -> None:
+    _, codes = await enrol(api)
+    client = new_client()
+    await client.post(
+        "/sign-in/second-factor",
+        json={"token": (await password_step(client))["token"], "recovery_code": "0000-0000-0000-0000"},
+    )
+    await ok(
+        await client.post(
+            "/sign-in/second-factor", json={"token": (await password_step(client))["token"], "recovery_code": codes[0]}
+        )
+    )
+    await age_sign_ins(container)
+    await ok(
+        await client.post("/me/reauthenticate", json={"password": OWNER["password"], "recovery_code": codes[1]}), 204
+    )
+
+    [(_, failed)] = await journal(container, "account.sign_in_failed")
+    [*_, (_, signed_in)] = await journal(container, "account.signed_in")
+    [(_, confirmed)] = await journal(container, "account.reauthenticated")
+    assert [failed["second_factor"], signed_in["second_factor"], confirmed["second_factor"]] == ["recovery_code"] * 3
+
+
+async def test_an_owner_without_a_second_factor_takes_back_no_other_owner(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    roles = {role["preset"]: role["id"] for role in await ok(await api.get(f"/homes/{ids['home']}/roles"))}
+    await add_second_factor(api, PUBLIC_URL)
+    second = await ok(await api.post(f"/homes/{ids['home']}/invitations", json={"role_id": roles["owner"]}), 201)
+    ivan = await join(new_client, second["url"].rsplit("/", 1)[1], "ivan")
+    await member(api, new_client, ids["home"], "family", "maria")
+    members = await ok(await ivan.get(f"/homes/{ids['home']}/members"))
+    grant = {m["person"]["username"]: m["grants"][0]["id"] for m in members}
+
+    owner = await ivan.delete(f"/homes/{ids['home']}/grants/{grant['owner']}")
+    family = await ivan.delete(f"/homes/{ids['home']}/grants/{grant['maria']}")
+
+    assert (owner.status_code, owner.json()["code"]) == (403, "second_factor_required")
+    assert family.status_code == 204
+
+
+async def test_a_former_owner_no_longer_needs_a_second_factor(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    await add_second_factor(api, PUBLIC_URL)
+    ids = await make_home(api)
+    roles = {role["preset"]: role["id"] for role in await ok(await api.get(f"/homes/{ids['home']}/roles"))}
+    second = await ok(await api.post(f"/homes/{ids['home']}/invitations", json={"role_id": roles["owner"]}), 201)
+    ivan = await join(new_client, second["url"].rsplit("/", 1)[1], "ivan")
+    before = await ok(await ivan.get("/me/second-factor"))
+    members = await ok(await api.get(f"/homes/{ids['home']}/members"))
+    [grant] = [m["grants"][0]["id"] for m in members if m["person"]["username"] == "ivan"]
+    await ok(await api.delete(f"/homes/{ids['home']}/grants/{grant}"), 204)
+
+    after = await ok(await ivan.get("/me/second-factor"))
+
+    assert (before["required"], after["required"], after["missing"]) == (True, False, False)
+
+
+async def test_removing_the_last_passkey_asks_for_a_second_factor_again(api: httpx.AsyncClient) -> None:
+    added = await ok(await add_passkey(api, Authenticator(PUBLIC_URL)), 201)
+
+    await ok(await api.delete(f"/me/passkeys/{added['id']}"), 204)
+
+    assert (await ok(await api.get("/me/second-factor")))["missing"] is True
+
+
+async def test_the_operator_finds_no_app_to_turn_off(
+    api: httpx.AsyncClient, settings: Settings, container: DishkaContainer
+) -> None:
+    await ok(await api.post("/me/totp"))
+    cli = CliSettings.model_validate({"database": settings.database, "public_url": PUBLIC_URL})
+
+    printed = await reset(cli, parse(["users", "reset", "owner", "--disable-second-factor"]))
+
+    assert "The account had no authenticator app to turn off." in printed
+    assert await journal(container, "account.totp_disabled") == []

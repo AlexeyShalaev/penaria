@@ -51,7 +51,7 @@ describe('TwoStepSignIn', () => {
         .getAllByRole('listitem')
         .map((item) => item.textContent),
     ).toEqual(CODES)
-    expect(calls.find((call) => call.path === '/api/v1/me/totp:confirm')?.body).toEqual({code: '123456'})
+    expect(calls.find((call) => call.path === '/api/v1/me/totp:confirm')?.body).toEqual({code: '123 456'})
     fireEvent.click(screen.getByRole('button', {name: 'I have saved them'}))
     expect(await screen.findByText('Two-step sign-in is on')).toBeVisible()
     expect(screen.getByText(/10 recovery codes left/)).toBeVisible()

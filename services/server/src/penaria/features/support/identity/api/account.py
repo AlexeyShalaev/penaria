@@ -128,6 +128,13 @@ class SecondFactorSignInIn(SecondFactorFields):
             raise ValueError("give a code of the authenticator app or a recovery code")
         return self
 
+    def given_proof(self) -> SecondFactorProof:
+        """The code or the recovery code, one of which the model requires."""
+        proof = self.proof()
+        if proof is None:
+            raise RuntimeError("the model requires a code or a recovery code")
+        return proof
+
 
 class AccountPatch(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
@@ -231,11 +238,8 @@ async def sign_in_second_factor(
     body: Annotated[SecondFactorSignInIn, Body()], request: Request, response: Response, scope: UnitScopeDep
 ) -> AccountOut:
     """The second step of signing in with a password: a code of the authenticator app, or a recovery code."""
-    proof = body.proof()
-    if proof is None:
-        raise RuntimeError("the model requires a code or a recovery code")
     user, token = await (await scope.get(SignInWithSecondFactor)).execute(
-        token=body.token, proof=proof, client=client_of(request)
+        token=body.token, proof=body.given_proof(), client=client_of(request)
     )
     (await scope.get(SessionCookie)).set(response, token)
     return AccountOut.of(user)

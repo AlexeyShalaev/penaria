@@ -29,7 +29,7 @@ describe('SecondFactorForm', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Sign in'}))
 
     await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalled())
-    expect(calls[0]?.body).toEqual({token: 'pending-token', code: '123456'})
+    expect(calls[0]?.body).toEqual({token: 'pending-token', code: '123 456'})
   })
 
   it('signs in with a recovery code instead', async () => {
@@ -42,7 +42,7 @@ describe('SecondFactorForm', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Sign in'}))
 
     await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalled())
-    expect(calls[0]?.body).toEqual({token: 'pending-token', recovery_code: '7kq2-m9xd-3hfa-wp0e'})
+    expect(calls[0]?.body).toEqual({token: 'pending-token', recovery_code: ' 7kq2-m9xd-3hfa-wp0e '})
   })
 
   it('says a wrong code is wrong', async () => {

@@ -148,6 +148,8 @@ class ResetPassword:
                 raise RuntimeError(f"the user ({user.id}) of a reset link has no account")
             await tx.passwords.set(user.id, password_hash, now)
             ended = await tx.sessions.revoke_all(user.id, now)
+            # A sign-in the old password started, waiting for its code, opens no session either.
+            await tx.pending_sign_ins.forget_for(user.id)
             await tx.account_links.use(link.id, now)
             # The person proved they hold the account: earlier wrong passwords no longer make them wait.
             await tx.failures.clear(account_key(user.username))

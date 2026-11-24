@@ -163,6 +163,10 @@ class PendingSignInRepository(Protocol):
 
     async def forget_expired(self, now: datetime) -> None: ...
 
+    async def forget_for(self, user_id: UUID) -> None:
+        """Drop the account's pending sign-ins: what its old password started opens no session."""
+        ...
+
 
 class SetupTokenRepository(Protocol):
     async def lock(self) -> None:

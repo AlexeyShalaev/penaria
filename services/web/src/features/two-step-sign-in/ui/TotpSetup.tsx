@@ -38,7 +38,7 @@ export function TotpSetup(props: {onStarted?: () => void; onDone?: () => void; o
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    confirm.mutate(code.replace(/\s/g, ''))
+    confirm.mutate(code)
   }
 
   if (confirm.data) return <RecoveryCodes codes={confirm.data.codes} onDone={() => props.onDone?.()} />

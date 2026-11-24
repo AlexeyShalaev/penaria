@@ -14,6 +14,9 @@ import styles from './SecondFactorPrompt.module.css'
  * Covers the app for an owner or an install admin who signs in with a password and has no second factor: the
  * server refuses their owner-level commands until they add a passkey or an authenticator app, so they are
  * asked at once. It stays while the app's set-up shows its recovery codes.
+ *
+ * Not a `Dialog`: nothing dismisses it but adding a factor or signing out, and it sits under the dialogs it
+ * opens itself (confirming it is you before the set-up), which is why its layer is below theirs.
  */
 export function SecondFactorPrompt() {
   const {t} = useTranslation()
