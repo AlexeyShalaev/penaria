@@ -5,9 +5,13 @@ from sqlalchemy_foundation_kit import AsyncSQLAlchemyUowTransaction
 
 from penaria.features.core.registry.infra.repository import PostgresEntityRepository
 from penaria.features.support.identity.infra.repositories import (
+    PostgresFailureRepository,
     PostgresGrantRepository,
     PostgresHomeRepository,
+    PostgresPasswordRepository,
     PostgresRoleRepository,
+    PostgresSessionRepository,
+    PostgresSetupTokenRepository,
     PostgresUserRepository,
 )
 from penaria.features.support.platform.infra.journal import PostgresJournal
@@ -17,6 +21,10 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
         self._users = PostgresUserRepository(session)
+        self._passwords = PostgresPasswordRepository(session)
+        self._sessions = PostgresSessionRepository(session)
+        self._setup_tokens = PostgresSetupTokenRepository(session)
+        self._failures = PostgresFailureRepository(session)
         self._homes = PostgresHomeRepository(session)
         self._roles = PostgresRoleRepository(session)
         self._grants = PostgresGrantRepository(session)
@@ -26,6 +34,22 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
     @property
     def users(self) -> PostgresUserRepository:
         return self._users
+
+    @property
+    def passwords(self) -> PostgresPasswordRepository:
+        return self._passwords
+
+    @property
+    def sessions(self) -> PostgresSessionRepository:
+        return self._sessions
+
+    @property
+    def setup_tokens(self) -> PostgresSetupTokenRepository:
+        return self._setup_tokens
+
+    @property
+    def failures(self) -> PostgresFailureRepository:
+        return self._failures
 
     @property
     def homes(self) -> PostgresHomeRepository:

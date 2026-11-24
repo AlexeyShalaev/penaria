@@ -7,14 +7,84 @@ from uuid import UUID
 
 from penaria.features.shared.journal import Journal
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
+from penaria.features.support.identity.domain.sessions import Session
+from penaria.features.support.identity.domain.throttle import Failures
 
 
 class UserRepository(Protocol):
     async def add(self, user: User) -> None: ...
 
+    async def save(self, user: User) -> None: ...
+
+    async def get(self, user_id: UUID) -> User | None: ...
+
+    async def by_username(self, username: str) -> User | None:
+        """The user with this (normalized) username."""
+        ...
+
     async def first(self) -> User | None:
         """The earliest user, if there is any."""
         ...
+
+
+class PasswordRepository(Protocol):
+    async def get(self, user_id: UUID) -> str | None:
+        """The user's password hash, if they have a password."""
+        ...
+
+    async def set(self, user_id: UUID, password_hash: str, now: datetime) -> None: ...
+
+    async def any(self) -> bool:
+        """Whether any account has a password, that is, whether the install is set up."""
+        ...
+
+
+class SessionRepository(Protocol):
+    async def add(self, session: Session) -> None: ...
+
+    async def by_token_hash(self, token_hash: bytes) -> tuple[Session, User] | None:
+        """The session with this token and its user, whatever their state."""
+        ...
+
+    async def active_for(self, user_id: UUID, now: datetime) -> list[Session]:
+        """The user's sessions that have not ended, the most recently seen first."""
+        ...
+
+    async def touch(self, session_id: UUID, now: datetime) -> None: ...
+
+    async def revoke(self, user_id: UUID, session_id: UUID, now: datetime) -> bool:
+        """End one session of the user's; whether there was such a session still open."""
+        ...
+
+    async def revoke_all_but(self, user_id: UUID, keep: UUID, now: datetime) -> list[UUID]:
+        """End every open session of the user's except ``keep``; the ids of those ended."""
+        ...
+
+
+class SetupTokenRepository(Protocol):
+    async def replace(self, token_hash: bytes, now: datetime) -> None:
+        """Keep this token and forget any earlier one."""
+        ...
+
+    async def current_for_update(self) -> bytes | None:
+        """The current token's hash, locked until the transaction ends."""
+        ...
+
+    async def clear(self) -> None: ...
+
+
+class FailureRepository(Protocol):
+    async def lock(self, keys: Sequence[str]) -> None:
+        """Hold the keys until the transaction ends; another transaction locking any of them waits."""
+        ...
+
+    async def get(self, keys: Sequence[str]) -> list[Failures]: ...
+
+    async def record(self, keys: Sequence[str], now: datetime, forget_before: datetime) -> None:
+        """Count a failure under each key; a count whose last failure is older than ``forget_before`` restarts."""
+        ...
+
+    async def clear(self, key: str) -> None: ...
 
 
 class HomeRepository(Protocol):
@@ -49,6 +119,18 @@ class GrantRepository(Protocol):
 class IdentityTransaction(Protocol):
     @property
     def users(self) -> UserRepository: ...
+
+    @property
+    def passwords(self) -> PasswordRepository: ...
+
+    @property
+    def sessions(self) -> SessionRepository: ...
+
+    @property
+    def setup_tokens(self) -> SetupTokenRepository: ...
+
+    @property
+    def failures(self) -> FailureRepository: ...
 
     @property
     def homes(self) -> HomeRepository: ...

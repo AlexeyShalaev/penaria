@@ -156,7 +156,8 @@ jobs:
               db_env=(-e PENARIA_DATABASE__CONNECTION__HOST=db -e PENARIA_DATABASE__CONNECTION__USER=penaria
                       -e PENARIA_DATABASE__CONNECTION__PASSWORD=penaria -e PENARIA_DATABASE__CONNECTION__DATABASE=penaria)
               docker run --rm --network smoke "${db_env[@]}" "$image" python -m penaria.apps.migrate upgrade
-              docker run -d --name smoke --network smoke -p "$port:$port" "${db_env[@]}" "$image"
+              docker run -d --name smoke --network smoke -p "$port:$port" "${db_env[@]}" \
+                -e PENARIA_PUBLIC_URL="http://127.0.0.1:$port" -e PENARIA_SECRET_KEY=smoke-test-secret-key-of-32-characters "$image"
               ;;
             web)
               port=8080; path=/

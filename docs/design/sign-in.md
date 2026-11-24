@@ -236,3 +236,17 @@ The author accepted every decision below on 2026-11-24 and added outgoing email 
 | 9 | Device tokens without expiry, with last use shown and revocation (6.3) | Yes |
 | 10 | Recovery without SMTP through an admin's link and a CLI command (8) | Yes |
 | 11 | The order of work | 1) accounts, passwords, sessions, setup token, sign-out, account page; 2) passkeys; 3) invitations and guest links; 4) TOTP; 5) device tokens; 6) OIDC. Each is a pull request, and the demo keeps working after each |
+
+## 12. Notes from step 1
+
+Step 1 (accounts, passwords, sessions, the setup token, sign-out and the account page) settled what the sections above left open:
+
+- **The `Secure` flag follows the scheme of `PENARIA_PUBLIC_URL`,** not "except on `localhost`" (section 5). Browsers drop a `Secure` cookie set over plain HTTP, so an install opened at `http://192.168.1.10` could not sign in at all. The server warns at start when `PENARIA_PUBLIC_URL` is plain HTTP on another host than the machine itself.
+- **Usernames are stored in lower case,** so a plain unique index keeps them unique case-insensitively. A username is 3 to 32 letters or digits of any script, dots, underscores or hyphens.
+- **The setup token** is 32 hexadecimal characters. Only its SHA-256 hash is kept, in `identity_setup_tokens`, which holds at most one row. With several api replicas, the replica that started last holds the valid token. Setup turns the earliest user into the account, or creates one when there is none.
+- **Rate limits** (section 7) count failures in `identity_sign_in_failures`, under the account (a hash of the username typed, so unknown names are limited too and no typed name is stored) and under the IP address. Five failures are free; then the wait is 30 seconds, doubling up to 15 minutes. A count is forgotten an hour after its last failure, and a successful sign-in clears the account's count. Attempts on the same account or from the same address wait for each other (an advisory lock), so parallel guesses cannot all pass the check before the first failure is counted. Wrong setup tokens are counted per address, wrong current passwords per account. The server answers 429 with `too_many_attempts` and `retry_after_seconds`.
+- **Changing the password ends every other session** of the account.
+- **The `Origin` check** (section 5) falls back to `Referer` when a request has no `Origin`. A request with neither comes from a client that is not a browser, which a forged page cannot make carry the cookie, and passes.
+- **Account events are journalled with no home:** `journal_events.home_id` is nullable (core-model 9.3). The types are `account.setup_completed`, `account.signed_in`, `account.sign_in_failed`, `account.signed_out`, `account.updated`, `account.password_changed` and `session.revoked`, each with the `user_id` in the payload. A failed sign-in is recorded only for an existing account, with the `system` actor: nobody is signed in.
+- **A session's last use** is written at most every 5 minutes, so reading pages does not write on every request.
+- **`identity_sessions` has no `grant_id` yet:** it comes with guest links (step 3), and `user_id` is required until then.

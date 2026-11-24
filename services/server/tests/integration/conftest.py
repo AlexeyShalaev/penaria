@@ -1,9 +1,11 @@
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 import httpx
 import pytest
 from alembic import command
+from fastapi import FastAPI
 from servicewright import BootstrapContext, HealthRegistry, ServiceContext
 from servicewright.adapters.dishka import DishkaContainer
 from servicewright.adapters.fastapi import HttpServerSettings
@@ -15,10 +17,13 @@ from penaria.apps.api.container import build_container
 from penaria.apps.api.entrypoint import build_http
 from penaria.apps.api.settings import Settings
 from penaria.common.database import DatabaseSettings
+from penaria.features.support.identity.use_cases.setup import IssueSetupToken
 from penaria.migrations.runner import build_config, run_with_connection
 
 # Every table that holds data; CASCADE reaches the rest.
-DATA_TABLES = "identity_users, identity_homes, journal_events"
+DATA_TABLES = "identity_users, identity_homes, journal_events, identity_setup_tokens, identity_sign_in_failures"
+PUBLIC_URL = "http://test"
+OWNER = {"username": "owner", "display_name": "Owner", "password": "correct horse battery", "locale": "en"}
 
 
 @pytest.fixture(scope="session")
@@ -48,6 +53,18 @@ def database_settings(test_database_url: str) -> DatabaseSettings:
 
 
 @pytest.fixture
+def settings(database_settings: DatabaseSettings) -> Settings:
+    return Settings.model_validate(
+        {
+            "server": HttpServerSettings(),
+            "database": database_settings,
+            "public_url": PUBLIC_URL,
+            "secret_key": "test-secret-key-of-at-least-32-characters",
+        }
+    )
+
+
+@pytest.fixture
 async def migrated_database(test_database_url: str) -> AsyncIterator[None]:
     """The test database at the latest migration, emptied after each test."""
     engine = create_async_engine(test_database_url, poolclass=NullPool)
@@ -61,19 +78,54 @@ async def migrated_database(test_database_url: str) -> AsyncIterator[None]:
 
 
 @pytest.fixture
-async def container(migrated_database: None, database_settings: DatabaseSettings) -> AsyncIterator[DishkaContainer]:
+async def container(migrated_database: None, settings: Settings) -> AsyncIterator[DishkaContainer]:
     # Its app scope closes it: the api fixture or the test opens one.
-    yield build_container(Settings.model_validate({"server": HttpServerSettings(), "database": database_settings}))
+    yield build_container(settings)
 
 
 @pytest.fixture
-async def api(container: DishkaContainer, database_settings: DatabaseSettings) -> AsyncIterator[httpx.AsyncClient]:
-    """An HTTP client of the API process, wired to the test database."""
-    settings = Settings.model_validate({"server": HttpServerSettings(), "database": database_settings})
+async def app(container: DishkaContainer, settings: Settings) -> AsyncIterator[FastAPI]:
+    """The API process's HTTP app, wired to the test database."""
     async with container.app_scope() as app_scope:
         bootstrap = BootstrapContext(settings=settings, service_name="penaria-api", container=container)
         context = ServiceContext(bootstrap=bootstrap, app_scope=app_scope, health=HealthRegistry())
-        app = await build_http(settings).build_app(context)
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test/api/v1") as client:
-            yield client
+        yield await build_http(settings).build_app(context)
+
+
+@pytest.fixture
+async def new_client(app: FastAPI) -> AsyncIterator[Callable[..., httpx.AsyncClient]]:
+    """Make HTTP clients of the app, each with its own cookies, like separate browsers."""
+    clients: list[httpx.AsyncClient] = []
+
+    def make(**kwargs: Any) -> httpx.AsyncClient:
+        kwargs.setdefault("transport", httpx.ASGITransport(app=app))
+        client = httpx.AsyncClient(base_url=f"{PUBLIC_URL}/api/v1", **kwargs)
+        clients.append(client)
+        return client
+
+    yield make
+    for client in clients:
+        await client.aclose()
+
+
+@pytest.fixture
+async def setup_token(container: DishkaContainer, app: FastAPI) -> str:
+    """The token the server would print on its first start."""
+    token = await (await container.container.get(IssueSetupToken)).execute()
+    assert token is not None
+    return token
+
+
+@pytest.fixture
+async def anonymous(new_client: Callable[..., httpx.AsyncClient]) -> httpx.AsyncClient:
+    """A client without a session."""
+    return new_client()
+
+
+@pytest.fixture
+async def api(new_client: Callable[..., httpx.AsyncClient], setup_token: str) -> httpx.AsyncClient:
+    """A client signed in as the install's owner, who completed the setup."""
+    client = new_client()
+    response = await client.post("/setup", json={**OWNER, "token": setup_token})
+    assert response.status_code == 200, response.text
+    return client

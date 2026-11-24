@@ -3,6 +3,13 @@
 from servicewright import ErrorKind, ServiceError
 
 
+class UnauthenticatedError(ServiceError):
+    """The request carries no valid session; sign in first."""
+
+    kind = ErrorKind.UNAUTHENTICATED
+    code = "unauthenticated"
+
+
 class NotFoundError(ServiceError):
     kind = ErrorKind.NOT_FOUND
 
@@ -17,6 +24,10 @@ class ConflictError(ServiceError):
 
 class InvalidError(ServiceError):
     kind = ErrorKind.INVALID
+
+
+class TooManyRequestsError(ServiceError):
+    kind = ErrorKind.TOO_MANY_REQUESTS
 
 
 class StaleVersionError(ConflictError):

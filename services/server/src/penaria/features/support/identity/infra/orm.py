@@ -3,8 +3,8 @@
 import datetime
 import uuid
 
-from sqlalchemy import ARRAY, CheckConstraint, ForeignKey, Index, Interval, String, Text, func, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import ARRAY, CheckConstraint, ForeignKey, Index, Interval, LargeBinary, String, Text, func, text
+from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from penaria.common.database import Base
@@ -17,10 +17,59 @@ class Timestamps:
 
 class UserDB(Timestamps, Base):
     __tablename__ = "identity_users"
+    __table_args__ = (
+        # Stored in lower case, so a plain unique index makes them unique case-insensitively.
+        CheckConstraint("username = lower(username)", name="username_lower"),
+        CheckConstraint("email = lower(email)", name="email_lower"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     display_name: Mapped[str] = mapped_column(Text)
     locale: Mapped[str] = mapped_column(Text)
+    username: Mapped[str | None] = mapped_column(Text, unique=True)
+    email: Mapped[str | None] = mapped_column(Text, unique=True)
+    install_admin: Mapped[bool] = mapped_column(server_default=text("false"))
+    disabled_at: Mapped[datetime.datetime | None]
+
+
+class PasswordDB(Base):
+    __tablename__ = "identity_passwords"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"), primary_key=True)
+    hash: Mapped[str] = mapped_column(Text)
+    changed_at: Mapped[datetime.datetime]
+
+
+class SessionDB(Base):
+    __tablename__ = "identity_sessions"
+    __table_args__ = (Index("identity_sessions_user_id_idx", "user_id", postgresql_where=text("revoked_at IS NULL")),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime.datetime]
+    last_seen_at: Mapped[datetime.datetime]
+    authenticated_at: Mapped[datetime.datetime]
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    ip: Mapped[str | None] = mapped_column(INET)
+    revoked_at: Mapped[datetime.datetime | None]
+
+
+class SetupTokenDB(Base):
+    """At most one row: the hash of the setup token printed at the last start before setup."""
+
+    __tablename__ = "identity_setup_tokens"
+
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, primary_key=True)
+    created_at: Mapped[datetime.datetime]
+
+
+class SignInFailureDB(Base):
+    __tablename__ = "identity_sign_in_failures"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    count: Mapped[int]
+    last_at: Mapped[datetime.datetime] = mapped_column(index=True)
 
 
 class HomeDB(Timestamps, Base):

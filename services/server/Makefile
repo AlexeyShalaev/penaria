@@ -32,7 +32,11 @@ test-unit:  ## Unit tests only, no database
 test-integration:  ## Integration tests only (database)
 	uv run pytest -m integration
 
-run-api:  ## Run the API on :8000 against the development database
+# People open the web app's dev server (make -C ../web dev), which proxies the API; the key is
+# public, like every development credential here.
+run-api: export PENARIA_PUBLIC_URL ?= http://localhost:5173
+run-api: export PENARIA_SECRET_KEY ?= development-only-secret-key-never-use-it-at-home
+run-api:  ## Run the API on :8000 against the development database; its log prints the setup token
 	uv run python -m penaria.apps.api
 
 migrate:  ## Apply the migrations to the development database

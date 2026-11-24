@@ -13,7 +13,8 @@ from penaria.features.shared.ids import new_id
 @dataclass(frozen=True, slots=True)
 class Event:
     type: str
-    home_id: UUID
+    # None for an event of an account rather than of a home, such as a sign-in.
+    home_id: UUID | None
     actor: Actor
     payload: dict[str, Any]
     entity_id: UUID | None = None
@@ -27,7 +28,7 @@ class RecordedEvent:
     id: UUID
     type: str
     version: int
-    home_id: UUID
+    home_id: UUID | None
     entity_id: UUID | None
     actor: dict[str, Any]
     payload: dict[str, Any]

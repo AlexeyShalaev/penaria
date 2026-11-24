@@ -1,4 +1,4 @@
-"""HTTP: the actor's homes and the actor itself."""
+"""HTTP: the actor's homes."""
 
 from typing import Annotated
 from uuid import UUID
@@ -9,10 +9,11 @@ from servicewright.adapters.fastapi import UnitScopeDep
 
 from penaria.features.shared.access import Access
 from penaria.features.shared.actor import Actor
+from penaria.features.shared.http import SIGNED_IN
 from penaria.features.support.identity.domain.models import Home
 from penaria.features.support.identity.use_cases.homes import CreateHome, GetHome, ListHomes
 
-router = APIRouter(prefix="/api/v1", tags=["homes"])
+router = APIRouter(prefix="/api/v1", tags=["homes"], dependencies=[SIGNED_IN])
 
 
 class AccessOut(BaseModel):
@@ -49,17 +50,6 @@ class HomeIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     timezone: str = Field(examples=["Europe/Moscow"])
     locale: str = Field(examples=["ru"])
-
-
-class MeOut(BaseModel):
-    id: UUID
-    kind: str
-
-
-@router.get("/me")
-async def me(scope: UnitScopeDep) -> MeOut:
-    actor = await scope.get(Actor)
-    return MeOut(id=actor.id, kind=actor.kind.value)
 
 
 @router.get("/homes")

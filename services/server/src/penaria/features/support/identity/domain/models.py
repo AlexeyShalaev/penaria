@@ -34,6 +34,11 @@ class User:
     display_name: str
     locale: str
     id: UUID = field(default_factory=new_id)
+    # None until the user has an account: the local user of an install from before sign-in.
+    username: str | None = None
+    email: str | None = None
+    install_admin: bool = False
+    disabled_at: datetime | None = None
 
 
 @dataclass(slots=True)
