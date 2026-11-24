@@ -1,8 +1,7 @@
-import {Check, Copy, Download} from 'lucide-react'
-import {useState} from 'react'
+import {Download} from 'lucide-react'
 import {useTranslation} from 'react-i18next'
 
-import {Button, FormActions} from '@/shared/ui'
+import {Button, CopyButton, FormActions} from '@/shared/ui'
 
 import styles from './TwoStep.module.css'
 
@@ -12,15 +11,7 @@ const REVOKE_AFTER_MS = 60_000
 /** Recovery codes just made, shown only now: to copy, download or write down before `onDone`. */
 export function RecoveryCodes(props: {codes: string[]; onDone: () => void}) {
   const {t} = useTranslation()
-  const [copied, setCopied] = useState(false)
   const text = props.codes.join('\n') + '\n'
-  // Browsers offer the clipboard only on a secure page: an install opened at a plain http address has none.
-  const canCopy = typeof navigator.clipboard?.writeText === 'function'
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-  }
 
   const download = () => {
     const url = URL.createObjectURL(new Blob([text], {type: 'text/plain'}))
@@ -42,11 +33,7 @@ export function RecoveryCodes(props: {codes: string[]; onDone: () => void}) {
         ))}
       </ol>
       <div className={styles.buttons}>
-        {canCopy && (
-          <Button variant="secondary" icon={copied ? Check : Copy} onClick={() => void copy()}>
-            {t(copied ? 'twoStep.copied' : 'twoStep.copy')}
-          </Button>
-        )}
+        <CopyButton text={text} label={t('twoStep.copy')} copiedLabel={t('twoStep.copied')} variant="secondary" />
         <Button variant="secondary" icon={Download} onClick={download}>
           {t('twoStep.download')}
         </Button>

@@ -318,7 +318,6 @@ class Token:
     token_hash: bytes
     created_at: datetime
     last_used_at: datetime | None = None
-    # The address it was last used from.
     last_used_ip: str | None = None
     revoked_at: datetime | None = None
     id: UUID = field(default_factory=new_id)

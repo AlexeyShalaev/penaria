@@ -1,11 +1,10 @@
-import {Check, Copy} from 'lucide-react'
 import {type FormEvent, useState} from 'react'
 import {useTranslation} from 'react-i18next'
 
 import {useRecentSignIn} from '@/entities/account'
 import {type Role, RolePicker, useCreateDevice, useRoles} from '@/entities/member'
 import {describeError} from '@/shared/api'
-import {Button, Dialog, Field, FormActions, FormError, FormLayout, QueryState, TextInput} from '@/shared/ui'
+import {Button, CopyButton, Dialog, Field, FormActions, FormError, FormLayout, QueryState, TextInput} from '@/shared/ui'
 
 import styles from './AccessDialog.module.css'
 import {ScopeField} from './ScopeField'
@@ -110,29 +109,20 @@ function TokenReady(props: {homeId: string; token: string}) {
           aria-label={t('device.token')}
           onFocus={(event) => event.currentTarget.select()}
         />
-        <CopyButton text={props.token} label={t('device.copy')} />
+        <CopyButton text={props.token} label={t('device.copy')} copiedLabel={t('share.copied')} />
       </div>
       <p className={styles.text}>{t('device.example')}</p>
       <pre className={styles.example} aria-label={t('device.exampleLabel')}>
         {example}
       </pre>
       <div>
-        <CopyButton text={example} label={t('device.copyExample')} variant="secondary" />
+        <CopyButton
+          text={example}
+          label={t('device.copyExample')}
+          copiedLabel={t('share.copied')}
+          variant="secondary"
+        />
       </div>
     </>
-  )
-}
-
-function CopyButton(props: {text: string; label: string; variant?: 'primary' | 'secondary'}) {
-  const {t} = useTranslation()
-  const [copied, setCopied] = useState(false)
-  const copy = async () => {
-    await navigator.clipboard.writeText(props.text)
-    setCopied(true)
-  }
-  return (
-    <Button icon={copied ? Check : Copy} variant={props.variant} onClick={() => void copy()}>
-      {copied ? t('share.copied') : props.label}
-    </Button>
   )
 }

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from penaria.features.shared.errors import UnauthenticatedError
+from penaria.features.shared.errors import ForbiddenError, UnauthenticatedError
 from penaria.features.shared.ids import new_id
 from penaria.features.support.identity.domain.members import InvalidGrantError, Token, check_scope, check_token_name
 from penaria.features.support.identity.domain.models import Grant, PrincipalType, Role
@@ -33,6 +33,15 @@ class InvalidTokenError(UnauthenticatedError):
     """The bearer token is unknown, malformed or revoked; the same answer for each."""
 
     code = "invalid_token"
+
+    def __init__(self) -> None:
+        super().__init__("this token does not work: check it, or make a new one")
+
+
+class GiverAccessEndsError(ForbiddenError):
+    """The access that lets the person give the device's role ends, and a device's never does."""
+
+    code = "giver_access_ends"
 
 
 def is_device_token(value: str) -> bool:
@@ -99,15 +108,19 @@ class Device:
     def is_active(self, now: datetime) -> bool:
         return self.token.revoked_at is None and self.grant.is_active(now)
 
-    def use_to_record(self, ip: str | None, now: datetime) -> bool:
-        """Whether this use moves the device's "last used": now and then, or at once from another address."""
+    def needs_touch(self, now: datetime) -> bool:
+        """Whether this use moves the device's "last used", with its address: at most every few minutes."""
         last = self.token.last_used_at
-        return last is None or now - last >= LAST_SEEN_PRECISION or self._moved(ip)
+        return last is None or now - last >= LAST_SEEN_PRECISION
 
-    def use_to_journal(self, ip: str | None, now: datetime) -> bool:
-        """Whether this use goes to the journal: the first, the first after a quiet day, or from another address."""
+    def needs_journal(self, ip: str | None, now: datetime) -> bool:
+        """Whether this use goes to the journal: the first, the first after a quiet day, or one from another
+        address. A move is noticed only when the use is recorded, so a device whose address alternates
+        (IPv4 and IPv6, a pool of exits) journals at most once per record, not once per request."""
         last = self.token.last_used_at
-        return last is None or now - last >= USE_JOURNALLED_AFTER or self._moved(ip)
+        if last is None or now - last >= USE_JOURNALLED_AFTER:
+            return True
+        return self.needs_touch(now) and self._moved(ip)
 
     def _moved(self, ip: str | None) -> bool:
         # Compared as counter keys, so a phone's changing IPv6 address within its /64 is the same place.

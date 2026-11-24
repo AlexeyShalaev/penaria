@@ -50,7 +50,17 @@ Devices and integrations (a smart mirror, a backup script, another service) sign
 curl -H "Authorization: Bearer pnr_…" https://home.example.org/api/v1/homes
 ```
 
-A reverse proxy in front of Penaria may use the `Authorization` header for its own sign-in (basic auth, say): Penaria reads only bearer tokens that start with `pnr_` and leaves the rest alone.
+Penaria reads only bearer tokens that start with `pnr_` and leaves any other `Authorization` header alone, so browsers work behind a reverse proxy that signs people in with it (basic auth, say). A device cannot send that header twice, though: let requests that carry `Bearer pnr_…` past the proxy's own check, for example in nginx:
+
+```nginx
+map $http_authorization $penaria_auth {
+    ~^Bearer\s+pnr_  off;
+    default          "Penaria";
+}
+auth_basic $penaria_auth;
+```
+
+A person who makes a device must hold the access to give its role without an end: a member whose access ends cannot add one.
 
 Passkeys belong to the host name of `PENARIA_PUBLIC_URL`: browsers offer them only on `https` with a domain name, or on `localhost`, so an install opened at a plain IP address signs in with passwords only. Changing the host name later makes every passkey unusable (people sign in with their password and add a new one). Adding or removing a passkey needs a sign-in within the last 10 minutes; the web app asks for the password or a passkey again when it is older.
 

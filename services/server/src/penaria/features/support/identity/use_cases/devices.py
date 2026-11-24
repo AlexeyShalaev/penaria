@@ -13,8 +13,13 @@ from sqlalchemy_foundation_kit import AsyncUnitOfWork
 from penaria.features.shared.actor import Actor
 from penaria.features.shared.journal import Event
 from penaria.features.shared.places import Place, PlaceDirectory
-from penaria.features.support.identity.domain.devices import Device, InvalidTokenError, is_device_token
-from penaria.features.support.identity.domain.members import check_can_give, grant_payload
+from penaria.features.support.identity.domain.devices import (
+    Device,
+    GiverAccessEndsError,
+    InvalidTokenError,
+    is_device_token,
+)
+from penaria.features.support.identity.domain.members import can_give, check_can_give, grant_payload
 from penaria.features.support.identity.domain.models import Role, User
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, DeviceCaller, hash_token
@@ -23,6 +28,7 @@ from penaria.features.support.identity.use_cases.attempts import count_attempt
 from penaria.features.support.identity.use_cases.members import (
     access_in,
     check_place,
+    lasting_access_in,
     place_of,
     require_manager,
     require_member,
@@ -73,6 +79,11 @@ class CreateDevice:
             # Under the lock that taking the creator's access back takes, so their devices end with it.
             await tx.homes.lock(home_id)
             check_can_give(await access_in(tx, actor, home_id, scope, now), role)
+            # Access that ends would otherwise leave behind a token that does not.
+            if not can_give(await lasting_access_in(tx, actor, home_id, scope, now), role):
+                raise GiverAccessEndsError(
+                    "your access to this home ends, and a device's never does: ask someone whose access does not end"
+                )
             await tx.grants.add(device.grant)
             await tx.tokens.add(device.token)
             await tx.journal.append(
@@ -120,6 +131,11 @@ class AuthenticateDevice:
     Tokens that do not exist count against the address, as guessed links do (sign-in.md, 7); a known
     token that was revoked is no guess and does not count, so a forgotten device that keeps calling
     does not make the other devices of its household wait.
+
+    Unlike ``attempts.find_by_secret``, an attempt is counted only once it missed, not before the look-up:
+    a device calls every few seconds, and counting first would write on each of its requests. So a burst
+    of parallel guesses passes the check until the first of them is counted; with 256-bit tokens, those
+    few guesses are no risk.
     """
 
     def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction]) -> None:
@@ -136,15 +152,15 @@ class AuthenticateDevice:
                 return await _use(tx, device, client, now)
         async with self._uow.transaction() as tx:
             await count_attempt(tx, keys, now)
-        raise InvalidTokenError("this token does not work: check it, or make a new one")
+        raise InvalidTokenError
 
 
 async def _use(tx: IdentityTransaction, device: Device, client: Client, now: datetime) -> DeviceCaller:
     if not device.is_active(now):
-        raise InvalidTokenError("this token does not work: check it, or make a new one")
-    if device.use_to_journal(client.ip, now):
+        raise InvalidTokenError
+    if device.needs_journal(client.ip, now):
         payload = {"device_id": str(device.id), "ip": client.ip}
         await tx.journal.append([Event("device.used", device.grant.home_id, Actor.device(device.id), payload)])
-    if device.use_to_record(client.ip, now):
-        await tx.tokens.used(device.token.id, now, client.ip)
-    return DeviceCaller(device_id=device.id, grant_id=device.grant.id, home_id=device.grant.home_id)
+    if device.needs_touch(now):
+        await tx.tokens.used(device.token.id, now, ip=client.ip)
+    return DeviceCaller(device_id=device.id)

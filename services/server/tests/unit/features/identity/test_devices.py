@@ -98,37 +98,43 @@ def test_a_revoked_token_or_grant_ends_the_device() -> None:
 def test_the_first_use_is_recorded_and_journalled() -> None:
     device, _ = made()
 
-    assert (device.use_to_record(ADDRESS, NOW), device.use_to_journal(ADDRESS, NOW)) == (True, True)
+    assert (device.needs_touch(NOW), device.needs_journal(ADDRESS, NOW)) == (True, True)
 
 
 def test_uses_minutes_apart_from_the_same_place_are_neither_recorded_nor_journalled() -> None:
     device = used(made()[0], NOW)
 
     later = NOW + timedelta(minutes=4)
-    assert (device.use_to_record(ADDRESS, later), device.use_to_journal(ADDRESS, later)) == (False, False)
+    assert (device.needs_touch(later), device.needs_journal(ADDRESS, later)) == (False, False)
 
 
 def test_a_use_after_five_minutes_is_recorded_but_not_journalled() -> None:
     device = used(made()[0], NOW)
 
     later = NOW + timedelta(minutes=5)
-    assert (device.use_to_record(ADDRESS, later), device.use_to_journal(ADDRESS, later)) == (True, False)
+    assert (device.needs_touch(later), device.needs_journal(ADDRESS, later)) == (True, False)
 
 
 def test_a_use_after_a_quiet_day_is_journalled() -> None:
     device = used(made()[0], NOW)
 
-    assert device.use_to_journal(ADDRESS, NOW + timedelta(days=1))
+    assert device.needs_journal(ADDRESS, NOW + timedelta(days=1))
 
 
-def test_a_use_from_another_address_is_recorded_and_journalled_at_once() -> None:
+def test_a_use_from_another_address_is_journalled_when_it_is_recorded() -> None:
     device = used(made()[0], NOW)
 
-    later = NOW + timedelta(seconds=1)
-    assert (device.use_to_record("198.51.100.7", later), device.use_to_journal("198.51.100.7", later)) == (True, True)
+    later = NOW + timedelta(minutes=5)
+    assert (device.needs_touch(later), device.needs_journal("198.51.100.7", later)) == (True, True)
+
+
+def test_an_address_that_alternates_between_records_is_not_journalled_on_each_request() -> None:
+    device = used(made()[0], NOW)
+
+    assert not device.needs_journal("198.51.100.7", NOW + timedelta(seconds=5))
 
 
 def test_another_address_in_the_same_ipv6_block_is_the_same_place() -> None:
     device = used(made()[0], NOW, ip="2001:db8::1")
 
-    assert not device.use_to_journal("2001:db8::abcd", NOW + timedelta(seconds=1))
+    assert not device.needs_journal("2001:db8::abcd", NOW + timedelta(minutes=5))

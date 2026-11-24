@@ -118,8 +118,6 @@ class DeviceCaller:
     """A request made with a device's token: it acts as the device, within the device's grant."""
 
     device_id: UUID
-    grant_id: UUID
-    home_id: UUID
 
 
 @dataclass(frozen=True, slots=True)

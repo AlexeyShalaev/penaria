@@ -3,7 +3,7 @@ import {Route} from 'react-router'
 import {describe, expect, it, vi} from 'vitest'
 
 import {mockApi, problem, SECOND_FACTOR_FINE} from '@/test/api'
-import {HOME_ID, role, ROLES} from '@/test/fixtures'
+import {entity, HOME_ID, role, ROLES} from '@/test/fixtures'
 import {renderAt} from '@/test/render'
 
 import {DeviceDialog} from './DeviceDialog'
@@ -108,5 +108,39 @@ describe('DeviceDialog', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Make the token'}))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('You cannot give more access than you have yourself.')
+  })
+
+  it('gives the device one place when one is picked, and asks for it otherwise', async () => {
+    const calls = mockApi({
+      [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES,
+      [`GET /api/v1/homes/${HOME_ID}/entities`]: [entity({id: 'hall', name: 'Hall', kind: 'space'})],
+      [`POST /api/v1/homes/${HOME_ID}/devices`]: created('Mirror'),
+    })
+    renderDialog()
+
+    fireEvent.change(await screen.findByLabelText('Name'), {target: {value: 'Mirror'}})
+    fireEvent.click(screen.getByRole('radio', {name: 'One place'}))
+    fireEvent.click(screen.getByRole('button', {name: 'Make the token'}))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Pick a place, or choose the whole home.')
+    fireEvent.click(await screen.findByRole('button', {name: /^Hall/}))
+    fireEvent.click(screen.getByRole('button', {name: 'Make the token'}))
+
+    expect(await screen.findByRole('textbox', {name: 'Token'})).toHaveValue(TOKEN)
+    expect(calls.find((call) => call.method === 'POST')?.body).toMatchObject({scope_entity_id: 'hall'})
+  })
+
+  it('offers no copy button where the browser has no clipboard, leaving the token to select', async () => {
+    vi.stubGlobal('navigator', {...navigator, clipboard: undefined})
+    mockApi({
+      [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES,
+      [`POST /api/v1/homes/${HOME_ID}/devices`]: created('Mirror'),
+    })
+    renderDialog()
+
+    fireEvent.change(await screen.findByLabelText('Name'), {target: {value: 'Mirror'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Make the token'}))
+
+    expect(await screen.findByRole('textbox', {name: 'Token'})).toHaveValue(TOKEN)
+    expect(screen.queryByRole('button', {name: 'Copy the token'})).toBeNull()
   })
 })

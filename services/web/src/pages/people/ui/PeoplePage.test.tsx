@@ -163,6 +163,28 @@ describe('PeoplePage', () => {
     ])
   })
 
+  it('says when a device was never used, or by no known address, and why a revoke failed', async () => {
+    mockApi(
+      manager({
+        [`GET /api/v1/homes/${HOME_ID}/devices`]: [
+          {...DEVICE, id: 'new', grant_id: 'g-new', name: 'New script', last_used_at: null, last_used_ip: null},
+          {...DEVICE, last_used_ip: null},
+        ],
+        [`DELETE /api/v1/homes/${HOME_ID}/grants/g-new`]: problem(404, 'grant_not_found'),
+      }),
+    )
+    renderPage()
+
+    const section = await screen.findByRole('region', {name: 'Devices and integrations'})
+    expect(await within(section).findByText('Not used yet')).toBeVisible()
+    expect(within(section).getByText(/^Last used [^·]*$/)).not.toHaveTextContent('from')
+    fireEvent.click(within(section).getByRole('button', {name: 'Revoke the token of “New script”'}))
+
+    expect(await within(section).findByRole('alert')).toHaveTextContent(
+      'This access has already been changed or taken back.',
+    )
+  })
+
   it('opens the dialog that adds a device', async () => {
     mockApi(manager({[`GET /api/v1/homes/${HOME_ID}/roles`]: [role('family')]}))
     renderPage()

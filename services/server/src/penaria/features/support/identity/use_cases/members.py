@@ -238,6 +238,16 @@ async def access_in(tx: IdentityTransaction, actor: Actor, home_id: UUID, place:
     return access_of(await tx.grants.applicable(principal_type, principal_id, home_id, path, now))
 
 
+async def lasting_access_in(
+    tx: IdentityTransaction, actor: Actor, home_id: UUID, place: Place | None, now: datetime
+) -> Access:
+    """What the actor may do at the place through those of its grants that never end: what lets it give
+    access that never ends, a device's."""
+    principal_type, principal_id = principal_of(actor)
+    path = () if place is None else place.path
+    return access_of(await tx.grants.lasting(principal_type, principal_id, home_id, path, now))
+
+
 async def lock_unchanged(tx: IdentityTransaction, grant: Grant) -> None:
     """Lock the grant's home for a change to its people, refusing if the grant changed since it was read."""
     await tx.homes.lock(grant.home_id)
@@ -293,6 +303,7 @@ async def disarm_given_by(
     tx: IdentityTransaction, places: PlaceDirectory, user_id: UUID, home_id: UUID, actor: Actor, now: datetime
 ) -> None:
     """End the guest links and devices the user gave that they could no longer give, once their access shrank.
+    A device's grant never ends, so it needs access of the giver that never ends either.
 
     Pending invitations need no such sweep: accepting one checks its inviter again.
     """
@@ -309,7 +320,12 @@ async def disarm_given_by(
     giver = Actor.user(user_id)
     for grant in given:
         role = roles[grant.role_id]
-        if not can_give(await access_in(tx, giver, home_id, place_of(found, grant.scope_entity_id), now), role):
+        place = place_of(found, grant.scope_entity_id)
+        if grant.principal_type is PrincipalType.DEVICE:
+            access = await lasting_access_in(tx, giver, home_id, place, now)
+        else:
+            access = await access_in(tx, giver, home_id, place, now)
+        if not can_give(access, role):
             await revoke(tx, actor, grant, role, now, reason=RevokeReason.GIVER_LOST_ACCESS)
 
 

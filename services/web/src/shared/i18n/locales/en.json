@@ -265,7 +265,8 @@
     "last_second_factor": "Owners and admins need a second step to sign in. Add a passkey before you turn the authenticator app off.",
     "second_factor_required": "Add a passkey or an authenticator app first: owners and admins need a second step to sign in.",
     "invalid_grant_device_role": "A device cannot be an owner or have a role whose access must end.",
-    "invalid_token": "This token does not work. Check it, or make a new one."
+    "invalid_token": "This token does not work. Check it, or make a new one.",
+    "giver_access_ends": "Your own access to this home ends, and a device's never does. Ask someone whose access does not end to add it."
   },
   "languages": {
     "en": "English",

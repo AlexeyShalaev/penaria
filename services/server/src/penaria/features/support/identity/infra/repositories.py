@@ -625,6 +625,29 @@ class PostgresGrantRepository:
         path: Sequence[UUID],
         now: datetime,
     ) -> list[Role]:
+        return await self._roles_covering(principal_type, principal_id, home_id, path, now)
+
+    async def lasting(
+        self,
+        principal_type: PrincipalType,
+        principal_id: UUID,
+        home_id: UUID,
+        path: Sequence[UUID],
+        now: datetime,
+    ) -> list[Role]:
+        return await self._roles_covering(
+            principal_type, principal_id, home_id, path, now, GrantDB.expires_at.is_(None)
+        )
+
+    async def _roles_covering(
+        self,
+        principal_type: PrincipalType,
+        principal_id: UUID,
+        home_id: UUID,
+        path: Sequence[UUID],
+        now: datetime,
+        *conditions: ColumnElement[bool],
+    ) -> list[Role]:
         scope: ColumnElement[bool] = GrantDB.scope_entity_id.is_(None)
         if path:
             scope = or_(scope, GrantDB.scope_entity_id.in_(list(path)))
@@ -637,6 +660,7 @@ class PostgresGrantRepository:
                 GrantDB.principal_id == principal_id,
                 scope,
                 *_active(now),
+                *conditions,
             )
         )
         return [_role(row) for row in rows]
@@ -713,7 +737,7 @@ class PostgresTokenRepository:
         )
         return None if row is None else _token(row)
 
-    async def used(self, token_id: UUID, now: datetime, ip: str | None) -> None:
+    async def used(self, token_id: UUID, now: datetime, *, ip: str | None) -> None:
         await self._session.execute(
             update(TokenDB).where(TokenDB.id == token_id).values(last_used_at=now, last_used_ip=ip)
         )
@@ -730,32 +754,29 @@ class PostgresTokenRepository:
         )
 
     async def links_in(self, home_id: UUID, now: datetime) -> list[GuestLink]:
-        rows = await self._session.execute(
-            select(GrantDB, TokenDB)
-            .join(TokenDB, _token_of_grant())
-            .where(
-                GrantDB.home_id == home_id,
-                GrantDB.principal_type == PrincipalType.LINK.value,
-                TokenDB.revoked_at.is_(None),
-                *_active(now),
-            )
-            .order_by(GrantDB.created_at.desc(), GrantDB.id.desc())
-        )
-        return [GuestLink(grant=_grant(grant), token=_token(token)) for grant, token in rows]
+        pairs = await self._with_grants(home_id, PrincipalType.LINK, now)
+        return [GuestLink(grant=grant, token=token) for grant, token in pairs]
 
     async def devices_in(self, home_id: UUID, now: datetime) -> list[Device]:
+        pairs = await self._with_grants(home_id, PrincipalType.DEVICE, now)
+        return [Device(grant=grant, token=token) for grant, token in pairs]
+
+    async def _with_grants(
+        self, home_id: UUID, principal_type: PrincipalType, now: datetime
+    ) -> list[tuple[Grant, Token]]:
+        """The home's tokens of this principal type that work, with their active grants, the newest first."""
         rows = await self._session.execute(
             select(GrantDB, TokenDB)
             .join(TokenDB, _token_of_grant())
             .where(
                 GrantDB.home_id == home_id,
-                GrantDB.principal_type == PrincipalType.DEVICE.value,
+                GrantDB.principal_type == principal_type.value,
                 TokenDB.revoked_at.is_(None),
                 *_active(now),
             )
             .order_by(GrantDB.created_at.desc(), GrantDB.id.desc())
         )
-        return [Device(grant=_grant(grant), token=_token(token)) for grant, token in rows]
+        return [(_grant(grant), _token(token)) for grant, token in rows]
 
     async def device_by_token_hash(self, token_hash: bytes) -> Device | None:
         row = (

@@ -275,6 +275,17 @@ class GrantRepository(Protocol):
         """The roles of the principal's active grants whose scope is the whole home or an id in ``path``."""
         ...
 
+    async def lasting(
+        self,
+        principal_type: PrincipalType,
+        principal_id: UUID,
+        home_id: UUID,
+        path: Sequence[UUID],
+        now: datetime,
+    ) -> list[Role]:
+        """The roles of those of the ``applicable`` grants that have no end."""
+        ...
+
 
 class InvitationRepository(Protocol):
     async def add(self, invitation: Invitation) -> None: ...
@@ -301,8 +312,8 @@ class TokenRepository(Protocol):
         """The principal's token; a guest link has exactly one."""
         ...
 
-    async def used(self, token_id: UUID, now: datetime, ip: str | None) -> None:
-        """Keep when and from which address the token was last used."""
+    async def used(self, token_id: UUID, now: datetime, *, ip: str | None) -> None:
+        """Keep when the token was last used, and from which address when ``ip`` is given."""
         ...
 
     async def revoke_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> None: ...

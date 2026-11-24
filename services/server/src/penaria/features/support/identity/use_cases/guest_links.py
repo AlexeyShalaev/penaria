@@ -160,7 +160,8 @@ class OpenGuestLink:
             session, new_token = Session.start_guest(grant.id, client, now)
             await tx.sessions.add(session)
             await tx.sessions.trim_for_grant(grant.id, GUEST_SESSIONS_MAX, now)
-            await tx.tokens.used(found.id, now, client.ip)
+            # Its journal entry has the visitor's address; the link keeps none.
+            await tx.tokens.used(found.id, now, ip=None)
             await tx.journal.append(
                 [
                     Event(
