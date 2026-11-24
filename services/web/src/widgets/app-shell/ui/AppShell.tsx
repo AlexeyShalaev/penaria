@@ -1,7 +1,7 @@
 import {CircleUserRound, Map as MapIcon} from 'lucide-react'
 import {useEffect} from 'react'
 import {useTranslation} from 'react-i18next'
-import {Link, Outlet, useLocation, useParams} from 'react-router'
+import {Link, Outlet, useParams} from 'react-router'
 
 import {useAccount} from '@/entities/account'
 import {useEntity} from '@/entities/entity'
@@ -10,15 +10,17 @@ import {readLastHome, rememberLastHome} from '@/shared/lib/lastHome'
 import styles from './AppShell.module.css'
 import {HomeSwitcher} from './HomeSwitcher'
 
-/** The frame of every page inside a home: a sidebar on wide screens, a top bar and tab bar on phones. */
-export function AppShell() {
+/**
+ * The frame of the app's pages: a sidebar on wide screens, a top bar and tab bar on phones. A page
+ * of one home shows that home in the switcher; the account, which belongs to no home, the home used last.
+ */
+export function AppShell(props: {section: 'places' | 'account'}) {
   const {t} = useTranslation()
   const params = useParams<{homeId?: string; entityId?: string}>()
   const entity = useEntity(params.entityId)
   const account = useAccount()
-  const onAccountPage = useLocation().pathname === '/account'
+  const onAccountPage = props.section === 'account'
   const pageHomeId = params.homeId ?? entity.data?.home_id
-  // A page of no home, such as the account, keeps the home used last in the switcher.
   const homeId = pageHomeId ?? (onAccountPage ? (readLastHome() ?? undefined) : undefined)
 
   useEffect(() => {

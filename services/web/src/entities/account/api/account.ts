@@ -1,12 +1,26 @@
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {type QueryClient, useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 
-import {ACCOUNT_KEY, api, isApiError, type Schemas, unwrap} from '@/shared/api'
+import {api, isApiError, type Schemas, unwrap} from '@/shared/api'
 
 export type Account = Schemas['AccountOut']
 export type AccountSession = Schemas['SessionOut']
 
+const ACCOUNT_KEY = ['account'] as const
 const setupKey = ['setup'] as const
-const sessionsKey = ['account', 'sessions'] as const
+const sessionsKey = ['sessions'] as const
+
+/** Shows the app signed out, as when the server answers that the session is gone. */
+export function forgetAccount(queryClient: QueryClient) {
+  startSession(queryClient, null)
+}
+
+// After signing in or out, nothing cached under the previous session may show.
+function startSession(queryClient: QueryClient, account: Account | null) {
+  queryClient.removeQueries({
+    predicate: (query) => !(query.queryKey.length === 1 && query.queryKey[0] === ACCOUNT_KEY[0]),
+  })
+  queryClient.setQueryData(ACCOUNT_KEY, account)
+}
 
 /** The signed-in account, or `null` without a session. */
 export function useAccount() {
@@ -29,13 +43,9 @@ export function useSetupStatus() {
   return useQuery({queryKey: setupKey, queryFn: () => unwrap(api.GET('/api/v1/setup'))})
 }
 
-/** After signing in or out, nothing cached under the previous session may show. */
 function useStartSession() {
   const queryClient = useQueryClient()
-  return (account: Account | null) => {
-    queryClient.removeQueries({predicate: (query) => query.queryKey[0] !== ACCOUNT_KEY[0]})
-    queryClient.setQueryData(ACCOUNT_KEY, account)
-  }
+  return (account: Account | null) => startSession(queryClient, account)
 }
 
 export function useCompleteSetup() {

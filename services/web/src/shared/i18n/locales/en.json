@@ -220,13 +220,13 @@
     "displayName": "Your name",
     "displayNameHint": "What others in your homes see.",
     "password": "Password",
-    "passwordHint": "At least {{min}} characters. A few unrelated words make a good one.",
     "repeatPassword": "Repeat the password",
     "submit": "Create account"
   },
   "password": {
     "tooShort": "The password needs at least {{min}} characters.",
-    "mismatch": "The passwords do not match."
+    "mismatch": "The passwords do not match.",
+    "hint": "At least {{min}} characters. A few unrelated words make a good one."
   },
   "account": {
     "title": "Account",

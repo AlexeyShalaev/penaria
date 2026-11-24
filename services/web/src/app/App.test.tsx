@@ -3,7 +3,7 @@ import {Route} from 'react-router'
 import {describe, expect, it} from 'vitest'
 
 import {mockApi, problem} from '@/test/api'
-import {account, detail, home, HOME_ID} from '@/test/fixtures'
+import {account, detail, home, HOME_ID, session} from '@/test/fixtures'
 import {renderAt} from '@/test/render'
 
 import {AppRoutes} from './App'
@@ -132,5 +132,40 @@ describe('App', () => {
     renderApp()
 
     expect(await screen.findByRole('heading', {name: 'Добро пожаловать в Penaria'})).toBeVisible()
+  })
+
+  it('shows nothing of the previous person after signing out and in as someone else', async () => {
+    let signedIn: string | null = 'Alex'
+    mockApi({
+      'GET /api/v1/me': () =>
+        signedIn
+          ? account({display_name: signedIn, username: signedIn.toLowerCase()})
+          : problem(401, 'unauthenticated'),
+      'GET /api/v1/setup': {needed: false},
+      'GET /api/v1/me/sessions': () => [
+        session({id: `${signedIn}-laptop`, current: true, ip: signedIn === 'Alex' ? '192.0.2.1' : '198.51.100.9'}),
+      ],
+      'POST /api/v1/sign-out': () => {
+        signedIn = null
+        return new Response(null, {status: 204})
+      },
+      'POST /api/v1/sign-in': () => {
+        signedIn = 'Sam'
+        return account({display_name: 'Sam', username: 'sam'})
+      },
+      'GET /api/v1/homes': () => [],
+    })
+    renderApp('/account')
+
+    expect(await screen.findByText(/192\.0\.2\.1/)).toBeVisible()
+    expect(screen.getByRole('link', {name: /Alex/})).toHaveAttribute('aria-current', 'page')
+    fireEvent.click(screen.getByRole('button', {name: 'Sign out'}))
+    expect(await screen.findByRole('heading', {name: 'Sign in'})).toBeVisible()
+    fireEvent.change(screen.getByLabelText('Username'), {target: {value: 'sam'}})
+    fireEvent.change(screen.getByLabelText('Password'), {target: {value: 'another long password'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Sign in'}))
+
+    expect(await screen.findByText(/198\.51\.100\.9/)).toBeVisible()
+    expect(screen.queryByText(/192\.0\.2\.1/)).toBeNull()
   })
 })

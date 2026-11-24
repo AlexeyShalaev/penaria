@@ -6,7 +6,8 @@ import {SignInForm} from '@/features/sign-in'
 import {useAccount, useSetupStatus} from '@/entities/account'
 import {Card, IconTile, PageTitle, QueryState} from '@/shared/ui'
 
-import styles from './AuthPage.module.css'
+import {safeNext} from '../model/next'
+import styles from './SignInPage.module.css'
 
 /** Where the guard sends a request without a session; `next` is the page to return to. */
 export function SignInPage() {
@@ -39,9 +40,4 @@ export function SignInPage() {
       </QueryState>
     </main>
   )
-}
-
-// Only a path of this app: a link to sign in must not send anyone to another site afterwards.
-function safeNext(next: string | null): string {
-  return next?.startsWith('/') && !next.startsWith('//') ? next : '/'
 }

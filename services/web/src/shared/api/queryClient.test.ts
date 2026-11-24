@@ -1,9 +1,14 @@
-import {describe, expect, it} from 'vitest'
+import {describe, expect, it, vi} from 'vitest'
 
 import {ApiError} from './errors'
-import {ACCOUNT_KEY, createQueryClient} from './queryClient'
+import {createQueryClient} from './queryClient'
 
-const retry = createQueryClient().getDefaultOptions().queries?.retry as (failures: number, error: Error) => boolean
+const retry = createQueryClient({onUnauthenticated: () => {}}).getDefaultOptions().queries?.retry as (
+  failures: number,
+  error: Error,
+) => boolean
+
+const reject = (error: Error) => () => Promise.reject(error)
 
 describe('createQueryClient', () => {
   it.each([
@@ -16,33 +21,38 @@ describe('createQueryClient', () => {
     expect(retry(failures, error)).toBe(expected)
   })
 
-  it('forgets the account when any call finds the session gone', async () => {
-    const client = createQueryClient()
-    client.setQueryData(ACCOUNT_KEY, {username: 'owner'})
+  it('signs out when a query finds the session gone', async () => {
+    const onUnauthenticated = vi.fn()
+    const client = createQueryClient({onUnauthenticated})
 
     await client
-      .fetchQuery({
-        queryKey: ['homes'],
-        queryFn: () => Promise.reject(new ApiError(401, 'unauthenticated', '')),
-        retry: false,
-      })
+      .fetchQuery({queryKey: ['homes'], queryFn: reject(new ApiError(401, 'unauthenticated', '')), retry: false})
       .catch(() => {})
 
-    expect(client.getQueryData(ACCOUNT_KEY)).toBeNull()
+    expect(onUnauthenticated).toHaveBeenCalledWith(client)
   })
 
-  it('keeps the account after other failures', async () => {
-    const client = createQueryClient()
-    client.setQueryData(ACCOUNT_KEY, {username: 'owner'})
+  it('signs out when a change finds the session gone', async () => {
+    const onUnauthenticated = vi.fn()
+    const client = createQueryClient({onUnauthenticated})
 
     await client
-      .fetchQuery({
-        queryKey: ['homes'],
-        queryFn: () => Promise.reject(new ApiError(404, 'home_not_found', '')),
-        retry: false,
-      })
+      .getMutationCache()
+      .build(client, {mutationFn: reject(new ApiError(401, 'unauthenticated', ''))})
+      .execute(undefined)
       .catch(() => {})
 
-    expect(client.getQueryData(ACCOUNT_KEY)).toEqual({username: 'owner'})
+    expect(onUnauthenticated).toHaveBeenCalledWith(client)
+  })
+
+  it('stays signed in after other failures', async () => {
+    const onUnauthenticated = vi.fn()
+    const client = createQueryClient({onUnauthenticated})
+
+    await client
+      .fetchQuery({queryKey: ['homes'], queryFn: reject(new ApiError(401, 'invalid_credentials', '')), retry: false})
+      .catch(() => {})
+
+    expect(onUnauthenticated).not.toHaveBeenCalled()
   })
 })

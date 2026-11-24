@@ -68,7 +68,7 @@ export function SetupForm(props: {onDone: (account: Account) => void}) {
             maxLength={200}
           />
         </Field>
-        <Field label={t('setup.password')} hint={t('setup.passwordHint', {min: PASSWORD_MIN_LENGTH})}>
+        <Field label={t('setup.password')} hint={t('password.hint', {min: PASSWORD_MIN_LENGTH})}>
           <TextInput
             type="password"
             value={password}

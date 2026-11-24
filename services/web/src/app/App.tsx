@@ -11,6 +11,7 @@ import {SetupPage} from '@/pages/setup'
 import {SignInPage} from '@/pages/sign-in'
 import {StartPage} from '@/pages/start'
 import {AppShell} from '@/widgets/app-shell'
+import {forgetAccount} from '@/entities/account'
 import {createQueryClient} from '@/shared/api'
 
 import {RequireAccount} from './RequireAccount'
@@ -23,9 +24,11 @@ export function AppRoutes() {
       <Route element={<RequireAccount />}>
         <Route index element={<StartPage />} />
         <Route path="homes/new" element={<NewHomePage />} />
-        <Route element={<AppShell />}>
+        <Route element={<AppShell section="places" />}>
           <Route path="homes/:homeId/places" element={<PlacesPage />} />
           <Route path="entities/:entityId" element={<EntityPage />} />
+        </Route>
+        <Route element={<AppShell section="account" />}>
           <Route path="account" element={<AccountPage />} />
         </Route>
       </Route>
@@ -35,7 +38,7 @@ export function AppRoutes() {
 }
 
 export function App() {
-  const [queryClient] = useState(createQueryClient)
+  const [queryClient] = useState(() => createQueryClient({onUnauthenticated: forgetAccount}))
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

@@ -4,17 +4,14 @@ import {ApiError, isApiError} from './errors'
 
 const MAX_RETRIES = 2
 
-/** The signed-in account's query; `null` once the server says there is no session. */
-export const ACCOUNT_KEY = ['account'] as const
-
-export function createQueryClient() {
-  // Any call that finds the session gone signs the app out, and the guard sends the person to sign in.
-  const signOutOnUnauthenticated = (error: Error) => {
-    if (isApiError(error, 'unauthenticated')) client.setQueryData(ACCOUNT_KEY, null)
+/** The app's query client; `onUnauthenticated` runs whenever a call finds the session gone. */
+export function createQueryClient(options: {onUnauthenticated: (client: QueryClient) => void}) {
+  const signOut = (error: Error) => {
+    if (isApiError(error, 'unauthenticated')) options.onUnauthenticated(client)
   }
   const client: QueryClient = new QueryClient({
-    queryCache: new QueryCache({onError: signOutOnUnauthenticated}),
-    mutationCache: new MutationCache({onError: signOutOnUnauthenticated}),
+    queryCache: new QueryCache({onError: signOut}),
+    mutationCache: new MutationCache({onError: signOut}),
     defaultOptions: {
       queries: {
         // A 4xx answer does not change on retry; a network failure or a 5xx may.

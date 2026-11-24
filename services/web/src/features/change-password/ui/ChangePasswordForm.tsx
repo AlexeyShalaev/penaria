@@ -45,7 +45,7 @@ export function ChangePasswordForm() {
             required
           />
         </Field>
-        <Field label={t('account.newPassword')} hint={t('setup.passwordHint', {min: PASSWORD_MIN_LENGTH})}>
+        <Field label={t('account.newPassword')} hint={t('password.hint', {min: PASSWORD_MIN_LENGTH})}>
           <TextInput
             type="password"
             value={password}
