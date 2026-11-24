@@ -23,9 +23,10 @@
   border-bottom: none;
 }
 
+/* On a phone the buttons go under the name rather than squeeze it. */
 .text {
   display: flex;
-  flex: 1;
+  flex: 1 1 14rem;
   flex-direction: column;
   gap: 2px;
   min-width: 0;

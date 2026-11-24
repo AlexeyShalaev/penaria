@@ -1,0 +1,3 @@
+type = "added"
+en = "Passkeys: sign in with your fingerprint, face or screen lock instead of a password, without typing a username. Add, rename and remove passkeys on the account page; Penaria asks you to confirm it's you before you add or remove one. Passkeys need Penaria opened over https at a domain name."
+ru = "Ключи доступа: входите по отпечатку пальца, лицу или коду блокировки экрана вместо пароля, не вводя имя пользователя. Ключи добавляют, переименовывают и удаляют на странице аккаунта, а перед добавлением или удалением Penaria просит подтвердить, что это вы. Ключам доступа нужно, чтобы Penaria открывалась по https и доменному имени."
