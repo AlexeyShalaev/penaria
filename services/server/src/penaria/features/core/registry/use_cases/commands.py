@@ -21,6 +21,10 @@ from penaria.features.shared.access import Permission
 from penaria.features.shared.actor import Actor
 from penaria.features.shared.journal import Event
 
+# The payload keys under which events name another place, each as `_place` writes it; reading the
+# history leaves out the places its reader may not see (queries.py).
+PLACE_KEYS = ("parent", "from", "to")
+
 
 def _place(entity: Entity | None) -> dict[str, Any] | None:
     return None if entity is None else {"id": str(entity.id), "name": entity.name, "kind": entity.kind.value}

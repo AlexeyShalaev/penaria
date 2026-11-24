@@ -1188,3 +1188,88 @@ async def test_a_guest_sees_no_history_and_only_the_names_of_places_on_the_way(
 
     assert (history.status_code, history.json()["code"]) == (403, "permission_denied")
     assert (seen["name"], seen["aliases"]) == ("Guest room", [])
+
+
+async def test_history_judges_each_place_by_the_readers_access_there(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    shed = await ok(
+        await api.post(
+            f"/homes/{ids['home']}/entities", json={"kind": "space", "name": "Shed", "parent_id": ids["house"]}
+        ),
+        201,
+    )
+    rake = await ok(
+        await api.post(
+            f"/homes/{ids['home']}/entities", json={"kind": "item", "name": "Rake", "parent_id": shed["id"]}
+        ),
+        201,
+    )
+    await ok(await api.post(f"/entities/{rake['id']}:move", json={"parent_id": ids["kitchen"], "version": 1}))
+    # An admin, so private places would show, but only over the kitchen.
+    admin = await member(api, new_client, ids["home"], "admin", "anna", scope_entity_id=ids["kitchen"])
+
+    history = await ok(await admin.get(f"/entities/{rake['id']}/history"))
+
+    assert [(e["type"], e["payload"].get("parent"), e["payload"].get("from")) for e in history] == [
+        ("entity.moved", None, None),
+        ("entity.created", None, None),
+    ]
+    assert history[0]["payload"]["to"]["name"] == "Kitchen"
+
+
+async def test_opening_an_ended_guest_link_does_not_count_as_guessing(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    token = await guest_link(api, ids["home"])
+    [link] = await ok(await api.get(f"/homes/{ids['home']}/guest-links"))
+    await ok(await api.delete(f"/homes/{ids['home']}/grants/{link['grant_id']}"), 204)
+    guest = new_client()
+
+    answers = [(await guest.post("/guest-sessions", json={"token": token})).json()["code"] for _ in range(6)]
+
+    assert answers == ["guest_link_ended"] * 6
+
+
+async def demote(api: httpx.AsyncClient, home_id: str, anna: httpx.AsyncClient) -> None:
+    [m] = [m for m in await ok(await api.get(f"/homes/{home_id}/members")) if m["person"]["username"] == "anna"]
+    family = (await roles(api, home_id))["family"]
+    await ok(await api.patch(f"/homes/{home_id}/grants/{m['grants'][0]['id']}", json={"role_id": family}), 204)
+
+
+async def leave(api: httpx.AsyncClient, home_id: str, anna: httpx.AsyncClient) -> None:
+    await ok(await anna.post(f"/homes/{home_id}:leave"), 204)
+
+
+@pytest.mark.parametrize("lose_access", [demote, leave], ids=["demoted", "left"])
+async def test_a_guest_link_ends_when_its_maker_is_demoted_or_leaves(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer, lose_access: Any
+) -> None:
+    ids = await make_home(api)
+    anna = await member(api, new_client, ids["home"], "admin", "anna")
+    visitor = new_client()
+    await ok(await visitor.post("/guest-sessions", json={"token": await guest_link(anna, ids["home"])}))
+
+    await lose_access(api, ids["home"], anna)
+
+    assert (await visitor.get("/guest")).status_code == 401
+    assert [e[2]["reason"] for e in await last_events(container, 5) if e[0] == "guest_link.revoked"] == [
+        "giver_lost_access"
+    ]
+
+
+async def test_handing_the_home_over_ends_the_old_owners_guest_links(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    ids = await make_home(api)
+    visitor = new_client()
+    await ok(await visitor.post("/guest-sessions", json={"token": await guest_link(api, ids["home"])}))
+
+    await join(new_client, await invite(api, ids["home"], "owner", leave_when_accepted=True), "heir")
+
+    assert (await visitor.get("/guest")).status_code == 401
+    assert [e[2]["reason"] for e in await last_events(container, 6) if e[0] == "guest_link.revoked"] == [
+        "giver_lost_access"
+    ]
