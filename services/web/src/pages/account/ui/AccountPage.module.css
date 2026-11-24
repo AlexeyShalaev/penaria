@@ -29,6 +29,10 @@
   font-size: var(--fs-sm);
 }
 
+.passkeyActions {
+  margin-top: var(--sp-4);
+}
+
 @media (max-width: 860px) {
   .columns {
     grid-template-columns: minmax(0, 1fr);

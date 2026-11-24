@@ -11,7 +11,8 @@ const BROWSERS: [RegExp, string][] = [
 ]
 
 const SYSTEMS: [RegExp, string][] = [
-  [/iPhone|iPad|iPod/, 'iOS'],
+  [/iPhone|iPod/, 'iPhone'],
+  [/iPad/, 'iPad'],
   [/Android/, 'Android'],
   [/Windows/, 'Windows'],
   [/Mac OS X|Macintosh/, 'macOS'],

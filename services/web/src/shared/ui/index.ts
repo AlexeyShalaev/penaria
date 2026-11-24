@@ -1,6 +1,6 @@
 export {Badge, type Tone} from './Badge'
 export {Breadcrumbs} from './Breadcrumbs'
-export {Button} from './Button'
+export {Button, IconButton} from './Button'
 export {Card} from './Card'
 export {Chip} from './Chip'
 export {Dialog} from './Dialog'

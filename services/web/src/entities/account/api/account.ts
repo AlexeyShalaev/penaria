@@ -43,7 +43,7 @@ export function useSetupStatus() {
   return useQuery({queryKey: setupKey, queryFn: () => unwrap(api.GET('/api/v1/setup'))})
 }
 
-function useStartSession() {
+export function useStartSession() {
   const queryClient = useQueryClient()
   return (account: Account | null) => startSession(queryClient, account)
 }

@@ -1,16 +1,19 @@
 import {LogOut} from 'lucide-react'
 import {useTranslation} from 'react-i18next'
 
+import {AddPasskeyButton} from '@/features/add-passkey'
 import {ChangePasswordForm} from '@/features/change-password'
 import {AccountForm} from '@/features/edit-account'
+import {PasskeyList} from '@/features/manage-passkeys'
 import {SessionList} from '@/features/manage-sessions'
 import {useAccount, useSignOut} from '@/entities/account'
 import {describeError} from '@/shared/api'
+import {passkeysSupported} from '@/shared/lib/webauthn'
 import {Button, Card, CardTitle, FormError, PageTitle, QueryState} from '@/shared/ui'
 
 import styles from './AccountPage.module.css'
 
-/** The signed-in person's own account: their name, language, password and devices. */
+/** The signed-in person's own account: their name, language, password, passkeys and devices. */
 export function AccountPage() {
   const {t} = useTranslation()
   const account = useAccount()
@@ -36,6 +39,18 @@ export function AccountPage() {
               <Card as="section" aria-labelledby="account-password">
                 <CardTitle id="account-password">{t('account.passwordTitle')}</CardTitle>
                 <ChangePasswordForm />
+              </Card>
+              <Card as="section" id="passkeys" className={styles.wide} aria-labelledby="account-passkeys">
+                <CardTitle id="account-passkeys">{t('passkeys.title')}</CardTitle>
+                <p className={styles.text}>{t('passkeys.text')}</p>
+                <PasskeyList />
+                <div className={styles.passkeyActions}>
+                  {passkeysSupported() ? (
+                    <AddPasskeyButton />
+                  ) : (
+                    <p className={styles.text}>{t('passkeys.unsupported')}</p>
+                  )}
+                </div>
               </Card>
               <Card as="section" className={styles.wide} aria-labelledby="account-sessions">
                 <CardTitle id="account-sessions">{t('account.sessions')}</CardTitle>

@@ -71,7 +71,7 @@ function SessionRow(props: {session: AccountSession; onRevoke: () => void; busy:
   ].filter(Boolean)
   return (
     <li className={styles.row}>
-      <IconTile icon={system === 'iOS' || system === 'Android' ? Smartphone : Monitor} size="sm" />
+      <IconTile icon={system === 'iPhone' || system === 'Android' ? Smartphone : Monitor} size="sm" />
       <div className={styles.text}>
         <span className={styles.device}>
           {device}
