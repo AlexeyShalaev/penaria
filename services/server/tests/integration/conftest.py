@@ -24,7 +24,7 @@ from tests.smtp import FakeSmtp
 # Every table that holds data; CASCADE reaches the rest.
 DATA_TABLES = (
     "identity_users, identity_homes, journal_events, identity_setup_tokens, identity_sign_in_failures, "
-    "identity_passkey_challenges, identity_tokens, identity_install_settings, identity_mail"
+    "identity_passkey_challenges, identity_tokens, identity_install_settings, identity_mail, identity_oidc_flows"
 )
 PUBLIC_URL = "http://test"
 OWNER = {"username": "owner", "display_name": "Owner", "password": "correct horse battery", "locale": "en"}
@@ -69,7 +69,18 @@ def operator_mail() -> dict[str, Any] | None:
 
 
 @pytest.fixture
-def settings(database_settings: DatabaseSettings, public_url: str, operator_mail: dict[str, Any] | None) -> Settings:
+def operator_oidc() -> dict[str, Any] | None:
+    """``PENARIA_AUTH__OIDC__*`` of the tests: none; a test overrides it to set a sign-in provider up."""
+    return None
+
+
+@pytest.fixture
+def settings(
+    database_settings: DatabaseSettings,
+    public_url: str,
+    operator_mail: dict[str, Any] | None,
+    operator_oidc: dict[str, Any] | None,
+) -> Settings:
     return Settings.model_validate(
         {
             "server": HttpServerSettings(),
@@ -77,6 +88,7 @@ def settings(database_settings: DatabaseSettings, public_url: str, operator_mail
             "public_url": public_url,
             "secret_key": "test-secret-key-of-at-least-32-characters",
             "mail": operator_mail,
+            "auth": {"oidc": operator_oidc},
         }
     )
 

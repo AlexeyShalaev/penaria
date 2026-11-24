@@ -1,0 +1,3 @@
+type = "added"
+en = "If you run an identity provider such as Authentik or Keycloak, people can sign in to Penaria with it: set the PENARIA_AUTH__OIDC__* variables, and the sign-in page offers \"Sign in with\" your provider. People link it on their account page or join through an invitation with it; new accounts are made only if you allow it."
+ru = "Если у вас есть свой провайдер входа, например Authentik или Keycloak, в Penaria можно входить через него: задайте переменные PENARIA_AUTH__OIDC__*, и на странице входа появится кнопка «Войти через» ваш провайдер. Люди привязывают его на странице аккаунта или присоединяются через него по приглашению; новые аккаунты создаются, только если вы это разрешили."

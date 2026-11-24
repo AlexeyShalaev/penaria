@@ -1,6 +1,6 @@
 """Checking a second factor, and the rule of who must have one (sign-in.md, 4.3).
 
-An owner of any home and an install admin who can sign in with a password must also have an
+An owner of any home and an install admin who can sign in with a password or the provider must also have an
 authenticator app or a passkey. Until they add one, the owner-level commands refuse them
 (``require_second_factor``); the rule follows the account as it is now, so adding a factor lifts it
 in every session at once, and becoming an owner brings it.
@@ -117,9 +117,12 @@ async def totp_enabled(tx: IdentityTransaction, user_id: UUID) -> Totp | None:
 
 
 async def must_have_second_factor(tx: IdentityTransaction, user: User) -> bool:
-    """Whether the account must keep a second factor: an install admin or an owner who has a password."""
+    """Whether the account must keep a second factor: an install admin or an owner who has a password or an
+    identity at the operator's provider. Any identity counts, one of an earlier issuer too: asking for a
+    factor it no longer needs errs on the safe side."""
     return second_factor_required(
-        has_password=await tx.passwords.get(user.id) is not None,
+        signs_in_without_passkey=await tx.passwords.get(user.id) is not None
+        or bool(await tx.external_identities.for_user(user.id)),
         install_admin=user.install_admin,
         owns_a_home=await tx.grants.owns_a_home(user.id),
     )
@@ -150,5 +153,5 @@ async def require_second_factor(tx: IdentityTransaction, user_id: UUID) -> None:
     if (await second_factor_state(tx, user)).missing:
         raise SecondFactorRequiredError(
             "add a passkey or an authenticator app first: owners and install admins who sign in with a "
-            "password need a second factor"
+            "password or the sign-in provider need a second factor"
         )

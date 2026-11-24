@@ -38,6 +38,7 @@ from penaria.features.support.identity.api.devices import device_token_of
 from penaria.features.support.identity.domain.links import PublicLinks
 from penaria.features.support.identity.domain.mail import MailTransport
 from penaria.features.support.identity.domain.mailbox import Mailbox, MailboxSource, OperatorMailbox
+from penaria.features.support.identity.domain.oidc import ExternalSignIn
 from penaria.features.support.identity.domain.passkeys import RelyingParty
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
@@ -45,6 +46,7 @@ from penaria.features.support.identity.domain.secrets import SecretBox
 from penaria.features.support.identity.domain.sessions import CurrentSession, GuestSession, RequestSession
 from penaria.features.support.identity.infra.argon2 import Argon2PasswordHasher
 from penaria.features.support.identity.infra.fernet import FernetSecretBox
+from penaria.features.support.identity.infra.oidc import AuthlibOidcProvider
 from penaria.features.support.identity.infra.smtp import SmtpTransport
 from penaria.features.support.identity.infra.webauthn import WebAuthnRelyingParty
 from penaria.features.support.identity.use_cases.access import GrantAccessPolicy
@@ -88,6 +90,15 @@ from penaria.features.support.identity.use_cases.members import (
     ListMembers,
     ListRoles,
     RevokeGrant,
+)
+from penaria.features.support.identity.use_cases.oidc import (
+    CompleteOidc,
+    ListSignInMethods,
+    StartOidcInvitation,
+    StartOidcLink,
+    StartOidcReauthentication,
+    StartOidcSignIn,
+    UnlinkExternalIdentity,
 )
 from penaria.features.support.identity.use_cases.passkeys import (
     AddPasskey,
@@ -163,6 +174,20 @@ class SettingsProvider(Provider):
             self._settings.secret_key.get_secret_value(),
             [key.get_secret_value() for key in self._settings.retired_secret_keys],
         )
+
+    @provide
+    def external_sign_in(self) -> ExternalSignIn:
+        oidc = self._settings.auth.oidc
+        if oidc is None:
+            return ExternalSignIn()
+        provider = AuthlibOidcProvider(
+            issuer=oidc.issuer,
+            client_id=oidc.client_id,
+            client_secret=oidc.client_secret.get_secret_value(),
+            scopes=oidc.scopes,
+            redirect_uri=self._settings.oidc_redirect_uri,
+        )
+        return ExternalSignIn(provider=provider, name=oidc.display_name, allow_sign_up=oidc.allow_sign_up)
 
     @provide
     def operator_mailbox(self) -> OperatorMailbox:
@@ -263,6 +288,13 @@ class UseCaseProvider(Provider):
         GetGuestView,
         CreateDevice,
         ListDevices,
+        StartOidcSignIn,
+        StartOidcInvitation,
+        StartOidcLink,
+        StartOidcReauthentication,
+        CompleteOidc,
+        ListSignInMethods,
+        UnlinkExternalIdentity,
         AuthenticateDevice,
         EntityAccess,
         CreateEntity,

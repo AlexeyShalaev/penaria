@@ -16,11 +16,14 @@ from penaria import __version__
 from penaria.apps.api.container import build_container
 from penaria.apps.api.origin import origin_check
 from penaria.apps.api.settings import Settings
+from penaria.common.urls import is_loopback
 from penaria.features.core.registry.api.routes import router as registry_router
 from penaria.features.support.identity.api.account import router as account_router
 from penaria.features.support.identity.api.account import sign_in_router
 from penaria.features.support.identity.api.devices import router as devices_router
 from penaria.features.support.identity.api.install import router as install_router
+from penaria.features.support.identity.api.oidc import public_router as oidc_public_router
+from penaria.features.support.identity.api.oidc import router as oidc_router
 from penaria.features.support.identity.api.passkeys import router as passkeys_router
 from penaria.features.support.identity.api.passkeys import sign_in_router as passkey_sign_in_router
 from penaria.features.support.identity.api.people import guest_router, public_router
@@ -34,10 +37,12 @@ SERVICE_NAME = "penaria-api"
 ROUTERS = (
     sign_in_router,
     passkey_sign_in_router,
+    oidc_public_router,
     recovery_router,
     account_router,
     passkeys_router,
     totp_router,
+    oidc_router,
     identity_router,
     people_router,
     devices_router,
@@ -46,7 +51,6 @@ ROUTERS = (
     install_router,
     registry_router,
 )
-LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "[::1]"})
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +80,7 @@ def build_spec() -> AppSpec[Settings, DishkaContainer]:
 
 
 def build_http(settings: Settings) -> FastApiEntrypoint:
-    if not settings.serves_https and settings.public_url.host not in LOOPBACK_HOSTS:
+    if not settings.serves_https and not is_loopback(settings.public_url.host):
         logger.warning(
             "PENARIA_PUBLIC_URL is plain HTTP: passwords and session cookies cross the network unencrypted; "
             "put Penaria behind HTTPS"

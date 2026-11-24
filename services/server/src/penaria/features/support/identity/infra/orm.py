@@ -333,3 +333,48 @@ class AccountLinkDB(Base):
     expires_at: Mapped[datetime.datetime]
     used_at: Mapped[datetime.datetime | None]
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id", ondelete="SET NULL"))
+
+
+class ExternalIdentityDB(Base):
+    """Identities at the operator's OpenID Connect provider, each linked to one account (sign-in.md, 4.4)."""
+
+    __tablename__ = "identity_external_identities"
+    __table_args__ = (
+        Index("identity_external_identities_issuer_subject_key", "issuer", "subject", unique=True),
+        # One identity per provider and account: linking another replaces nothing silently.
+        Index("identity_external_identities_user_id_issuer_key", "user_id", "issuer", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    issuer: Mapped[str] = mapped_column(Text)
+    subject: Mapped[str] = mapped_column(Text)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"))
+    email: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime]
+
+
+class OidcFlowDB(Base):
+    """Sign-ins and links started with the provider and waiting for its callback; used once."""
+
+    __tablename__ = "identity_oidc_flows"
+    __table_args__ = (
+        CheckConstraint("purpose IN ('sign_in', 'link', 'reauthenticate', 'invitation')", name="purpose"),
+        CheckConstraint("(purpose IN ('link', 'reauthenticate')) = (session_id IS NOT NULL)", name="session"),
+        CheckConstraint("(purpose = 'invitation') = (invitation_hash IS NOT NULL)", name="invitation"),
+        Index("identity_oidc_flows_address_idx", "address", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    purpose: Mapped[str] = mapped_column(Text)
+    state_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    browser_hash: Mapped[bytes] = mapped_column(LargeBinary)
+    nonce: Mapped[str] = mapped_column(Text)
+    code_verifier: Mapped[str] = mapped_column(Text)
+    return_to: Mapped[str] = mapped_column(Text)
+    locale: Mapped[str] = mapped_column(Text)
+    address: Mapped[str | None] = mapped_column(Text)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"))
+    session_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_sessions.id", ondelete="CASCADE"))
+    invitation_hash: Mapped[bytes | None] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime.datetime]
+    expires_at: Mapped[datetime.datetime] = mapped_column(index=True)

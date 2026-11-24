@@ -27,6 +27,16 @@ export {
   useSignInWithPasskey,
 } from './api/passkeys'
 export {
+  type ExternalIdentity,
+  useAuthConfig,
+  useReauthenticateWithProvider,
+  useSignInMethods,
+  useStartProviderInvitation,
+  useStartProviderLink,
+  useStartProviderSignIn,
+  useUnlinkIdentity,
+} from './api/oidc'
+export {
   type ResetPreview,
   useConfirmEmail,
   usePasswordResetPreview,

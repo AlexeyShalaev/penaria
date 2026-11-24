@@ -4,6 +4,83 @@
  */
 
 export interface paths {
+    "/api/v1/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Auth Config
+         * @description How people may sign in here beyond passwords and passkeys.
+         */
+        get: operations["auth_config_api_v1_auth_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Oidc Callback
+         * @description Where the provider sends the browser back (`PENARIA_PUBLIC_URL` + this path): it redirects to a page.
+         */
+        get: operations["oidc_callback_api_v1_auth_oidc_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc:accept-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Oidc Invitation
+         * @description Accept an invitation with an identity at the provider: its account, or a new one made from it.
+         */
+        post: operations["start_oidc_invitation_api_v1_auth_oidc_accept_invitation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc:sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Oidc Sign In */
+        post: operations["start_oidc_sign_in_api_v1_auth_oidc_sign_in_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/email-verifications:confirm": {
         parameters: {
             query?: never;
@@ -614,6 +691,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/external-identities/{identity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unlink External Identity
+         * @description Unlink an identity; needs a recent sign-in, and the account keeps another way to sign in.
+         */
+        delete: operations["unlink_external_identity_api_v1_me_external_identities__identity_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/external-identities:link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Oidc Link
+         * @description Link the account to an identity at the provider; needs a recent sign-in.
+         */
+        post: operations["start_oidc_link_api_v1_me_external_identities_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/passkeys": {
         parameters: {
             query?: never;
@@ -708,6 +825,27 @@ export interface paths {
          *     while the authenticator app is on (``second_factor_code_required`` otherwise).
          */
         post: operations["reauthenticate_api_v1_me_reauthenticate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/reauthenticate/oidc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Oidc Reauthentication
+         * @description Confirm it is you by signing in at the provider again (``second_factor_code_required`` without a code while
+         *     the authenticator app is on).
+         */
+        post: operations["start_oidc_reauthentication_api_v1_me_reauthenticate_oidc_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -810,6 +948,23 @@ export interface paths {
         put?: never;
         /** Revoke Other Sessions */
         post: operations["revoke_other_sessions_api_v1_me_sessions_revoke_others_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/sign-in-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sign In Methods */
+        get: operations["sign_in_methods_api_v1_me_sign_in_methods_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1196,6 +1351,11 @@ export interface components {
              */
             transports: string[];
         };
+        /** AuthConfigOut */
+        AuthConfigOut: {
+            /** @description The operator's provider; null when there is none */
+            oidc: components["schemas"]["OidcConfigOut"] | null;
+        };
         /**
          * AuthenticationCredentialIn
          * @description An answer to a challenge, as ``navigator.credentials.get`` gives it, in JSON.
@@ -1451,6 +1611,24 @@ export interface components {
             };
             /** Type */
             type: string;
+        };
+        /** ExternalIdentityOut */
+        ExternalIdentityOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Email
+             * @description What the provider said when it was linked
+             */
+            email: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /**
          * FailureReason
@@ -1877,6 +2055,70 @@ export interface components {
             account: components["schemas"]["AccountOut"];
             home: components["schemas"]["HomeRefOut"];
         };
+        /** OidcConfigOut */
+        OidcConfigOut: {
+            /**
+             * Name
+             * @description What the sign-in button calls the provider, such as Authentik
+             */
+            name: string;
+        };
+        /** OidcInvitationIn */
+        OidcInvitationIn: {
+            /**
+             * Locale
+             * @description The language of an account the invitation may make
+             * @example en
+             */
+            locale: string;
+            /** Token */
+            token: string;
+        };
+        /** OidcLinkIn */
+        OidcLinkIn: {
+            /** Return To */
+            return_to?: string | null;
+        };
+        /**
+         * OidcReauthenticationIn
+         * @description A code or a recovery code too while the account's authenticator app is on.
+         */
+        OidcReauthenticationIn: {
+            /**
+             * Code
+             * @description A code the authenticator app shows
+             */
+            code?: string | null;
+            /**
+             * Recovery Code
+             * @description One of the recovery codes
+             */
+            recovery_code?: string | null;
+            /** Return To */
+            return_to?: string | null;
+        };
+        /** OidcSignInIn */
+        OidcSignInIn: {
+            /**
+             * Locale
+             * @description The language of an account the sign-in may make
+             * @example en
+             */
+            locale: string;
+            /**
+             * Return To
+             * @description A page to come back to
+             */
+            return_to?: string | null;
+        };
+        /** OidcStartOut */
+        OidcStartOut: {
+            /**
+             * Url
+             * @description Open it in the browser: the provider signs the person in and sends them back
+             */
+            url: string;
+        };
         /** PasskeyIn */
         PasskeyIn: {
             /**
@@ -2288,6 +2530,19 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** SignInMethodsOut */
+        SignInMethodsOut: {
+            /**
+             * External Identities
+             * @description Its identities at the operator's provider
+             */
+            external_identities: components["schemas"]["ExternalIdentityOut"][];
+            /**
+             * Password
+             * @description Whether the account has a password
+             */
+            password: boolean;
+        };
         /**
          * Status
          * @enum {string}
@@ -2360,6 +2615,123 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    auth_config_api_v1_auth_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthConfigOut"];
+                };
+            };
+        };
+    };
+    oidc_callback_api_v1_auth_oidc_callback_get: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                code?: string | null;
+                error?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_oidc_invitation_api_v1_auth_oidc_accept_invitation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OidcInvitationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcStartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_oidc_sign_in_api_v1_auth_oidc_sign_in_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OidcSignInIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcStartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     confirm_email_api_v1_email_verifications_confirm_post: {
         parameters: {
             query?: never;
@@ -3663,6 +4035,68 @@ export interface operations {
             };
         };
     };
+    unlink_external_identity_api_v1_me_external_identities__identity_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                identity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_oidc_link_api_v1_me_external_identities_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OidcLinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcStartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_passkeys_api_v1_me_passkeys_get: {
         parameters: {
             query?: never;
@@ -3862,6 +4296,39 @@ export interface operations {
             };
         };
     };
+    start_oidc_reauthentication_api_v1_me_reauthenticate_oidc_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OidcReauthenticationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcStartOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reauthenticate_with_passkey_api_v1_me_reauthenticate_passkey_post: {
         parameters: {
             query?: never;
@@ -3998,6 +4465,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevokedOut"];
+                };
+            };
+        };
+    };
+    sign_in_methods_api_v1_me_sign_in_methods_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInMethodsOut"];
                 };
             };
         };

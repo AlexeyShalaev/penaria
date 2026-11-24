@@ -207,7 +207,7 @@
     "passkey_already_registered": "This passkey is already added.",
     "passkey_not_found": "This passkey has already been removed.",
     "invalid_passkey_name": "A passkey's name needs 1 to {{max_length}} characters.",
-    "last_sign_in_method": "This passkey is your only way to sign in, so it cannot be removed.",
+    "last_sign_in_method": "This is your only way to sign in, so it cannot be removed.",
     "recent_sign_in_required": "Confirm it's you first.",
     "escalation": "You cannot give more access than you have yourself.",
     "invalid_grant": "Check the role, the place and the dates.",
@@ -266,7 +266,11 @@
     "second_factor_required": "Add a passkey or an authenticator app first: owners and admins need a second step to sign in.",
     "invalid_grant_device_role": "A device cannot be an owner or have a role whose access must end.",
     "invalid_token": "This token does not work. Check it, or make a new one.",
-    "giver_access_ends": "Your own access to this home ends, and a device's never does. Ask someone whose access does not end to add it."
+    "giver_access_ends": "Your own access to this home ends, and a device's never does. Ask someone whose access does not end to add it.",
+    "oidc_off": "This Penaria has no sign-in provider.",
+    "oidc_unavailable": "The sign-in provider cannot be reached right now. Try again later.",
+    "identity_already_linked": "An account of the sign-in provider is linked already. Unlink it first.",
+    "external_identity_not_found": "This account is not linked to the sign-in provider."
   },
   "languages": {
     "en": "English",
@@ -362,7 +366,9 @@
     "usePasskey": "Use a passkey",
     "orPassword": "or enter your password",
     "password": "Password",
-    "submit": "Confirm"
+    "submit": "Confirm",
+    "useProvider": "Continue with {{name}}",
+    "providerCode": "Enter a code from your authenticator app below first: it is asked for along with the provider."
   },
   "twoStep": {
     "title": "Two-step sign-in",
@@ -707,5 +713,60 @@
     "make": "Make the link",
     "ready": "Pass this link on to {{name}}. It works once, until {{until}}.",
     "shareTitle": "Penaria password reset"
+  },
+  "provider": {
+    "signIn": "Sign in with {{name}}",
+    "join": "Join with {{name}}",
+    "fallbackName": "the sign-in provider",
+    "backToSignIn": "Back to sign-in",
+    "toAccount": "Go to your account",
+    "problems": {
+      "expired": {
+        "title": "Signing in took too long",
+        "text": "The sign-in with {{name}} expired, was already used or was started in another browser. Start again."
+      },
+      "failed": {
+        "title": "{{name}} did not sign you in",
+        "text": "The sign-in was cancelled, or {{name}} answered with something Penaria could not check. Try again; if it keeps failing, ask whoever runs this Penaria."
+      },
+      "invitation_required": {
+        "title": "You need an invitation",
+        "text": "Your {{name}} account is not on this Penaria yet. Ask someone in the household for an invitation, open its link and choose “Join with {{name}}”."
+      },
+      "identity_taken": {
+        "title": "Linked to another account",
+        "text": "This {{name}} account is linked to another Penaria account already. Sign in with that one, or unlink it there first."
+      },
+      "wrong_account": {
+        "title": "Another {{name}} account",
+        "text": "You confirmed with a different {{name}} account than the one linked to yours. Try again with the linked one."
+      },
+      "account_disabled": {
+        "title": "This account is disabled",
+        "text": "An admin of this Penaria has disabled the account. Ask them about it."
+      },
+      "already_linked": {
+        "title": "Already linked",
+        "text": "Your account is linked to a {{name}} account already. Unlink it on the account page first."
+      },
+      "invitation_unusable": {
+        "title": "The invitation cannot be used",
+        "text": "It was used, revoked or has expired, or it gives access you already have. Ask for a new one."
+      },
+      "sign_in_first": {
+        "title": "Sign in first",
+        "text": "Your account asks for a code from your authenticator app. Sign in with {{name}} and the code first, then open the invitation link again and accept it."
+      }
+    }
+  },
+  "linked": {
+    "title": "Linked accounts",
+    "text": "Sign in with your {{name}} account instead of typing a password here.",
+    "none": "No {{name}} account is linked.",
+    "link": "Link your {{name}} account",
+    "details": "Linked {{when}}",
+    "detailsEmail": "{{email}} · linked {{when}}",
+    "unlink": "Unlink",
+    "unlinkLabel": "Unlink the {{name}} account"
   }
 }

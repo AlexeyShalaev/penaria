@@ -11,10 +11,12 @@ from penaria.features.support.identity.infra.mail_repositories import (
 )
 from penaria.features.support.identity.infra.repositories import (
     PostgresChallengeRepository,
+    PostgresExternalIdentityRepository,
     PostgresFailureRepository,
     PostgresGrantRepository,
     PostgresHomeRepository,
     PostgresInvitationRepository,
+    PostgresOidcFlowRepository,
     PostgresPasskeyRepository,
     PostgresPasswordRepository,
     PostgresPendingSignInRepository,
@@ -48,6 +50,8 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
         self._install_settings = PostgresInstallSettingsRepository(session)
         self._mail = PostgresMailRepository(session)
         self._account_links = PostgresAccountLinkRepository(session)
+        self._external_identities = PostgresExternalIdentityRepository(session)
+        self._oidc_flows = PostgresOidcFlowRepository(session)
         self._entities = PostgresEntityRepository(session)
         self._journal = PostgresJournal(session)
 
@@ -118,6 +122,14 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
     @property
     def account_links(self) -> PostgresAccountLinkRepository:
         return self._account_links
+
+    @property
+    def external_identities(self) -> PostgresExternalIdentityRepository:
+        return self._external_identities
+
+    @property
+    def oidc_flows(self) -> PostgresOidcFlowRepository:
+        return self._oidc_flows
 
     @property
     def entities(self) -> PostgresEntityRepository:

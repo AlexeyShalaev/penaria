@@ -332,18 +332,22 @@ async def start_session(
     now: datetime,
     *,
     passkey_id: UUID | None = None,
+    external_identity_id: UUID | None = None,
     second_factor: SecondFactorMethod | None = None,
 ) -> str:
     """Open a session for the user in the transaction and journal the sign-in; the token for the cookie.
 
-    ``passkey_id`` names the passkey the person signed in with; without it, they used their password,
-    and ``second_factor`` says how they confirmed it, if they had to.
+    ``passkey_id`` names the passkey the person signed in with, ``external_identity_id`` their identity at the
+    operator's provider; without either, they used their password, and ``second_factor`` says how they
+    confirmed it, if they had to.
     """
     session, token = Session.start(user.id, client, now)
     await tx.sessions.add(session)
     payload = {"user_id": str(user.id), "session_id": str(session.id), "ip": client.ip}
     if passkey_id is not None:
         payload["passkey_id"] = str(passkey_id)
+    if external_identity_id is not None:
+        payload["external_identity_id"] = str(external_identity_id)
     if second_factor is not None:
         payload["second_factor"] = second_factor.value
     await tx.journal.append([Event("account.signed_in", None, Actor.user(user.id), payload)])

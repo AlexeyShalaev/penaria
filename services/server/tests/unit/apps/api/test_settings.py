@@ -94,3 +94,53 @@ def test_a_short_retired_key_stops_the_process(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(ValidationError, match="at least 32 characters"):
         Settings()
+
+
+def provider_variables(monkeypatch: pytest.MonkeyPatch, issuer: str) -> None:
+    monkeypatch.setenv("PENARIA_AUTH__OIDC__ISSUER", issuer)
+    monkeypatch.setenv("PENARIA_AUTH__OIDC__CLIENT_ID", "penaria")
+    monkeypatch.setenv("PENARIA_AUTH__OIDC__CLIENT_SECRET", PASSWORD)
+
+
+def test_without_provider_variables_there_is_no_provider() -> None:
+    assert Settings().auth.oidc is None
+
+
+def test_a_provider_from_the_environment_keeps_its_issuer_exactly(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider_variables(monkeypatch, "https://auth.example.org/application/o/penaria/")
+
+    oidc = Settings().auth.oidc
+
+    assert oidc is not None
+    assert (oidc.issuer, oidc.allow_sign_up, oidc.scopes, oidc.display_name) == (
+        "https://auth.example.org/application/o/penaria/",
+        False,
+        "openid profile email",
+        "auth.example.org",
+    )
+    assert Settings().oidc_redirect_uri == "http://localhost:5173/api/v1/auth/oidc/callback"
+
+
+@pytest.mark.parametrize(
+    "issuer", ["http://auth.example.org", "https://auth.example.org/?tenant=1", "auth.example.org"]
+)
+def test_a_provider_must_be_https_unless_it_is_on_the_machine(monkeypatch: pytest.MonkeyPatch, issuer: str) -> None:
+    provider_variables(monkeypatch, issuer)
+
+    with pytest.raises(ValidationError, match=r"auth\.oidc\.issuer"):
+        Settings()
+
+
+@pytest.mark.parametrize("issuer", ["http://localhost:5556/dex", "http://127.0.0.1:5556/dex", "http://[::1]:5556/dex"])
+def test_a_provider_on_the_machine_may_use_http(monkeypatch: pytest.MonkeyPatch, issuer: str) -> None:
+    provider_variables(monkeypatch, issuer)
+
+    assert Settings().auth.oidc is not None
+
+
+def test_scopes_without_openid_are_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider_variables(monkeypatch, "https://auth.example.org")
+    monkeypatch.setenv("PENARIA_AUTH__OIDC__SCOPES", "profile email")
+
+    with pytest.raises(ValidationError, match="openid"):
+        Settings()
