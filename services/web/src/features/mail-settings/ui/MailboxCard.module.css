@@ -1,0 +1,136 @@
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.text {
+  margin: var(--sp-2) 0 var(--sp-3);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3);
+  border: 1px solid var(--info-soft);
+  border-radius: var(--r-md);
+  background: var(--info-soft);
+  color: var(--info-text);
+  font-size: var(--fs-sm);
+}
+
+.noticeIcon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.serverRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7rem;
+  gap: var(--sp-3);
+}
+
+.port {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-3);
+}
+
+.saved {
+  align-self: center;
+  margin-right: auto;
+  color: var(--ok-text);
+  font-size: var(--fs-sm);
+}
+
+.test {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+.testTitle {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+
+.test .text {
+  margin: 0;
+}
+
+.testRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+}
+
+.testRow > :first-child {
+  flex: 1;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: var(--fs-xs);
+}
+
+.sent {
+  margin: 0;
+  color: var(--ok-text);
+  font-size: var(--fs-sm);
+}
+
+.failed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: var(--fs-sm);
+}
+
+.serverWords {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .serverRow {
+    grid-template-columns: minmax(0, 1fr) 5.5rem;
+  }
+
+  .testRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

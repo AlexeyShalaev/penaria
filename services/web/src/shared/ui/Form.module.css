@@ -11,6 +11,14 @@
   min-width: 0;
 }
 
+.labelRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
 .label {
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
@@ -22,6 +30,11 @@
   color: var(--text-subtle);
 }
 
+.fieldError {
+  font-size: var(--fs-xs);
+  color: var(--danger-text);
+}
+
 .control {
   width: 100%;
   min-height: var(--tap);
@@ -31,6 +44,12 @@
   background: var(--surface-raised);
   color: var(--text);
   font: inherit;
+}
+
+.control:disabled {
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 
 .control:focus-visible {

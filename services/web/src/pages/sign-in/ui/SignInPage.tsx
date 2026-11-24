@@ -1,10 +1,11 @@
 import {KeyRound} from 'lucide-react'
 import {useTranslation} from 'react-i18next'
-import {Navigate, useNavigate, useSearchParams} from 'react-router'
+import {Link, Navigate, useNavigate, useSearchParams} from 'react-router'
 
 import {SignInForm} from '@/features/sign-in'
 import {PasskeySignInButton} from '@/features/sign-in-with-passkey'
 import {useAccount, useSetupStatus} from '@/entities/account'
+import {useMailEnabled} from '@/entities/install'
 import {passkeysSupported} from '@/shared/lib/webauthn'
 import {Card, IconTile, PageTitle, QueryState} from '@/shared/ui'
 
@@ -19,6 +20,7 @@ export function SignInPage() {
   const next = safeNext(params.get('next'))
   const account = useAccount()
   const setup = useSetupStatus()
+  const mail = useMailEnabled()
   const withPasskey = passkeysSupported()
   const signedIn = () => navigate(next, {replace: true})
 
@@ -43,6 +45,11 @@ export function SignInPage() {
                   </>
                 )}
                 <SignInForm onSignedIn={signedIn} submitVariant={withPasskey ? 'secondary' : 'primary'} />
+                {mail.data && (
+                  <p className={styles.forgot}>
+                    <Link to="/forgot-password">{t('signIn.forgot')}</Link>
+                  </p>
+                )}
               </Card>
             </>
           )

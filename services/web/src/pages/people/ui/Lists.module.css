@@ -79,3 +79,7 @@
   margin: 0;
   color: var(--text-muted);
 }
+
+.reset {
+  margin-left: auto;
+}

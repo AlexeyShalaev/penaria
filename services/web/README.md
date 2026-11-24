@@ -27,6 +27,8 @@ The server keeps the session in an `HttpOnly` cookie, so the app holds no token:
 
 The invitation and guest pages: `/invite/:token` shows what an invitation offers and accepts it with the signed-in account, or makes an account through it. `/guest/:token` opens a guest link: it exchanges the token for a guest session and moves on to `/guest`, the guest's read-only view of the home. QR codes of these links are drawn in the browser (`src/shared/ui/QrCode.tsx`, with `uqr`).
 
+Recovery and email: `/forgot-password` asks for a reset link by email (the sign-in page links to it when the install sends email), `/reset-password/:token` sets a new password with a link from an email, an admin or the operator, and `/verify-email/:token` confirms the address an account added. The install's admins see Settings (`/settings`): the mailbox the install sends email through, a test email, the connection's status and the mail log. In development, Mailpit of `make dev-up` catches the email (http://localhost:58025); connect it in Settings as the server README says.
+
 Passkeys go through `navigator.credentials` in `src/shared/lib/webauthn.ts`, which converts the server's JSON options and the browser's answers; the passkey button and the suggestion to add one show only where the browser offers WebAuthn (a secure page: `https`, or `localhost`). Tests stand in for the browser with `src/test/webauthn.ts`.
 
 In development, `make -C ../server run-api` prints the setup token of a fresh database; the server expects the dev server's address, `http://localhost:5173`, as `PENARIA_PUBLIC_URL`, so open the app there.

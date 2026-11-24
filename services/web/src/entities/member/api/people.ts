@@ -102,6 +102,18 @@ export function useRevokeGrant(homeId: string) {
   )
 }
 
+/** A password reset link for a member, to pass on by hand. */
+export function useCreateResetLink(homeId: string) {
+  return useMutation({
+    mutationFn: (userId: string) =>
+      unwrap(
+        api.POST('/api/v1/homes/{home_id}/members/{user_id}:reset-link', {
+          params: {path: {home_id: homeId, user_id: userId}},
+        }),
+      ),
+  })
+}
+
 /** The signed-in person gives up their access to the home. */
 export function useLeaveHome(homeId: string) {
   const queryClient = useQueryClient()

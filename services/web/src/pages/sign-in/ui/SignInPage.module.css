@@ -36,3 +36,9 @@
   border-top: 1px solid var(--border);
   content: '';
 }
+
+.forgot {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-sm);
+  text-align: center;
+}

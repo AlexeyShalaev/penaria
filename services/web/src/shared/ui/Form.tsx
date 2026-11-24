@@ -12,19 +12,29 @@ import styles from './Form.module.css'
 // The control inside a Field takes its id and hint from here, so the label names only the control.
 const FieldContext = createContext<{id?: string; hintId?: string}>({})
 
-export function Field(props: {label: string; hint?: string; children: ReactNode}) {
+/** A labelled control; `aside` sits next to the label, such as a mark that the field is locked. */
+export function Field(props: {label: string; hint?: string; aside?: ReactNode; error?: string; children: ReactNode}) {
   const id = useId()
-  const hintId = props.hint ? `${id}-hint` : undefined
+  const hintId = props.hint || props.error ? `${id}-hint` : undefined
   return (
     <div className={styles.field}>
-      <label className={styles.label} htmlFor={id}>
-        {props.label}
-      </label>
+      <span className={styles.labelRow}>
+        <label className={styles.label} htmlFor={id}>
+          {props.label}
+        </label>
+        {props.aside}
+      </span>
       <FieldContext value={{id, hintId}}>{props.children}</FieldContext>
-      {props.hint && (
-        <span id={hintId} className={styles.hint}>
-          {props.hint}
+      {props.error ? (
+        <span id={hintId} className={styles.fieldError}>
+          {props.error}
         </span>
+      ) : (
+        props.hint && (
+          <span id={hintId} className={styles.hint}>
+            {props.hint}
+          </span>
+        )
       )}
     </div>
   )

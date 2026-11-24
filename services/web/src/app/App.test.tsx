@@ -2,7 +2,7 @@ import {fireEvent, screen} from '@testing-library/react'
 import {Route} from 'react-router'
 import {describe, expect, it} from 'vitest'
 
-import {mockApi, problem} from '@/test/api'
+import {MAIL_OFF, mockApi, problem} from '@/test/api'
 import {account, detail, home, HOME_ID, session} from '@/test/fixtures'
 import {renderAt} from '@/test/render'
 
@@ -18,6 +18,7 @@ describe('App', () => {
   it('welcomes a new install and lands in the tree of the home it creates', async () => {
     let homes: unknown[] = []
     const calls = mockApi({
+      ...MAIL_OFF,
       'GET /api/v1/me': account(),
       'GET /api/v1/homes': () => homes,
       'POST /api/v1/homes': () => {
@@ -45,6 +46,7 @@ describe('App', () => {
   it('opens the home used last', async () => {
     localStorage.setItem('penaria.lastHome', OTHER_ID)
     mockApi({
+      ...MAIL_OFF,
       'GET /api/v1/me': account(),
       'GET /api/v1/homes': [home(), home({id: OTHER_ID, name: 'Country house'})],
       [`GET /api/v1/homes/${OTHER_ID}`]: home({id: OTHER_ID, name: 'Country house'}),
@@ -58,6 +60,7 @@ describe('App', () => {
 
   it('remembers the home of an entity page', async () => {
     mockApi({
+      ...MAIL_OFF,
       'GET /api/v1/me': account(),
       'GET /api/v1/entities/drill': {...detail({id: 'drill', name: 'Drill', kind: 'item'}), home_id: OTHER_ID},
       [`GET /api/v1/homes/${OTHER_ID}`]: home({id: OTHER_ID, name: 'Country house'}),
@@ -74,6 +77,7 @@ describe('App', () => {
   it('sends a visitor without a session to sign in, and back to the page afterwards', async () => {
     let signedIn = false
     const calls = mockApi({
+      ...MAIL_OFF,
       'GET /api/v1/me': () => (signedIn ? account() : problem(401, 'unauthenticated')),
       'GET /api/v1/setup': {needed: false},
       'POST /api/v1/sign-in': () => {
@@ -100,10 +104,7 @@ describe('App', () => {
   })
 
   it('sends the first visitor of a fresh install to the setup', async () => {
-    mockApi({
-      'GET /api/v1/me': problem(401, 'unauthenticated'),
-      'GET /api/v1/setup': {needed: true},
-    })
+    mockApi({...MAIL_OFF, 'GET /api/v1/me': problem(401, 'unauthenticated'), 'GET /api/v1/setup': {needed: true}})
 
     renderApp()
 
@@ -113,6 +114,7 @@ describe('App', () => {
 
   it('goes back to sign in when the session ends while the app is open', async () => {
     mockApi({
+      ...MAIL_OFF,
       'GET /api/v1/me': account(),
       'GET /api/v1/homes': problem(401, 'unauthenticated'),
       'GET /api/v1/setup': {needed: false},
@@ -124,10 +126,7 @@ describe('App', () => {
   })
 
   it('speaks the language of the account', async () => {
-    mockApi({
-      'GET /api/v1/me': account({locale: 'ru'}),
-      'GET /api/v1/homes': [],
-    })
+    mockApi({...MAIL_OFF, 'GET /api/v1/me': account({locale: 'ru'}), 'GET /api/v1/homes': []})
 
     renderApp()
 
@@ -137,6 +136,7 @@ describe('App', () => {
   it('shows nothing of the previous person after signing out and in as someone else', async () => {
     let signedIn: string | null = 'Alex'
     mockApi({
+      ...MAIL_OFF,
       'GET /api/v1/me': () =>
         signedIn
           ? account({display_name: signedIn, username: signedIn.toLowerCase()})

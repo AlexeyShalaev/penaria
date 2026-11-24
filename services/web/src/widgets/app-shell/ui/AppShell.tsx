@@ -1,4 +1,4 @@
-import {CircleUserRound, Map as MapIcon, Users} from 'lucide-react'
+import {CircleUserRound, Map as MapIcon, Settings, Users} from 'lucide-react'
 import {useEffect} from 'react'
 import {useTranslation} from 'react-i18next'
 import {Link, Outlet, useParams} from 'react-router'
@@ -13,9 +13,10 @@ import {PasskeySuggestion} from './PasskeySuggestion'
 
 /**
  * The frame of the app's pages: a sidebar on wide screens, a top bar and tab bar on phones. A page
- * of one home shows that home in the switcher; the account, which belongs to no home, the home used last.
+ * of one home shows that home in the switcher; the account and the install's settings, which belong to no home,
+ * the home used last.
  */
-type AppShellProps = {section: 'places' | 'people' | 'account'}
+type AppShellProps = {section: 'places' | 'people' | 'account' | 'settings'}
 
 export function AppShell(props: AppShellProps) {
   const {t} = useTranslation()
@@ -23,8 +24,10 @@ export function AppShell(props: AppShellProps) {
   const entity = useEntity(params.entityId)
   const account = useAccount()
   const onAccountPage = props.section === 'account'
+  const homeless = onAccountPage || props.section === 'settings'
   const pageHomeId = params.homeId ?? entity.data?.home_id
-  const homeId = pageHomeId ?? (onAccountPage ? (readLastHome() ?? undefined) : undefined)
+  const homeId = pageHomeId ?? (homeless ? (readLastHome() ?? undefined) : undefined)
+  const installAdmin = !!account.data?.install_admin
 
   useEffect(() => {
     if (pageHomeId) rememberLastHome(pageHomeId)
@@ -49,6 +52,12 @@ export function AppShell(props: AppShellProps) {
             <Link to={peopleLink} className={styles.navItem} aria-current={current('people')}>
               <Users aria-hidden />
               {t('shell.people')}
+            </Link>
+          )}
+          {installAdmin && (
+            <Link to="/settings" className={styles.navItem} aria-current={current('settings')}>
+              <Settings aria-hidden />
+              {t('shell.settings')}
             </Link>
           )}
         </nav>
@@ -83,6 +92,12 @@ export function AppShell(props: AppShellProps) {
           <Link to={peopleLink} className={styles.tab} aria-current={current('people')}>
             <Users aria-hidden />
             {t('shell.peopleShort')}
+          </Link>
+        )}
+        {installAdmin && (
+          <Link to="/settings" className={styles.tab} aria-current={current('settings')}>
+            <Settings aria-hidden />
+            {t('shell.settingsShort')}
           </Link>
         )}
         <Link to="/account" className={styles.tab} aria-current={current('account')}>

@@ -2,6 +2,7 @@ import {LogOut} from 'lucide-react'
 import {useTranslation} from 'react-i18next'
 
 import {AddPasskeyButton} from '@/features/add-passkey'
+import {EmailForm} from '@/features/account-email'
 import {ChangePasswordForm} from '@/features/change-password'
 import {AccountForm} from '@/features/edit-account'
 import {PasskeyList} from '@/features/manage-passkeys'
@@ -39,6 +40,11 @@ export function AccountPage() {
               <Card as="section" aria-labelledby="account-password">
                 <CardTitle id="account-password">{t('account.passwordTitle')}</CardTitle>
                 <ChangePasswordForm />
+              </Card>
+              <Card as="section" className={styles.wide} aria-labelledby="account-email">
+                <CardTitle id="account-email">{t('email.title')}</CardTitle>
+                <p className={styles.text}>{t('email.text')}</p>
+                <EmailForm account={data} />
               </Card>
               <Card as="section" id="passkeys" className={styles.wide} aria-labelledby="account-passkeys">
                 <CardTitle id="account-passkeys">{t('passkeys.title')}</CardTitle>
