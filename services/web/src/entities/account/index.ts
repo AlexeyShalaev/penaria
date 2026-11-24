@@ -13,5 +13,15 @@ export {
   useSignOut,
   useUpdateAccount,
 } from './api/account'
-export {describeDevice} from './model/device'
+export {
+  type Passkey,
+  useAddPasskey,
+  usePasskeys,
+  useRemovePasskey,
+  useRenamePasskey,
+  useSignInWithPasskey,
+} from './api/passkeys'
+export {describeDevice, deviceName} from './model/device'
 export {checkNewPassword, PASSWORD_MIN_LENGTH, type PasswordProblem} from './model/password'
+export {describePasskeyError} from './model/passkeys'
+export {useRecentSignIn} from './ui/useRecentSignIn'

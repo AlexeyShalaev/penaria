@@ -1,3 +1,5 @@
+import type {TFunction} from 'i18next'
+
 export type Device = {browser: string | null; system: string | null}
 
 // The first match wins: Edge and Opera also name Chrome, Chrome also names Safari.
@@ -11,7 +13,8 @@ const BROWSERS: [RegExp, string][] = [
 ]
 
 const SYSTEMS: [RegExp, string][] = [
-  [/iPhone|iPad|iPod/, 'iOS'],
+  [/iPhone|iPod/, 'iPhone'],
+  [/iPad/, 'iPad'],
   [/Android/, 'Android'],
   [/Windows/, 'Windows'],
   [/Mac OS X|Macintosh/, 'macOS'],
@@ -23,4 +26,11 @@ const SYSTEMS: [RegExp, string][] = [
 export function describeDevice(userAgent: string | null | undefined): Device {
   const find = (table: [RegExp, string][]) => table.find(([pattern]) => userAgent && pattern.test(userAgent))?.[1]
   return {browser: find(BROWSERS) ?? null, system: find(SYSTEMS) ?? null}
+}
+
+/** "Safari on iPhone": a device as people recognise it, or `fallback` when its user agent tells nothing. */
+export function deviceName(userAgent: string | null | undefined, t: TFunction, fallback: string): string {
+  const {browser, system} = describeDevice(userAgent)
+  if (browser && system) return t('account.deviceOn', {browser, system})
+  return browser ?? system ?? fallback
 }

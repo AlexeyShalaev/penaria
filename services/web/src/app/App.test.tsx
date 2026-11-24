@@ -145,6 +145,7 @@ describe('App', () => {
       'GET /api/v1/me/sessions': () => [
         session({id: `${signedIn}-laptop`, current: true, ip: signedIn === 'Alex' ? '192.0.2.1' : '198.51.100.9'}),
       ],
+      'GET /api/v1/me/passkeys': [],
       'POST /api/v1/sign-out': () => {
         signedIn = null
         return new Response(null, {status: 204})

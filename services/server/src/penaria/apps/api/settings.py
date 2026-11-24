@@ -31,5 +31,12 @@ class Settings(PenariaSettings):
         return origin_of(str(self.public_url))
 
     @property
+    def passkey_rp_id(self) -> str:
+        """The passkeys' relying party: the host name people open, which browsers check passkeys against."""
+        if self.public_url.host is None:
+            raise RuntimeError("PENARIA_PUBLIC_URL has no host")
+        return self.public_url.host
+
+    @property
     def serves_https(self) -> bool:
         return self.public_url.scheme == "https"

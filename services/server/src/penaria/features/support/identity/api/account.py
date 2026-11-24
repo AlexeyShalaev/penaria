@@ -21,6 +21,7 @@ from penaria.features.support.identity.use_cases.account import (
     RevokeSession,
     UpdateAccount,
 )
+from penaria.features.support.identity.use_cases.reauthentication import ReauthenticateWithPassword
 from penaria.features.support.identity.use_cases.sessions import SignIn, SignOut
 from penaria.features.support.identity.use_cases.setup import CompleteSetup, NeedsSetup
 
@@ -84,6 +85,10 @@ class PasswordChangeIn(BaseModel):
     new_password: str = Field(min_length=1, max_length=PASSWORD_INPUT_MAX_LENGTH)
 
 
+class ReauthenticationIn(BaseModel):
+    password: str = Field(min_length=1, max_length=PASSWORD_INPUT_MAX_LENGTH)
+
+
 class SessionOut(BaseModel):
     id: UUID
     created_at: datetime
@@ -123,7 +128,7 @@ async def complete_setup(
         display_name=body.display_name,
         password=body.password,
         locale=body.locale,
-        client=_client(request),
+        client=client_of(request),
     )
     (await scope.get(SessionCookie)).set(response, token)
     return AccountOut.of(user)
@@ -134,7 +139,7 @@ async def sign_in(
     body: Annotated[SignInIn, Body()], request: Request, response: Response, scope: UnitScopeDep
 ) -> AccountOut:
     user, token = await (await scope.get(SignIn)).execute(
-        username=body.username, password=body.password, client=_client(request)
+        username=body.username, password=body.password, client=client_of(request)
     )
     (await scope.get(SessionCookie)).set(response, token)
     return AccountOut.of(user)
@@ -166,6 +171,12 @@ async def change_password(body: Annotated[PasswordChangeIn, Body()], scope: Unit
     )
 
 
+@router.post("/me/reauthenticate", status_code=status.HTTP_204_NO_CONTENT)
+async def reauthenticate(body: Annotated[ReauthenticationIn, Body()], scope: UnitScopeDep) -> None:
+    """Confirm it is still you with the password, so the session counts as signed in recently."""
+    await (await scope.get(ReauthenticateWithPassword)).execute(await scope.get(CurrentSession), body.password)
+
+
 @router.get("/me/sessions")
 async def list_sessions(scope: UnitScopeDep) -> list[SessionOut]:
     current = await scope.get(CurrentSession)
@@ -186,7 +197,7 @@ async def revoke_other_sessions(scope: UnitScopeDep) -> RevokedOut:
     return RevokedOut(revoked=await (await scope.get(RevokeOtherSessions)).execute(await scope.get(CurrentSession)))
 
 
-def _client(request: Request) -> Client:
+def client_of(request: Request) -> Client:
     user_agent = request.headers.get("user-agent")
     return Client(
         user_agent=None if user_agent is None else user_agent[:USER_AGENT_MAX_LENGTH],

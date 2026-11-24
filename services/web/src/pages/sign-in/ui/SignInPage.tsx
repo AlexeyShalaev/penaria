@@ -3,7 +3,9 @@ import {useTranslation} from 'react-i18next'
 import {Navigate, useNavigate, useSearchParams} from 'react-router'
 
 import {SignInForm} from '@/features/sign-in'
+import {PasskeySignInButton} from '@/features/sign-in-with-passkey'
 import {useAccount, useSetupStatus} from '@/entities/account'
+import {passkeysSupported} from '@/shared/lib/webauthn'
 import {Card, IconTile, PageTitle, QueryState} from '@/shared/ui'
 
 import {safeNext} from '../model/next'
@@ -17,6 +19,8 @@ export function SignInPage() {
   const next = safeNext(params.get('next'))
   const account = useAccount()
   const setup = useSetupStatus()
+  const withPasskey = passkeysSupported()
+  const signedIn = () => navigate(next, {replace: true})
 
   return (
     <main className={styles.page}>
@@ -32,7 +36,13 @@ export function SignInPage() {
                 <p className={styles.text}>{t('signIn.text')}</p>
               </div>
               <Card className={styles.card}>
-                <SignInForm onSignedIn={() => navigate(next, {replace: true})} />
+                {withPasskey && (
+                  <>
+                    <PasskeySignInButton onSignedIn={signedIn} />
+                    <p className={styles.or}>{t('passkeys.orPassword')}</p>
+                  </>
+                )}
+                <SignInForm onSignedIn={signedIn} submitVariant={withPasskey ? 'secondary' : 'primary'} />
               </Card>
             </>
           )

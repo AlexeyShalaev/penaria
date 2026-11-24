@@ -1,8 +1,6 @@
 """Setup, sign-in, sessions and the account through the HTTP API, as the web app uses them."""
 
 import asyncio
-import re
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -12,7 +10,6 @@ from argon2 import PasswordHasher as Argon2Hasher
 from fastapi import FastAPI
 from servicewright.adapters.dishka import DishkaContainer
 from sqlalchemy import select, update
-from sqlalchemy_foundation_kit import AsyncSQLAlchemyUnitOfWork
 
 from penaria.features.shared.actor import Actor
 from penaria.features.support.identity.domain.models import User
@@ -21,13 +18,11 @@ from penaria.features.support.identity.infra.orm import PasswordDB, SessionDB, S
 from penaria.features.support.identity.use_cases.homes import CreateHome
 from penaria.features.support.identity.use_cases.setup import IssueSetupToken
 from penaria.features.support.platform.infra.orm import JournalEventDB
-from penaria.integrations.postgres.transaction import PenariaTransaction
 from tests.integration.conftest import OWNER, PUBLIC_URL
+from tests.integration.helpers import UUID_PATTERN, WRONG, NewClient, from_address, shape, uow_of
 
 pytestmark = pytest.mark.integration
 
-NewClient = Callable[..., httpx.AsyncClient]
-WRONG = "not the password"
 NEW = "a brand new secret"
 ACCOUNT = {
     "id": str,
@@ -54,23 +49,12 @@ async def sign_in(client: httpx.AsyncClient, password: str = OWNER["password"], 
     return await client.post("/sign-in", json={"username": OWNER["username"], "password": password}, **kwargs)
 
 
-async def uow_of(container: DishkaContainer) -> AsyncSQLAlchemyUnitOfWork[PenariaTransaction]:
-    return await container.container.get(AsyncSQLAlchemyUnitOfWork[PenariaTransaction])
-
-
 async def fail_to_sign_in(client: httpx.AsyncClient, times: int, username: str = OWNER["username"]) -> list[int]:
     statuses = []
     for _ in range(times):
         response = await client.post("/sign-in", json={"username": username, "password": WRONG})
         statuses.append(response.status_code)
     return statuses
-
-
-def from_address(new_client: NewClient, app: FastAPI, ip: str) -> httpx.AsyncClient:
-    return new_client(transport=httpx.ASGITransport(app=app, client=(ip, 1)))
-
-
-UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
 # Setup
@@ -577,7 +561,7 @@ async def test_account_events_are_journalled_without_a_home(
         ).all()
 
     user_id = rows[0].payload["user_id"]
-    events = [(row.type, row.home_id, row.actor["kind"], _shape(row.payload)) for row in rows]
+    events = [(row.type, row.home_id, row.actor["kind"], shape(row.payload)) for row in rows]
     assert UUID_PATTERN.match(user_id)
     assert events == [
         ("account.setup_completed", None, "user", {"user_id": "uuid"}),
@@ -590,10 +574,3 @@ async def test_account_events_are_journalled_without_a_home(
         ("account.signed_out", None, "user", {"user_id": "uuid", "session_id": "uuid"}),
     ]
     assert {row.payload["user_id"] for row in rows} == {user_id}
-
-
-def _shape(payload: dict[str, Any]) -> dict[str, Any]:
-    """The payload with its ids replaced by "uuid", so it compares whole."""
-    return {
-        key: "uuid" if isinstance(value, str) and UUID_PATTERN.match(value) else value for key, value in payload.items()
-    }

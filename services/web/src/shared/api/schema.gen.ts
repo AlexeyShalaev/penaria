@@ -178,6 +178,68 @@ export interface paths {
         patch: operations["update_me_api_v1_me_patch"];
         trace?: never;
     };
+    "/api/v1/me/passkeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Passkeys */
+        get: operations["list_passkeys_api_v1_me_passkeys_get"];
+        put?: never;
+        /**
+         * Add Passkey
+         * @description Needs a recent sign-in (``recent_sign_in_required``).
+         */
+        post: operations["add_passkey_api_v1_me_passkeys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/passkeys/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Passkey Registration Options
+         * @description Needs a recent sign-in (``recent_sign_in_required``).
+         */
+        post: operations["passkey_registration_options_api_v1_me_passkeys_options_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/passkeys/{passkey_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Passkey
+         * @description Needs a recent sign-in (``recent_sign_in_required``).
+         */
+        delete: operations["remove_passkey_api_v1_me_passkeys__passkey_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Passkey */
+        patch: operations["rename_passkey_api_v1_me_passkeys__passkey_id__patch"];
+        trace?: never;
+    };
     "/api/v1/me/password": {
         parameters: {
             query?: never;
@@ -189,6 +251,60 @@ export interface paths {
         put?: never;
         /** Change Password */
         post: operations["change_password_api_v1_me_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/reauthenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reauthenticate
+         * @description Confirm it is still you with the password, so the session counts as signed in recently.
+         */
+        post: operations["reauthenticate_api_v1_me_reauthenticate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/reauthenticate/passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reauthenticate With Passkey */
+        post: operations["reauthenticate_with_passkey_api_v1_me_reauthenticate_passkey_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/reauthenticate/passkey/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Passkey Reauthentication Options */
+        post: operations["passkey_reauthentication_options_api_v1_me_reauthenticate_passkey_options_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -275,6 +391,43 @@ export interface paths {
         put?: never;
         /** Sign In */
         post: operations["sign_in_api_v1_sign_in_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sign-in/passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign In With Passkey */
+        post: operations["sign_in_with_passkey_api_v1_sign_in_passkey_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sign-in/passkey/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Passkey Sign In Options
+         * @description An address may hold 10 sign-ins that are neither finished nor expired (``too_many_attempts``).
+         */
+        post: operations["passkey_sign_in_options_api_v1_sign_in_passkey_options_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -381,6 +534,66 @@ export interface components {
          * @enum {string}
          */
         ArchiveReason: "discarded" | "sold" | "given_away" | "used_up" | "merged";
+        /** AssertionResponseIn */
+        AssertionResponseIn: {
+            /**
+             * Authenticatordata
+             * @description base64url
+             */
+            authenticatorData: string;
+            /**
+             * Clientdatajson
+             * @description base64url
+             */
+            clientDataJSON: string;
+            /**
+             * Signature
+             * @description base64url
+             */
+            signature: string;
+            /** Userhandle */
+            userHandle?: string | null;
+        };
+        /** AttestationResponseIn */
+        AttestationResponseIn: {
+            /**
+             * Attestationobject
+             * @description base64url
+             */
+            attestationObject: string;
+            /**
+             * Clientdatajson
+             * @description base64url
+             */
+            clientDataJSON: string;
+            /**
+             * Transports
+             * @default []
+             */
+            transports: string[];
+        };
+        /**
+         * AuthenticationCredentialIn
+         * @description An answer to a challenge, as ``navigator.credentials.get`` gives it, in JSON.
+         */
+        AuthenticationCredentialIn: {
+            /**
+             * Id
+             * @description base64url
+             */
+            id: string;
+            /**
+             * Rawid
+             * @description base64url
+             */
+            rawId: string;
+            response: components["schemas"]["AssertionResponseIn"];
+            /**
+             * Type
+             * @constant
+             */
+            type: "public-key";
+        };
         /** EntityDetailOut */
         EntityDetailOut: {
             /** Aliases */
@@ -588,6 +801,76 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** PasskeyIn */
+        PasskeyIn: {
+            /**
+             * Challenge Id
+             * Format: uuid
+             */
+            challenge_id: string;
+            credential: components["schemas"]["RegistrationCredentialIn"];
+            /**
+             * Name
+             * @description How the person tells it apart
+             */
+            name: string;
+        };
+        /** PasskeyOptionsOut */
+        PasskeyOptionsOut: {
+            /**
+             * Challenge Id
+             * Format: uuid
+             * @description Send it back with the browser's answer
+             */
+            challenge_id: string;
+            /**
+             * Options
+             * @description PublicKeyCredentialCreationOptionsJSON or PublicKeyCredentialRequestOptionsJSON (WebAuthn)
+             */
+            options: {
+                [key: string]: unknown;
+            };
+        };
+        /** PasskeyOut */
+        PasskeyOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+        };
+        /** PasskeyPatch */
+        PasskeyPatch: {
+            /** Name */
+            name: string;
+        };
+        /** PasskeyReauthenticationIn */
+        PasskeyReauthenticationIn: {
+            /**
+             * Challenge Id
+             * Format: uuid
+             */
+            challenge_id: string;
+            credential: components["schemas"]["AuthenticationCredentialIn"];
+        };
+        /** PasskeySignInIn */
+        PasskeySignInIn: {
+            /**
+             * Challenge Id
+             * Format: uuid
+             */
+            challenge_id: string;
+            credential: components["schemas"]["AuthenticationCredentialIn"];
+        };
         /** PasswordChangeIn */
         PasswordChangeIn: {
             /** Current Password */
@@ -611,6 +894,33 @@ export interface components {
          * @enum {string}
          */
         Privacy: "normal" | "guest_visible" | "private";
+        /** ReauthenticationIn */
+        ReauthenticationIn: {
+            /** Password */
+            password: string;
+        };
+        /**
+         * RegistrationCredentialIn
+         * @description A new credential, as ``navigator.credentials.create`` gives it, in JSON.
+         */
+        RegistrationCredentialIn: {
+            /**
+             * Id
+             * @description base64url
+             */
+            id: string;
+            /**
+             * Rawid
+             * @description base64url
+             */
+            rawId: string;
+            response: components["schemas"]["AttestationResponseIn"];
+            /**
+             * Type
+             * @constant
+             */
+            type: "public-key";
+        };
         /** RevokedOut */
         RevokedOut: {
             /** Revoked */
@@ -1151,6 +1461,143 @@ export interface operations {
             };
         };
     };
+    list_passkeys_api_v1_me_passkeys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOut"][];
+                };
+            };
+        };
+    };
+    add_passkey_api_v1_me_passkeys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    passkey_registration_options_api_v1_me_passkeys_options_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOptionsOut"];
+                };
+            };
+        };
+    };
+    remove_passkey_api_v1_me_passkeys__passkey_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passkey_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_passkey_api_v1_me_passkeys__passkey_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passkey_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     change_password_api_v1_me_password_post: {
         parameters: {
             query?: never;
@@ -1178,6 +1625,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reauthenticate_api_v1_me_reauthenticate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthenticationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reauthenticate_with_passkey_api_v1_me_reauthenticate_passkey_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyReauthenticationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    passkey_reauthentication_options_api_v1_me_reauthenticate_passkey_options_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOptionsOut"];
                 };
             };
         };
@@ -1333,6 +1862,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_in_with_passkey_api_v1_sign_in_passkey_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeySignInIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    passkey_sign_in_options_api_v1_sign_in_passkey_options_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOptionsOut"];
                 };
             };
         };

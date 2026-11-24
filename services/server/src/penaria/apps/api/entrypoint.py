@@ -1,6 +1,7 @@
 """The service spec and the HTTP entrypoint of the API process."""
 
 import dataclasses
+import ipaddress
 import logging
 
 from fastapi import Depends
@@ -18,11 +19,20 @@ from penaria.apps.api.settings import Settings
 from penaria.features.core.registry.api.routes import router as registry_router
 from penaria.features.support.identity.api.account import router as account_router
 from penaria.features.support.identity.api.account import sign_in_router
+from penaria.features.support.identity.api.passkeys import router as passkeys_router
+from penaria.features.support.identity.api.passkeys import sign_in_router as passkey_sign_in_router
 from penaria.features.support.identity.api.routes import router as identity_router
 from penaria.features.support.identity.use_cases.setup import IssueSetupToken
 
 SERVICE_NAME = "penaria-api"
-ROUTERS = (sign_in_router, account_router, identity_router, registry_router)
+ROUTERS = (
+    sign_in_router,
+    passkey_sign_in_router,
+    account_router,
+    passkeys_router,
+    identity_router,
+    registry_router,
+)
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "[::1]"})
 
 logger = logging.getLogger(__name__)
@@ -58,6 +68,11 @@ def build_http(settings: Settings) -> FastApiEntrypoint:
             "PENARIA_PUBLIC_URL is plain HTTP: passwords and session cookies cross the network unencrypted; "
             "put Penaria behind HTTPS"
         )
+    if _names_an_ip_address(settings.passkey_rp_id):
+        logger.warning(
+            "PENARIA_PUBLIC_URL names an IP address: browsers allow passkeys only at a domain name, "
+            "so people sign in with passwords"
+        )
     config = settings.server.to_config(version=__version__)
     # Every route, the public ones included, refuses a change asked for by another site.
     config = dataclasses.replace(
@@ -65,3 +80,11 @@ def build_http(settings: Settings) -> FastApiEntrypoint:
         fastapi_kwargs={**config.fastapi_kwargs, "dependencies": [Depends(origin_check(settings.public_origin))]},
     )
     return FastApiEntrypoint(config=config, routers=ROUTERS)
+
+
+def _names_an_ip_address(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        return False
+    return True

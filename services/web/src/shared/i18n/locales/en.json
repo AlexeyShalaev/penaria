@@ -195,7 +195,14 @@
     "invalid_account_locale": "This language is not available.",
     "wrong_password": "The current password is wrong.",
     "session_not_found": "This device is already signed out.",
-    "cross_origin_request": "The request came from another site and was refused. Open Penaria at its own address."
+    "cross_origin_request": "The request came from another site and was refused. Open Penaria at its own address.",
+    "invalid_passkey": "This passkey does not work here. It may have been removed from your account: sign in with your password instead.",
+    "passkey_rejected": "The passkey could not be checked. Try again.",
+    "passkey_already_registered": "This passkey is already added.",
+    "passkey_not_found": "This passkey has already been removed.",
+    "invalid_passkey_name": "A passkey's name needs 1 to {{max_length}} characters.",
+    "last_sign_in_method": "This passkey is your only way to sign in, so it cannot be removed.",
+    "recent_sign_in_required": "Confirm it's you first."
   },
   "languages": {
     "en": "English",
@@ -203,7 +210,7 @@
   },
   "signIn": {
     "title": "Sign in",
-    "text": "Sign in to your home with your username and password.",
+    "text": "Sign in to your home.",
     "username": "Username",
     "password": "Password",
     "submit": "Sign in"
@@ -254,5 +261,42 @@
     "othersRevoked_one": "Signed out of {{count}} other device.",
     "othersRevoked_other": "Signed out of {{count}} other devices.",
     "signOut": "Sign out"
+  },
+  "passkeys": {
+    "title": "Passkeys",
+    "text": "Sign in with your fingerprint, face or screen lock instead of a password. A passkey stays on your phone or computer, or in your password manager, and cannot be guessed or lured out by a fake site.",
+    "signIn": "Sign in with a passkey",
+    "orPassword": "or with your username and password",
+    "add": "Add a passkey",
+    "added": "The passkey is added. Next time, sign in with it.",
+    "defaultName": "Passkey",
+    "empty": "No passkeys yet.",
+    "unsupported": "This browser cannot use passkeys at this address. Passkeys need Penaria opened over https at a domain name.",
+    "created": "Added {{when}}",
+    "lastUsed": "last used {{when}}",
+    "neverUsed": "never used",
+    "name": "Name",
+    "rename": "Rename",
+    "renameLabel": "Rename {{name}}",
+    "remove": "Remove",
+    "removeLabel": "Remove {{name}}",
+    "removeTitle": "Remove {{name}}?",
+    "removeText": "You will no longer be able to sign in with it. To tidy up, also delete it on the device or in the password manager that keeps it.",
+    "suggestionTitle": "Sign in faster with a passkey",
+    "suggestionText": "Next time, use your fingerprint, face or screen lock instead of typing your password.",
+    "notNow": "Not now",
+    "failure": {
+      "cancelled": "No passkey was used. Try again.",
+      "exists": "This device already keeps a passkey for your account.",
+      "unavailable": "Passkeys do not work at this address. Open Penaria over https at its domain name."
+    }
+  },
+  "reauthenticate": {
+    "title": "Confirm it's you",
+    "text": "Before you change how you sign in, confirm it's you.",
+    "usePasskey": "Use a passkey",
+    "orPassword": "or enter your password",
+    "password": "Password",
+    "submit": "Confirm"
   }
 }

@@ -50,6 +50,10 @@ def test_the_public_origin_keeps_another_port() -> None:
     assert Settings().public_origin == "http://localhost:5173"
 
 
+def test_the_passkeys_belong_to_the_host_without_its_port() -> None:
+    assert Settings().passkey_rp_id == "localhost"
+
+
 @pytest.mark.parametrize("url", ["https://example.org/penaria", "https://example.org/?a=1", "ftp://example.org"])
 def test_a_public_url_that_is_not_the_root_of_a_site_stops_the_process(
     monkeypatch: pytest.MonkeyPatch, url: str

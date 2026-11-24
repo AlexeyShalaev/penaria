@@ -5,7 +5,8 @@ import {type Account, useSignIn} from '@/entities/account'
 import {describeError} from '@/shared/api'
 import {Button, Field, FormActions, FormError, FormLayout, TextInput} from '@/shared/ui'
 
-export function SignInForm(props: {onSignedIn: (account: Account) => void}) {
+/** `submitVariant` is `secondary` when a passkey is offered above it as the main way in. */
+export function SignInForm(props: {onSignedIn: (account: Account) => void; submitVariant?: 'primary' | 'secondary'}) {
   const {t} = useTranslation()
   const signIn = useSignIn()
   const [username, setUsername] = useState('')
@@ -40,7 +41,7 @@ export function SignInForm(props: {onSignedIn: (account: Account) => void}) {
         </Field>
         {signIn.isError && <FormError>{describeError(signIn.error, t)}</FormError>}
         <FormActions>
-          <Button type="submit" disabled={signIn.isPending}>
+          <Button type="submit" variant={props.submitVariant} disabled={signIn.isPending}>
             {t('signIn.submit')}
           </Button>
         </FormActions>

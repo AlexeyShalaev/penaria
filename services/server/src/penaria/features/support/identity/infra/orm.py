@@ -3,7 +3,19 @@
 import datetime
 import uuid
 
-from sqlalchemy import ARRAY, CheckConstraint, ForeignKey, Index, Interval, LargeBinary, String, Text, func, text
+from sqlalchemy import (
+    ARRAY,
+    BigInteger,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Interval,
+    LargeBinary,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -53,6 +65,38 @@ class SessionDB(Base):
     user_agent: Mapped[str | None] = mapped_column(Text)
     ip: Mapped[str | None] = mapped_column(INET)
     revoked_at: Mapped[datetime.datetime | None]
+
+
+class PasskeyDB(Base):
+    __tablename__ = "identity_passkeys"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"), index=True)
+    credential_id: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary)
+    sign_count: Mapped[int] = mapped_column(BigInteger)
+    name: Mapped[str] = mapped_column(Text)
+    transports: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+    created_at: Mapped[datetime.datetime]
+    last_used_at: Mapped[datetime.datetime | None]
+
+
+class PasskeyChallengeDB(Base):
+    """Challenges given out for a passkey ceremony, each used at most once before it expires."""
+
+    __tablename__ = "identity_passkey_challenges"
+    __table_args__ = (
+        CheckConstraint("ceremony IN ('registration', 'sign_in', 'reauthentication')", name="ceremony"),
+        CheckConstraint("(ceremony = 'sign_in') = (session_id IS NULL)", name="session"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    ceremony: Mapped[str] = mapped_column(Text)
+    challenge: Mapped[bytes] = mapped_column(LargeBinary)
+    session_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_sessions.id", ondelete="CASCADE"))
+    # A sign-in's address, as its counter key (domain/throttle.py): the open ones per address are capped.
+    address: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[datetime.datetime] = mapped_column(index=True)
 
 
 class SetupTokenDB(Base):

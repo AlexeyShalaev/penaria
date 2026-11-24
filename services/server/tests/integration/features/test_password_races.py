@@ -1,16 +1,19 @@
 """A password that changes while another attempt checks the old one: the old one wins nothing."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import httpx
 import pytest
 from servicewright.adapters.dishka import DishkaContainer
+from sqlalchemy import select, update
 from sqlalchemy_foundation_kit import AsyncSQLAlchemyUnitOfWork
 
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession
+from penaria.features.support.identity.infra.orm import SessionDB
 from penaria.features.support.identity.use_cases.account import ChangePassword, WrongPasswordError
+from penaria.features.support.identity.use_cases.reauthentication import ReauthenticateWithPassword
 from penaria.features.support.identity.use_cases.sessions import InvalidCredentialsError, SignIn
 from penaria.integrations.postgres.transaction import PenariaTransaction
 from tests.integration.conftest import OWNER
@@ -65,10 +68,32 @@ async def test_a_change_checked_against_a_password_changed_meanwhile_is_refused(
     uow = await container.container.get(AsyncSQLAlchemyUnitOfWork[PenariaTransaction])
     hasher = ChangingMidway(await container.container.get(PasswordHasher), uow)
     [session] = (await api.get("/me/sessions")).json()
-    current = CurrentSession(id=UUID(session["id"]), user_id=UUID((await api.get("/me")).json()["id"]))
+    current = CurrentSession(
+        id=UUID(session["id"]), user_id=UUID((await api.get("/me")).json()["id"]), authenticated_at=datetime.now(UTC)
+    )
 
     with pytest.raises(WrongPasswordError):
         await ChangePassword(uow, hasher).execute(current, current_password=OWNER["password"], new_password=NEW)
 
     signed_in = await api.post("/sign-in", json={"username": "owner", "password": MEANWHILE})
     assert signed_in.status_code == 200
+
+
+async def test_a_confirmation_checked_against_a_password_changed_meanwhile_is_refused(
+    api: httpx.AsyncClient, container: DishkaContainer
+) -> None:
+    uow = await container.container.get(AsyncSQLAlchemyUnitOfWork[PenariaTransaction])
+    hasher = ChangingMidway(await container.container.get(PasswordHasher), uow)
+    long_ago = datetime.now(UTC) - timedelta(minutes=11)
+    async with uow.transaction() as tx:
+        await tx.session.execute(update(SessionDB).values(authenticated_at=long_ago))
+    [session] = (await api.get("/me/sessions")).json()
+    current = CurrentSession(
+        id=UUID(session["id"]), user_id=UUID((await api.get("/me")).json()["id"]), authenticated_at=long_ago
+    )
+
+    with pytest.raises(WrongPasswordError):
+        await ReauthenticateWithPassword(uow, hasher).execute(current, OWNER["password"])
+
+    async with uow.query() as tx:
+        assert await tx.session.scalar(select(SessionDB.authenticated_at)) == long_ago

@@ -1,0 +1,11 @@
+.text {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.or {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: var(--fs-sm);
+  text-align: center;
+}

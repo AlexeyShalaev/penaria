@@ -9,6 +9,7 @@ import {readLastHome, rememberLastHome} from '@/shared/lib/lastHome'
 
 import styles from './AppShell.module.css'
 import {HomeSwitcher} from './HomeSwitcher'
+import {PasskeySuggestion} from './PasskeySuggestion'
 
 /**
  * The frame of the app's pages: a sidebar on wide screens, a top bar and tab bar on phones. A page
@@ -58,6 +59,8 @@ export function AppShell(props: {section: 'places' | 'account'}) {
           <HomeSwitcher homeId={homeId} />
         </header>
         <main className={styles.page}>
+          {/* The account page has its own place for passkeys. */}
+          {account.data && !onAccountPage && <PasskeySuggestion accountId={account.data.id} />}
           <Outlet />
         </main>
       </div>
