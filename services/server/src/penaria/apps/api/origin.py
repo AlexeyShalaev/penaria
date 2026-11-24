@@ -5,8 +5,8 @@ session cookie is ``SameSite=Lax``. So a request that changes something is refus
 ``Origin`` (or, without one, its ``Referer``) names another site than ``PENARIA_PUBLIC_URL``. A
 request with neither header comes from a client that is not a browser, such as a script, which a
 forged page cannot make carry the cookie; it passes. So does a request with a device's bearer token
-(sign-in.md, 6.3): it is judged by the token, never by a cookie, and a page of another site cannot
-add the header without the install agreeing to it (CORS), which it never does.
+(sign-in.md, 6.3): it is judged by the token, never by a cookie, and browsers never add the header by
+themselves, so a page of another site can send it only with a token it already holds.
 """
 
 from collections.abc import Awaitable, Callable
