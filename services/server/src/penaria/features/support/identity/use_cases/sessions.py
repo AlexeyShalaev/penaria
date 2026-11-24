@@ -68,6 +68,9 @@ class SignIn:
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
             await attempt_succeeded(tx, account, others)
+            # The password may have changed while it was checked: the old one opens no session.
+            if await tx.passwords.get(user.id) != password_hash:
+                raise InvalidCredentialsError("wrong username or password")
             if new_hash is not None:
                 await tx.passwords.set(user.id, new_hash, now)
             token = await start_session(tx, user, client, now)

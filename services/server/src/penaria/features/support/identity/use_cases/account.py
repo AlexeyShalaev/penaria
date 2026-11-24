@@ -81,6 +81,9 @@ class ChangePassword:
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
             await attempt_succeeded(tx, account)
+            # Another change may have come first: this one was checked against a password now gone.
+            if await tx.passwords.get(user.id) != password_hash:
+                raise WrongPasswordError("the current password is wrong")
             await tx.passwords.set(user.id, new_hash, now)
             revoked = await tx.sessions.revoke_all_but(user.id, current.id, now)
             await tx.journal.append(

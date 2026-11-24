@@ -23,6 +23,11 @@ async def count_attempt(tx: IdentityTransaction, keys: Sequence[str], now: datet
 
 
 async def attempt_succeeded(tx: IdentityTransaction, account: str, others: Sequence[str] = ()) -> None:
-    """The account's failures are forgiven; under the other keys, such as the address, only this attempt."""
+    """The account's failures are forgiven; under the other keys, such as the address, only this attempt.
+
+    It locks the account's key until the transaction ends, so the success and the change it makes
+    (a session, a new password) wait for any other attempt on the account that is finishing.
+    """
+    await tx.failures.lock([account])
     await tx.failures.clear(account)
     await tx.failures.uncount(others)

@@ -330,6 +330,14 @@ async def test_the_install_s_own_pages_may_change_things(api: httpx.AsyncClient)
     assert response.status_code == 201
 
 
+async def test_a_malformed_referer_is_refused(api: httpx.AsyncClient) -> None:
+    response = await api.post(
+        "/homes", json={"name": "Flat", "timezone": "UTC", "locale": "en"}, headers={"referer": "https://test:99999/"}
+    )
+
+    assert response.status_code == 403
+
+
 async def test_reading_from_another_site_is_not_refused(api: httpx.AsyncClient) -> None:
     assert (await api.get("/me", headers={"origin": "https://evil.example"})).status_code == 200
 
@@ -480,6 +488,27 @@ async def test_a_success_forgives_the_account_s_failures(
     await fail_to_sign_in(office, 4)
 
     assert (await sign_in(office)).status_code == 200
+
+
+async def test_a_success_takes_back_only_its_own_attempt_from_the_address(
+    api: httpx.AsyncClient, new_client: NewClient, app: FastAPI
+) -> None:
+    home = from_address(new_client, app, "192.0.2.1")
+    for n in range(4):
+        await fail_to_sign_in(home, 1, username=f"user{n}")
+    assert (await sign_in(home)).status_code == 200
+
+    assert await fail_to_sign_in(home, 2, username="user9") == [401, 429]
+
+
+async def test_a_completed_setup_takes_back_its_attempt_from_the_address(
+    anonymous: httpx.AsyncClient, setup_token: str, new_client: NewClient
+) -> None:
+    for _ in range(4):
+        await anonymous.post("/setup", json={**OWNER, "token": "0" * 32})
+    assert (await anonymous.post("/setup", json={**OWNER, "token": setup_token})).status_code == 200
+
+    assert await fail_to_sign_in(new_client(), 2, username="user9") == [401, 429]
 
 
 async def test_failures_are_forgotten_after_an_hour(

@@ -12,6 +12,9 @@ describe('safeNext', () => {
     ['/\\evil.example', '/'],
     ['/\t/evil.example', '/'],
     ['account', '/'],
+    ['//[', '/'],
+    ['/\\[', '/'],
+    ['//a:99999', '/'],
   ])('sends %s back to %s', (next, expected) => {
     expect(safeNext(next)).toBe(expected)
   })

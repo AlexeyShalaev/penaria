@@ -1,3 +1,7 @@
+import asyncio
+import os
+import time
+
 import pytest
 from argon2 import PasswordHasher
 
@@ -46,3 +50,26 @@ async def test_no_account_still_spends_a_verification(monkeypatch: pytest.Monkey
 
     assert not await hasher.verify(None, "tulip garden")
     assert checked == ["tulip garden"]
+
+
+async def test_no_more_hashes_run_at_once_than_the_cores_allow(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(os, "cpu_count", lambda: 8)
+    hasher = Argon2PasswordHasher()  # 4 lanes each: two at once
+    running, most = 0, 0
+    hash_one = PasswordHasher.hash
+
+    def counting(self: PasswordHasher, password: str) -> str:
+        nonlocal running, most
+        running += 1
+        most = max(most, running)
+        try:
+            time.sleep(0.05)
+            return hash_one(self, password)
+        finally:
+            running -= 1
+
+    monkeypatch.setattr(PasswordHasher, "hash", counting)
+
+    await asyncio.gather(*(hasher.hash(f"tulip garden {n}") for n in range(5)))
+
+    assert most == 2
