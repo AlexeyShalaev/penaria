@@ -24,7 +24,7 @@ from tests.smtp import FakeSmtp
 # Every table that holds data; CASCADE reaches the rest.
 DATA_TABLES = (
     "identity_users, identity_homes, journal_events, identity_setup_tokens, identity_sign_in_failures, "
-    "identity_passkey_challenges, identity_tokens, identity_install_settings, identity_mail"
+    "identity_passkey_challenges, identity_tokens, identity_install_settings, identity_mail, identity_oidc_flows"
 )
 PUBLIC_URL = "http://test"
 OWNER = {"username": "owner", "display_name": "Owner", "password": "correct horse battery", "locale": "en"}

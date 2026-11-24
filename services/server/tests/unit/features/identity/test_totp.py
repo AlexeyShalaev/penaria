@@ -159,7 +159,7 @@ def test_a_pending_sign_in_lasts_five_minutes_and_keeps_only_a_hash() -> None:
 
 
 @pytest.mark.parametrize(
-    ("has_password", "install_admin", "owns_a_home", "required"),
+    ("signs_in_without_passkey", "install_admin", "owns_a_home", "required"),
     [
         (True, False, True, True),
         (True, True, False, True),
@@ -167,11 +167,13 @@ def test_a_pending_sign_in_lasts_five_minutes_and_keeps_only_a_hash() -> None:
         (False, True, True, False),
     ],
 )
-def test_owners_and_install_admins_with_a_password_must_keep_a_second_factor(
-    has_password: bool, install_admin: bool, owns_a_home: bool, required: bool
+def test_owners_and_install_admins_with_a_password_or_a_provider_must_keep_a_second_factor(
+    signs_in_without_passkey: bool, install_admin: bool, owns_a_home: bool, required: bool
 ) -> None:
     assert (
-        second_factor_required(has_password=has_password, install_admin=install_admin, owns_a_home=owns_a_home)
+        second_factor_required(
+            signs_in_without_passkey=signs_in_without_passkey, install_admin=install_admin, owns_a_home=owns_a_home
+        )
         is required
     )
 

@@ -117,9 +117,11 @@ async def totp_enabled(tx: IdentityTransaction, user_id: UUID) -> Totp | None:
 
 
 async def must_have_second_factor(tx: IdentityTransaction, user: User) -> bool:
-    """Whether the account must keep a second factor: an install admin or an owner who has a password."""
+    """Whether the account must keep a second factor: an install admin or an owner who has a password or an
+    identity at the operator's provider."""
     return second_factor_required(
-        has_password=await tx.passwords.get(user.id) is not None,
+        signs_in_without_passkey=await tx.passwords.get(user.id) is not None
+        or bool(await tx.external_identities.for_user(user.id)),
         install_admin=user.install_admin,
         owns_a_home=await tx.grants.owns_a_home(user.id),
     )

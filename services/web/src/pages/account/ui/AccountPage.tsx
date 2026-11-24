@@ -5,21 +5,28 @@ import {AddPasskeyButton} from '@/features/add-passkey'
 import {EmailForm} from '@/features/account-email'
 import {ChangePasswordForm} from '@/features/change-password'
 import {AccountForm} from '@/features/edit-account'
+import {LinkedAccounts} from '@/features/linked-accounts'
 import {PasskeyList} from '@/features/manage-passkeys'
 import {SessionList} from '@/features/manage-sessions'
 import {TwoStepSignIn} from '@/features/two-step-sign-in'
-import {useAccount, useSignOut} from '@/entities/account'
+import {useAccount, useAuthConfig, useSignInMethods, useSignOut} from '@/entities/account'
 import {describeError} from '@/shared/api'
 import {passkeysSupported} from '@/shared/lib/webauthn'
 import {Button, Card, CardTitle, FormError, PageTitle, QueryState} from '@/shared/ui'
 
 import styles from './AccountPage.module.css'
 
-/** The signed-in person's own account: their name, language, password, passkeys, two-step sign-in and devices. */
+/**
+ * The signed-in person's own account: their name, language, password, passkeys, the identity at the install's
+ * provider, two-step sign-in and devices.
+ */
 export function AccountPage() {
   const {t} = useTranslation()
   const account = useAccount()
   const signOut = useSignOut()
+  const provider = useAuthConfig().data?.oidc
+  // An account made through the provider has no password to change; it can get one with a reset link.
+  const hasPassword = useSignInMethods().data?.password ?? true
 
   return (
     <QueryState query={account}>
@@ -38,10 +45,12 @@ export function AccountPage() {
                 <CardTitle id="account-profile">{t('account.profile')}</CardTitle>
                 <AccountForm account={data} />
               </Card>
-              <Card as="section" aria-labelledby="account-password">
-                <CardTitle id="account-password">{t('account.passwordTitle')}</CardTitle>
-                <ChangePasswordForm />
-              </Card>
+              {hasPassword && (
+                <Card as="section" aria-labelledby="account-password">
+                  <CardTitle id="account-password">{t('account.passwordTitle')}</CardTitle>
+                  <ChangePasswordForm />
+                </Card>
+              )}
               <Card as="section" className={styles.wide} aria-labelledby="account-email">
                 <CardTitle id="account-email">{t('email.title')}</CardTitle>
                 <p className={styles.text}>{t('email.text')}</p>
@@ -59,6 +68,13 @@ export function AccountPage() {
                   )}
                 </div>
               </Card>
+              {provider && (
+                <Card as="section" id="linked" className={styles.wide} aria-labelledby="account-linked">
+                  <CardTitle id="account-linked">{t('linked.title')}</CardTitle>
+                  <p className={styles.text}>{t('linked.text', {name: provider.name})}</p>
+                  <LinkedAccounts provider={provider.name} />
+                </Card>
+              )}
               <Card as="section" id="two-step" className={styles.wide} aria-labelledby="account-two-step">
                 <CardTitle id="account-two-step">{t('twoStep.title')}</CardTitle>
                 <p className={styles.text}>{t('twoStep.text')}</p>

@@ -21,6 +21,8 @@ from penaria.features.support.identity.api.account import router as account_rout
 from penaria.features.support.identity.api.account import sign_in_router
 from penaria.features.support.identity.api.devices import router as devices_router
 from penaria.features.support.identity.api.install import router as install_router
+from penaria.features.support.identity.api.oidc import public_router as oidc_public_router
+from penaria.features.support.identity.api.oidc import router as oidc_router
 from penaria.features.support.identity.api.passkeys import router as passkeys_router
 from penaria.features.support.identity.api.passkeys import sign_in_router as passkey_sign_in_router
 from penaria.features.support.identity.api.people import guest_router, public_router
@@ -34,10 +36,12 @@ SERVICE_NAME = "penaria-api"
 ROUTERS = (
     sign_in_router,
     passkey_sign_in_router,
+    oidc_public_router,
     recovery_router,
     account_router,
     passkeys_router,
     totp_router,
+    oidc_router,
     identity_router,
     people_router,
     devices_router,

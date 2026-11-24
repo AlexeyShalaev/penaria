@@ -126,10 +126,11 @@ class Totp:
         self.recovery_codes = [kept for kept in self.recovery_codes if kept != hashed]
 
 
-def second_factor_required(*, has_password: bool, install_admin: bool, owns_a_home: bool) -> bool:
-    """Whether an account must have a second factor (sign-in.md, 4.3): an install admin or an owner of any home
-    who can sign in with a password. A passkey is one by itself, so an account without a password needs none."""
-    return has_password and (install_admin or owns_a_home)
+def second_factor_required(*, signs_in_without_passkey: bool, install_admin: bool, owns_a_home: bool) -> bool:
+    """Whether an account must have a second factor (sign-in.md, 4.3 and 18): an install admin or an owner of any
+    home who can sign in with a password or through the operator's provider. A passkey is one by itself, so an
+    account with nothing else needs none."""
+    return signs_in_without_passkey and (install_admin or owns_a_home)
 
 
 def bound_to(user_id: UUID) -> str:

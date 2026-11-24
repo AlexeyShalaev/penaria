@@ -16,4 +16,5 @@ class Settings(PenariaSettings):
     secret_key: SecretStr | None = None
     retired_secret_keys: SecretStr | None = None
     mail: dict[str, Any] | None = None
+    auth: dict[str, Any] | None = None
     server: dict[str, Any] | None = None

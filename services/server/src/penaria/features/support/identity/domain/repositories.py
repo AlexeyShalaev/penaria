@@ -11,6 +11,7 @@ from penaria.features.support.identity.domain.mail import Attempt, LoggedMail, M
 from penaria.features.support.identity.domain.mailbox import StoredMailbox
 from penaria.features.support.identity.domain.members import GuestLink, Invitation, Token
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
+from penaria.features.support.identity.domain.oidc import ExternalIdentity, OidcFlow
 from penaria.features.support.identity.domain.passkeys import Ceremony, Challenge, Passkey
 from penaria.features.support.identity.domain.recovery import AccountLink, LinkPurpose
 from penaria.features.support.identity.domain.sessions import Session
@@ -390,6 +391,36 @@ class AccountLinkRepository(Protocol):
     async def forget_expired(self, now: datetime) -> None: ...
 
 
+class ExternalIdentityRepository(Protocol):
+    async def add(self, identity: ExternalIdentity) -> None: ...
+
+    async def by_subject(self, provider: str, subject: str) -> tuple[ExternalIdentity, User] | None:
+        """The identity at the provider, with the account it is linked to."""
+        ...
+
+    async def for_user(self, user_id: UUID) -> list[ExternalIdentity]:
+        """The account's identities, the oldest first."""
+        ...
+
+    async def remove(self, user_id: UUID, identity_id: UUID) -> bool:
+        """Unlink one of the account's identities; whether there was such an identity."""
+        ...
+
+
+class OidcFlowRepository(Protocol):
+    async def add(self, flow: OidcFlow) -> None: ...
+
+    async def take(self, state_hash: bytes, now: datetime) -> OidcFlow | None:
+        """Remove and return the flow of this state, if it has not expired: a flow ends at one callback."""
+        ...
+
+    async def open_for(self, address: str, now: datetime) -> int:
+        """How many flows the address started that are neither used nor expired."""
+        ...
+
+    async def forget_expired(self, now: datetime) -> None: ...
+
+
 class IdentityTransaction(Protocol):
     @property
     def users(self) -> UserRepository: ...
@@ -441,6 +472,12 @@ class IdentityTransaction(Protocol):
 
     @property
     def account_links(self) -> AccountLinkRepository: ...
+
+    @property
+    def external_identities(self) -> ExternalIdentityRepository: ...
+
+    @property
+    def oidc_flows(self) -> OidcFlowRepository: ...
 
     @property
     def journal(self) -> Journal: ...

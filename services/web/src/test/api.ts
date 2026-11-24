@@ -15,11 +15,21 @@ export function problem(status: number, code: string) {
 }
 
 /**
+ * What an install without a sign-in provider and an account with a password answer, for the many pages and
+ * dialogs that ask; a test overrides them by naming the same routes.
+ */
+const DEFAULT_ROUTES: Record<string, Reply> = {
+  'GET /api/v1/auth/config': {oidc: null},
+  'GET /api/v1/me/sign-in-methods': {password: true, external_identities: []},
+}
+
+/**
  * Replaces fetch with canned answers keyed by "METHOD /path" plus the exact query string, if any; a
  * reply is a JSON body, a Response, or a function of the call. Returns the calls, in order. A call
  * nothing answers fails the test in `expectEveryCallAnswered`, run after each test.
  */
-export function mockApi(routes: Record<string, Reply>): ApiCall[] {
+export function mockApi(overrides: Record<string, Reply>): ApiCall[] {
+  const routes = {...DEFAULT_ROUTES, ...overrides}
   const calls: ApiCall[] = []
   vi.stubGlobal(
     'fetch',

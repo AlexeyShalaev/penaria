@@ -11,15 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from penaria.features.support.identity.domain.devices import Device
 from penaria.features.support.identity.domain.members import GuestLink, Invitation, Token
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
+from penaria.features.support.identity.domain.oidc import ExternalIdentity, FlowPurpose, OidcFlow
 from penaria.features.support.identity.domain.passkeys import Ceremony, Challenge, Passkey
 from penaria.features.support.identity.domain.permissions import Preset
 from penaria.features.support.identity.domain.sessions import ABSOLUTE_LIFETIME, IDLE_TIMEOUT, Client, Session
 from penaria.features.support.identity.domain.throttle import Failures
 from penaria.features.support.identity.domain.totp import PendingSignIn, Totp
 from penaria.features.support.identity.infra.orm import (
+    ExternalIdentityDB,
     GrantDB,
     HomeDB,
     InvitationDB,
+    OidcFlowDB,
     PasskeyChallengeDB,
     PasskeyDB,
     PasswordDB,
@@ -793,6 +796,117 @@ class PostgresTokenRepository:
             )
         ).one_or_none()
         return None if row is None else Device(grant=_grant(row[0]), token=_token(row[1]))
+
+
+class PostgresExternalIdentityRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, identity: ExternalIdentity) -> None:
+        self._session.add(
+            ExternalIdentityDB(
+                id=identity.id,
+                provider=identity.provider,
+                subject=identity.subject,
+                user_id=identity.user_id,
+                email=identity.email,
+                created_at=identity.created_at,
+            )
+        )
+
+    async def by_subject(self, provider: str, subject: str) -> tuple[ExternalIdentity, User] | None:
+        row = (
+            await self._session.execute(
+                select(ExternalIdentityDB, UserDB)
+                .join(UserDB, UserDB.id == ExternalIdentityDB.user_id)
+                .where(ExternalIdentityDB.provider == provider, ExternalIdentityDB.subject == subject)
+            )
+        ).one_or_none()
+        return None if row is None else (_external_identity(row[0]), _user(row[1]))
+
+    async def for_user(self, user_id: UUID) -> list[ExternalIdentity]:
+        rows = await self._session.scalars(
+            select(ExternalIdentityDB)
+            .where(ExternalIdentityDB.user_id == user_id)
+            .order_by(ExternalIdentityDB.created_at, ExternalIdentityDB.id)
+        )
+        return [_external_identity(row) for row in rows]
+
+    async def remove(self, user_id: UUID, identity_id: UUID) -> bool:
+        removed = await self._session.scalar(
+            delete(ExternalIdentityDB)
+            .where(ExternalIdentityDB.id == identity_id, ExternalIdentityDB.user_id == user_id)
+            .returning(ExternalIdentityDB.id)
+        )
+        return removed is not None
+
+
+class PostgresOidcFlowRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, flow: OidcFlow) -> None:
+        self._session.add(
+            OidcFlowDB(
+                id=flow.id,
+                purpose=flow.purpose.value,
+                state_hash=flow.state_hash,
+                browser_hash=flow.browser_hash,
+                nonce=flow.nonce,
+                code_verifier=flow.code_verifier,
+                return_to=flow.return_to,
+                locale=flow.locale,
+                address=flow.address,
+                user_id=flow.user_id,
+                session_id=flow.session_id,
+                invitation_hash=flow.invitation_hash,
+                created_at=flow.created_at,
+                expires_at=flow.expires_at,
+            )
+        )
+
+    async def take(self, state_hash: bytes, now: datetime) -> OidcFlow | None:
+        row = await self._session.scalar(
+            delete(OidcFlowDB).where(OidcFlowDB.state_hash == state_hash).returning(OidcFlowDB)
+        )
+        if row is None or row.expires_at <= now:
+            return None
+        return OidcFlow(
+            id=row.id,
+            purpose=FlowPurpose(row.purpose),
+            state_hash=row.state_hash,
+            browser_hash=row.browser_hash,
+            nonce=row.nonce,
+            code_verifier=row.code_verifier,
+            return_to=row.return_to,
+            locale=row.locale,
+            address=row.address,
+            user_id=row.user_id,
+            session_id=row.session_id,
+            invitation_hash=row.invitation_hash,
+            created_at=row.created_at,
+            expires_at=row.expires_at,
+        )
+
+    async def open_for(self, address: str, now: datetime) -> int:
+        count = await self._session.scalar(
+            select(func.count()).where(OidcFlowDB.address == address, OidcFlowDB.expires_at > now)
+        )
+        return int(count or 0)
+
+    async def forget_expired(self, now: datetime) -> None:
+        await self._session.execute(delete(OidcFlowDB).where(OidcFlowDB.expires_at <= now))
+
+
+def _external_identity(row: ExternalIdentityDB) -> ExternalIdentity:
+    return ExternalIdentity(
+        id=row.id,
+        provider=row.provider,
+        subject=row.subject,
+        user_id=row.user_id,
+        email=row.email,
+        created_at=row.created_at,
+    )
 
 
 def _token_of_grant() -> ColumnElement[bool]:

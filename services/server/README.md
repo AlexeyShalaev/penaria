@@ -23,13 +23,14 @@ The api process also needs these; the migrate and cli processes accept them too,
 | `PENARIA_PUBLIC_URL` | Required. The address people open, such as `https://home.example.org`: the root of a site, without a path. Requests that change something are refused when the browser says they come from another site (`Origin`), and the session cookie is `Secure` when it is `https`. Its host name is what passkeys belong to |
 | `PENARIA_SECRET_KEY` | Required, at least 32 characters, such as the output of `openssl rand -hex 32`. Stored secrets (the mailbox's password, queued email) are encrypted with a key derived from it: keep it, and back it up apart from the database |
 | `PENARIA_RETIRED_SECRET_KEYS` | Optional. Earlier values of `PENARIA_SECRET_KEY`, separated by commas, while you rotate it: what they encrypted still opens, and new secrets use the new key. Save the mailbox's password again in Settings, then drop the old key. With several api replicas, first add the new key here on every replica, and only then make it `PENARIA_SECRET_KEY` |
+| `PENARIA_AUTH__OIDC__ISSUER`, `..._CLIENT_ID`, `..._CLIENT_SECRET`, `..._ALLOW_SIGN_UP`, `..._NAME`, `..._SCOPES` | Optional sign-in with your OpenID Connect provider, such as Authentik or Keycloak ("Sign-in with your identity provider" below) |
 | `PENARIA_MAIL__HOST`, `..._PORT`, `..._SECURITY` (`starttls`, `tls` or `none`), `..._USERNAME`, `..._PASSWORD`, `..._FROM_ADDRESS`, `..._FROM_NAME` | Optional outgoing email. Usually an install admin connects the mailbox in the web app (Settings); set these to manage it as configuration instead. With `PENARIA_MAIL__HOST` set, every mail setting comes from the environment (`..._FROM_ADDRESS` is then required, and the port defaults to 587, 465 or 25 by the security) and the web app shows them locked |
 
 Behind a reverse proxy, let the server trust its `X-Forwarded-For`, so that the session list and the sign-in limits see people's addresses rather than the proxy's: `PENARIA_SERVER__UVICORN__FORWARDED_ALLOW_IPS=<the proxy's address>`. Without it everyone signs in from the proxy's address, and five wrong passwords by anyone make everyone wait.
 
 ## HTTP API
 
-REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. The same document is committed as `openapi.json` (`make openapi` exports it without a database), and the web app generates its API types from it; a unit test fails when the committed file no longer matches the code. So far: setup and signing in (`/setup`, `/sign-in`, `/sign-in/second-factor`, `/sign-in/passkey`, `/sign-out`), recovery (`/mail`, `/password-reset:request`, `:preview`, `/password-reset`, `/email-verifications:confirm`), the signed-in account, its email, sessions, passkeys and second factor (`/me`, `/me/email`, `/me/password`, `/me/sessions`, `/me/passkeys`, `/me/second-factor`, `/me/totp`, `:confirm`, `/me/totp/recovery-codes`, `/me/reauthenticate`), the install's settings for its admins (`/install/mail`, `:test`, `/status`, `/messages`), the account's homes (`/homes`), a home's people (`/homes/{id}/roles`, `/members`, `/members/{id}:reset-link`, `/grants/{id}`, `:leave`, `/invitations`, `/guest-links`, `/devices`), accepting invitations (`/invitations:preview`, `:accept`, `:accept-new-account`), guest visits (`/guest-sessions`, `/guest`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`; a request without a session answers 401 with the code `unauthenticated`.
+REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. The same document is committed as `openapi.json` (`make openapi` exports it without a database), and the web app generates its API types from it; a unit test fails when the committed file no longer matches the code. So far: setup and signing in (`/setup`, `/sign-in`, `/sign-in/second-factor`, `/sign-in/passkey`, `/sign-out`), signing in with the operator's provider (`/auth/config`, `/auth/oidc:sign-in`, `:accept-invitation`, `/auth/oidc/callback`, `/me/sign-in-methods`, `/me/external-identities`, `:link`, `/me/reauthenticate/oidc`), recovery (`/mail`, `/password-reset:request`, `:preview`, `/password-reset`, `/email-verifications:confirm`), the signed-in account, its email, sessions, passkeys and second factor (`/me`, `/me/email`, `/me/password`, `/me/sessions`, `/me/passkeys`, `/me/second-factor`, `/me/totp`, `:confirm`, `/me/totp/recovery-codes`, `/me/reauthenticate`), the install's settings for its admins (`/install/mail`, `:test`, `/status`, `/messages`), the account's homes (`/homes`), a home's people (`/homes/{id}/roles`, `/members`, `/members/{id}:reset-link`, `/grants/{id}`, `:leave`, `/invitations`, `/guest-links`, `/devices`), accepting invitations (`/invitations:preview`, `:accept`, `:accept-new-account`), guest visits (`/guest-sessions`, `/guest`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`; a request without a session answers 401 with the code `unauthenticated`.
 
 ## Sign-in and the first start
 
@@ -67,6 +68,34 @@ A person who makes a device must hold the access to give its role without an end
 Passkeys belong to the host name of `PENARIA_PUBLIC_URL`: browsers offer them only on `https` with a domain name, or on `localhost`, so an install opened at a plain IP address signs in with passwords only. Changing the host name later makes every passkey unusable (people sign in with their password and add a new one). Adding or removing a passkey needs a sign-in within the last 10 minutes; the web app asks for the password or a passkey again when it is older.
 
 Two-step sign-in: an account may add an authenticator app (TOTP: six digits, 30 seconds, as Google Authenticator, 1Password and the like make them) on its account page, and then signing in with the password asks for a code from it too; ten single-use recovery codes stand in for the phone when it is lost. Signing in with a passkey asks for no code. The app's secret is stored encrypted with `PENARIA_SECRET_KEY`, so changing that key without keeping the old one in `PENARIA_RETIRED_SECRET_KEYS` leaves only the recovery codes working. Owners of a home and the install's admins who sign in with a password must have an authenticator app or a passkey: until they add one, they are asked for it right after signing in, and handing a home over, changing people's access, making reset links and the install's settings answer `403 second_factor_required` (`docs/design/sign-in.md`, section 16).
+
+## Sign-in with your identity provider
+
+A household that already runs an OpenID Connect provider (Authentik, Keycloak, Zitadel, Dex, a Google Workspace) can let people sign in with it. Register Penaria with the provider as a confidential client with the authorization code flow, and the redirect URI `<PENARIA_PUBLIC_URL>/api/v1/auth/oidc/callback`; then set:
+
+| Variable | Meaning |
+|---|---|
+| `PENARIA_AUTH__OIDC__ISSUER` | The provider's issuer, exactly as its `/.well-known/openid-configuration` names it, trailing slash and all. `https`, or `http` only for a provider on the same machine |
+| `PENARIA_AUTH__OIDC__CLIENT_ID`, `..._CLIENT_SECRET` | The client the provider made for Penaria |
+| `PENARIA_AUTH__OIDC__NAME` | Optional. What the button says: "Sign in with <name>"; the issuer's host name by default |
+| `PENARIA_AUTH__OIDC__ALLOW_SIGN_UP` | Optional, `false` by default. With `true`, anyone the provider signs in gets an account; with `false`, a person needs an invitation, and accepting it with "Join with <name>" links their identity |
+| `PENARIA_AUTH__OIDC__SCOPES` | Optional, `openid profile email` by default |
+
+```sh
+# Authentik: Applications → Providers → OAuth2/OpenID Provider, client type Confidential
+PENARIA_AUTH__OIDC__ISSUER=https://auth.example.org/application/o/penaria/
+PENARIA_AUTH__OIDC__CLIENT_ID=<client id>
+PENARIA_AUTH__OIDC__CLIENT_SECRET=<client secret>
+PENARIA_AUTH__OIDC__NAME=Authentik
+
+# Keycloak: a client with Client authentication on and Standard flow
+PENARIA_AUTH__OIDC__ISSUER=https://sso.example.org/realms/home
+PENARIA_AUTH__OIDC__CLIENT_ID=penaria
+PENARIA_AUTH__OIDC__CLIENT_SECRET=<client secret>
+PENARIA_AUTH__OIDC__NAME=Keycloak
+```
+
+People link their identity on the account page, or join through an invitation with it. Penaria keys an identity by the issuer and the provider's `sub`, never by email, and takes the email only when the provider says it checked it; so changing the issuer (moving the provider, renaming an Authentik application) unlinks everyone. Penaria's own rules still apply after the provider: an account with an authenticator app is asked for its code, and owners and admins must have the app or a passkey (`docs/design/sign-in.md`, section 18). If the provider cannot be reached, the button answers that it is unavailable and the details are in the server's log; passwords and passkeys keep working.
 
 ## Outgoing email
 

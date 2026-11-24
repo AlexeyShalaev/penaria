@@ -276,6 +276,26 @@
         "title": "AttestationResponseIn",
         "type": "object"
       },
+      "AuthConfigOut": {
+        "properties": {
+          "oidc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OidcConfigOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The operator's provider; null when there is none"
+          }
+        },
+        "required": [
+          "oidc"
+        ],
+        "title": "AuthConfigOut",
+        "type": "object"
+      },
       "AuthenticationCredentialIn": {
         "description": "An answer to a challenge, as ``navigator.credentials.get`` gives it, in JSON.",
         "properties": {
@@ -1004,6 +1024,39 @@
           "payload"
         ],
         "title": "EventOut",
+        "type": "object"
+      },
+      "ExternalIdentityOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the provider said when it was linked",
+            "title": "Email"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "created_at"
+        ],
+        "title": "ExternalIdentityOut",
         "type": "object"
       },
       "FailureReason": {
@@ -2072,6 +2125,153 @@
         "title": "NewAccountOut",
         "type": "object"
       },
+      "OidcConfigOut": {
+        "properties": {
+          "name": {
+            "description": "What the sign-in button calls the provider, such as Authentik",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OidcConfigOut",
+        "type": "object"
+      },
+      "OidcInvitationIn": {
+        "properties": {
+          "locale": {
+            "description": "The language of an account the invitation may make",
+            "examples": [
+              "en"
+            ],
+            "title": "Locale",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "locale"
+        ],
+        "title": "OidcInvitationIn",
+        "type": "object"
+      },
+      "OidcLinkIn": {
+        "properties": {
+          "return_to": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return To"
+          }
+        },
+        "title": "OidcLinkIn",
+        "type": "object"
+      },
+      "OidcReauthenticationIn": {
+        "description": "A code or a recovery code too while the account's authenticator app is on.",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A code the authenticator app shows",
+            "title": "Code"
+          },
+          "recovery_code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of the recovery codes",
+            "title": "Recovery Code"
+          },
+          "return_to": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return To"
+          }
+        },
+        "title": "OidcReauthenticationIn",
+        "type": "object"
+      },
+      "OidcSignInIn": {
+        "properties": {
+          "locale": {
+            "description": "The language of an account the sign-in may make",
+            "examples": [
+              "en"
+            ],
+            "title": "Locale",
+            "type": "string"
+          },
+          "return_to": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A page to come back to",
+            "title": "Return To"
+          }
+        },
+        "required": [
+          "locale"
+        ],
+        "title": "OidcSignInIn",
+        "type": "object"
+      },
+      "OidcStartOut": {
+        "properties": {
+          "url": {
+            "description": "Open it in the browser: the provider signs the person in and sends them back",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "OidcStartOut",
+        "type": "object"
+      },
       "PasskeyIn": {
         "properties": {
           "challenge_id": {
@@ -2948,6 +3148,29 @@
         "title": "SignInIn",
         "type": "object"
       },
+      "SignInMethodsOut": {
+        "properties": {
+          "external_identities": {
+            "description": "Its identities at the operator's provider",
+            "items": {
+              "$ref": "#/components/schemas/ExternalIdentityOut"
+            },
+            "title": "External Identities",
+            "type": "array"
+          },
+          "password": {
+            "description": "Whether the account has a password",
+            "title": "Password",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "password",
+          "external_identities"
+        ],
+        "title": "SignInMethodsOut",
+        "type": "object"
+      },
       "Status": {
         "enum": [
           "present",
@@ -3096,6 +3319,189 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/auth/config": {
+      "get": {
+        "description": "How people may sign in here beyond passwords and passkeys.",
+        "operationId": "auth_config_api_v1_auth_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Auth Config",
+        "tags": [
+          "sign-in"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc/callback": {
+      "get": {
+        "description": "Where the provider sends the browser back (`PENARIA_PUBLIC_URL` + this path): it redirects to a page.",
+        "operationId": "oidc_callback_api_v1_auth_oidc_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2048,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2048,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2048,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Oidc Callback",
+        "tags": [
+          "sign-in"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc:accept-invitation": {
+      "post": {
+        "description": "Accept an invitation with an identity at the provider: its account, or a new one made from it.",
+        "operationId": "start_oidc_invitation_api_v1_auth_oidc_accept_invitation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcInvitationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcStartOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Oidc Invitation",
+        "tags": [
+          "sign-in"
+        ]
+      }
+    },
+    "/api/v1/auth/oidc:sign-in": {
+      "post": {
+        "operationId": "start_oidc_sign_in_api_v1_auth_oidc_sign_in_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcSignInIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcStartOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Oidc Sign In",
+        "tags": [
+          "sign-in"
+        ]
+      }
+    },
     "/api/v1/email-verifications:confirm": {
       "post": {
         "description": "Make the address a confirmation link was sent to the account's email.",
@@ -4938,6 +5344,85 @@
         ]
       }
     },
+    "/api/v1/me/external-identities/{identity_id}": {
+      "delete": {
+        "description": "Unlink an identity; needs a recent sign-in, and the account keeps another way to sign in.",
+        "operationId": "unlink_external_identity_api_v1_me_external_identities__identity_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Identity Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unlink External Identity",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/me/external-identities:link": {
+      "post": {
+        "description": "Link the account to an identity at the provider; needs a recent sign-in.",
+        "operationId": "start_oidc_link_api_v1_me_external_identities_link_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcLinkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcStartOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Oidc Link",
+        "tags": [
+          "account"
+        ]
+      }
+    },
     "/api/v1/me/passkeys": {
       "get": {
         "operationId": "list_passkeys_api_v1_me_passkeys_get",
@@ -5182,6 +5667,48 @@
         ]
       }
     },
+    "/api/v1/me/reauthenticate/oidc": {
+      "post": {
+        "description": "Confirm it is you by signing in at the provider again (``second_factor_code_required`` without a code while\nthe authenticator app is on).",
+        "operationId": "start_oidc_reauthentication_api_v1_me_reauthenticate_oidc_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcReauthenticationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcStartOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Oidc Reauthentication",
+        "tags": [
+          "account"
+        ]
+      }
+    },
     "/api/v1/me/reauthenticate/passkey": {
       "post": {
         "operationId": "reauthenticate_with_passkey_api_v1_me_reauthenticate_passkey_post",
@@ -5335,6 +5862,27 @@
           }
         },
         "summary": "Revoke Other Sessions",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/me/sign-in-methods": {
+      "get": {
+        "operationId": "sign_in_methods_api_v1_me_sign_in_methods_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInMethodsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Sign In Methods",
         "tags": [
           "account"
         ]

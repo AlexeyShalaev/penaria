@@ -236,7 +236,7 @@ class PreviewInvitation:
 
     async def execute(self, token: str, client: Client) -> InvitationPreview:
         """Whose home the invitation opens, from whom and with which role; refused once it cannot be accepted."""
-        invitation = await _open_invitation(self._uow, token, client)
+        invitation = await open_invitation(self._uow, token, client)
         async with self._uow.query() as tx:
             home = await tx.homes.get(invitation.home_id)
             role = (await tx.roles.get_many({invitation.role_id}))[invitation.role_id]
@@ -261,14 +261,14 @@ class AcceptInvitation:
 
     async def execute(self, current: CurrentSession, token: str, client: Client) -> Home:
         """The home the person now belongs to."""
-        invitation = await _open_invitation(self._uow, token, client)
+        invitation = await open_invitation(self._uow, token, client)
         scope = await place_for(self._places, invitation.scope_entity_id)
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
-            invitation, home = await _lock(tx, token, scope, now)
+            invitation, home = await lock_invitation(tx, hash_token(token), scope, now)
             if invitation.created_by == current.user_id:
                 raise OwnInvitationError("this is your own invitation: pass the link on to the person it is for")
-            await _accept(tx, self._places, invitation, current.user_id, now)
+            await accept_invitation(tx, self._places, invitation, current.user_id, now)
         return home
 
 
@@ -293,7 +293,7 @@ class AcceptInvitationWithNewAccount:
         display_name = check_display_name(display_name)
         locale = check_locale(locale)
         check_password(password)
-        invitation = await _open_invitation(self._uow, token, client)
+        invitation = await open_invitation(self._uow, token, client)
         scope = await place_for(self._places, invitation.scope_entity_id)
         password_hash = await self._hasher.hash(password)
         now = datetime.now(UTC)
@@ -302,7 +302,7 @@ class AcceptInvitationWithNewAccount:
             await tx.failures.lock([account_key(username)])
             if await tx.users.by_username(username) is not None:
                 raise UsernameTakenError("this username is taken: choose another", params={"field": "username"})
-            invitation, home = await _lock(tx, token, scope, now)
+            invitation, home = await lock_invitation(tx, hash_token(token), scope, now)
             user = User(display_name=display_name, locale=locale, username=username)
             await tx.users.add(user)
             await tx.passwords.set(user.id, password_hash, now)
@@ -316,12 +316,12 @@ class AcceptInvitationWithNewAccount:
                     )
                 ]
             )
-            await _accept(tx, self._places, invitation, user.id, now)
+            await accept_invitation(tx, self._places, invitation, user.id, now)
             session_token = await start_session(tx, user, client, now)
         return user, home, session_token
 
 
-async def _open_invitation(uow: AsyncUnitOfWork[IdentityTransaction], token: str, client: Client) -> Invitation:
+async def open_invitation(uow: AsyncUnitOfWork[IdentityTransaction], token: str, client: Client) -> Invitation:
     """The invitation of the token, if it can still be accepted."""
     invitation = await find_by_secret(
         uow,
@@ -333,10 +333,12 @@ async def _open_invitation(uow: AsyncUnitOfWork[IdentityTransaction], token: str
     return invitation
 
 
-async def _lock(tx: IdentityTransaction, token: str, scope: Place | None, now: datetime) -> tuple[Invitation, Home]:
+async def lock_invitation(
+    tx: IdentityTransaction, token_hash: bytes, scope: Place | None, now: datetime
+) -> tuple[Invitation, Home]:
     """The invitation, locked so it is accepted once, and its home, locked as every change to its people;
     under the lock, the invitation gives only what its inviter may still give."""
-    invitation = await tx.invitations.by_token_hash(hash_token(token), for_update=True)
+    invitation = await tx.invitations.by_token_hash(token_hash, for_update=True)
     if invitation is None:
         raise RuntimeError("an invitation disappeared while it was accepted")
     invitation.check_open(now)
@@ -352,7 +354,7 @@ async def _lock(tx: IdentityTransaction, token: str, scope: Place | None, now: d
     return invitation, home
 
 
-async def _accept(
+async def accept_invitation(
     tx: IdentityTransaction, places: PlaceDirectory, invitation: Invitation, user_id: UUID, now: datetime
 ) -> None:
     """Give the user the invitation's grant and use it up; for a transfer, the inviter's ownership ends."""
