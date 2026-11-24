@@ -1,6 +1,7 @@
 """Slowing down password guessing: per account and per address, failures earn a growing wait (sign-in.md, 7)."""
 
 import hashlib
+import ipaddress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -11,6 +12,8 @@ FIRST_DELAY = timedelta(seconds=30)
 MAX_DELAY = timedelta(minutes=15)
 # A counter whose last failure is this old starts again from zero.
 FAILURES_EXPIRE_AFTER = timedelta(hours=1)
+IPV6 = 6
+IPV6_PREFIX = 64
 
 
 class TooManyAttemptsError(TooManyRequestsError):
@@ -19,7 +22,6 @@ class TooManyAttemptsError(TooManyRequestsError):
 
 @dataclass(frozen=True, slots=True)
 class Failures:
-    key: str
     count: int
     last_at: datetime
 
@@ -57,4 +59,10 @@ def account_key(username: str) -> str:
 
 
 def address_key(ip: str | None) -> str | None:
-    return None if ip is None else f"ip:{ip}"
+    """The counter of an address; IPv6 by its /64, the block a single household or attacker holds."""
+    if ip is None:
+        return None
+    address = ipaddress.ip_address(ip)
+    if address.version == IPV6:
+        return f"ip:{ipaddress.ip_network(f'{address}/{IPV6_PREFIX}', strict=False)}"
+    return f"ip:{address}"

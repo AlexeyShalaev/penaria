@@ -8,10 +8,11 @@ forged page cannot make carry the cookie; it passes.
 """
 
 from collections.abc import Awaitable, Callable
-from urllib.parse import urlsplit
 
 from fastapi import Request
 from servicewright import ErrorKind, ServiceError
+
+from penaria.common.urls import origin_of
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -29,13 +30,12 @@ def origin_check(public_origin: str) -> Callable[[Request], Awaitable[None]]:
             return
         origin = request.headers.get("origin")
         if origin is None and (referer := request.headers.get("referer")) is not None:
-            origin = _origin_of(referer)
+            try:
+                origin = origin_of(referer)
+            except ValueError:
+                # A malformed Referer, such as one with a port out of range, names no site we know.
+                origin = "null"
         if origin is not None and origin != public_origin:
             raise CrossOriginRequestError("the request comes from another site than PENARIA_PUBLIC_URL")
 
     return check_origin
-
-
-def _origin_of(url: str) -> str:
-    parts = urlsplit(url)
-    return f"{parts.scheme}://{parts.netloc}"

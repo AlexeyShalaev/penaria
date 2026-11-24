@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
 from penaria.features.support.identity.domain.permissions import Preset
-from penaria.features.support.identity.domain.sessions import Client, Session
+from penaria.features.support.identity.domain.sessions import ABSOLUTE_LIFETIME, IDLE_TIMEOUT, Client, Session
 from penaria.features.support.identity.domain.throttle import Failures
 from penaria.features.support.identity.infra.orm import (
     GrantDB,
@@ -22,6 +22,9 @@ from penaria.features.support.identity.infra.orm import (
     SignInFailureDB,
     UserDB,
 )
+
+# Any constant works, other than the migrations' (migrations/env.py); "PSET".
+SETUP_LOCK_KEY = 0x50534554
 
 
 class PostgresUserRepository:
@@ -40,6 +43,10 @@ class PostgresUserRepository:
         row = await self._session.get(UserDB, user_id)
         return None if row is None else _user(row)
 
+    async def get_for_update(self, user_id: UUID) -> User | None:
+        row = await self._session.scalar(select(UserDB).where(UserDB.id == user_id).with_for_update())
+        return None if row is None else _user(row)
+
     async def by_username(self, username: str) -> User | None:
         row = await self._session.scalar(select(UserDB).where(UserDB.username == username))
         return None if row is None else _user(row)
@@ -47,6 +54,9 @@ class PostgresUserRepository:
     async def first(self) -> User | None:
         row = await self._session.scalar(select(UserDB).order_by(UserDB.id).limit(1))
         return None if row is None else _user(row)
+
+    async def any_account(self) -> bool:
+        return bool(await self._session.scalar(select(exists().where(UserDB.username.is_not(None)))))
 
 
 class PostgresPasswordRepository:
@@ -63,9 +73,6 @@ class PostgresPasswordRepository:
                 index_elements=[PasswordDB.user_id], set_={"hash": password_hash, "changed_at": now}
             )
         )
-
-    async def any(self) -> bool:
-        return bool(await self._session.scalar(select(exists().select_from(PasswordDB))))
 
 
 class PostgresSessionRepository:
@@ -100,10 +107,10 @@ class PostgresSessionRepository:
     async def active_for(self, user_id: UUID, now: datetime) -> list[Session]:
         rows = await self._session.scalars(
             select(SessionDB)
-            .where(SessionDB.user_id == user_id, SessionDB.revoked_at.is_(None))
+            .where(SessionDB.user_id == user_id, *_active_session(now))
             .order_by(SessionDB.last_seen_at.desc(), SessionDB.id)
         )
-        return [session for session in map(_session, rows) if session.is_active(now)]
+        return [_session(row) for row in rows]
 
     async def touch(self, session_id: UUID, now: datetime) -> None:
         await self._session.execute(update(SessionDB).where(SessionDB.id == session_id).values(last_seen_at=now))
@@ -120,7 +127,7 @@ class PostgresSessionRepository:
     async def revoke_all_but(self, user_id: UUID, keep: UUID, now: datetime) -> list[UUID]:
         revoked = await self._session.scalars(
             update(SessionDB)
-            .where(SessionDB.user_id == user_id, SessionDB.id != keep, SessionDB.revoked_at.is_(None))
+            .where(SessionDB.user_id == user_id, SessionDB.id != keep, *_active_session(now))
             .values(revoked_at=now)
             .returning(SessionDB.id)
         )
@@ -131,12 +138,15 @@ class PostgresSetupTokenRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def lock(self) -> None:
+        await self._session.execute(select(func.pg_advisory_xact_lock(SETUP_LOCK_KEY)))
+
     async def replace(self, token_hash: bytes, now: datetime) -> None:
         await self._session.execute(delete(SetupTokenDB))
         self._session.add(SetupTokenDB(token_hash=token_hash, created_at=now))
 
-    async def current_for_update(self) -> bytes | None:
-        return await self._session.scalar(select(SetupTokenDB.token_hash).with_for_update())
+    async def current(self) -> bytes | None:
+        return await self._session.scalar(select(SetupTokenDB.token_hash))
 
     async def clear(self) -> None:
         await self._session.execute(delete(SetupTokenDB))
@@ -153,11 +163,11 @@ class PostgresFailureRepository:
 
     async def get(self, keys: Sequence[str]) -> list[Failures]:
         rows = await self._session.scalars(select(SignInFailureDB).where(SignInFailureDB.key.in_(list(keys))))
-        return [Failures(key=row.key, count=row.count, last_at=row.last_at) for row in rows]
+        return [Failures(count=row.count, last_at=row.last_at) for row in rows]
 
     async def record(self, keys: Sequence[str], now: datetime, forget_before: datetime) -> None:
-        # Counters nobody failed under for long are gone, so typed usernames do not pile up.
-        await self._session.execute(delete(SignInFailureDB).where(SignInFailureDB.last_at < forget_before))
+        if not keys:
+            return
         statement = insert(SignInFailureDB).values([{"key": key, "count": 1, "last_at": now} for key in keys])
         await self._session.execute(
             statement.on_conflict_do_update(
@@ -169,8 +179,19 @@ class PostgresFailureRepository:
             )
         )
 
+    async def uncount(self, keys: Sequence[str]) -> None:
+        if keys:
+            await self._session.execute(
+                update(SignInFailureDB)
+                .where(SignInFailureDB.key.in_(list(keys)))
+                .values(count=func.greatest(SignInFailureDB.count - 1, 0))
+            )
+
     async def clear(self, key: str) -> None:
         await self._session.execute(delete(SignInFailureDB).where(SignInFailureDB.key == key))
+
+    async def forget_older_than(self, cutoff: datetime) -> None:
+        await self._session.execute(delete(SignInFailureDB).where(SignInFailureDB.last_at < cutoff))
 
 
 class PostgresHomeRepository:
@@ -269,6 +290,15 @@ class PostgresGrantRepository:
 
 def _active(now: datetime) -> tuple[ColumnElement[bool], ...]:
     return (GrantDB.revoked_at.is_(None), or_(GrantDB.expires_at.is_(None), GrantDB.expires_at > now))
+
+
+def _active_session(now: datetime) -> tuple[ColumnElement[bool], ...]:
+    # Session.is_active, in SQL.
+    return (
+        SessionDB.revoked_at.is_(None),
+        SessionDB.last_seen_at > now - IDLE_TIMEOUT,
+        SessionDB.created_at > now - ABSOLUTE_LIFETIME,
+    )
 
 
 def _user_fields(user: User) -> dict[str, object]:

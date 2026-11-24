@@ -904,7 +904,7 @@
             "type": "string"
           },
           "username": {
-            "maxLength": 100,
+            "maxLength": 200,
             "minLength": 1,
             "title": "Username",
             "type": "string"
@@ -943,7 +943,7 @@
             "type": "string"
           },
           "username": {
-            "maxLength": 100,
+            "maxLength": 200,
             "minLength": 1,
             "title": "Username",
             "type": "string"

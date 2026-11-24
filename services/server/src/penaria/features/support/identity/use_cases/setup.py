@@ -22,11 +22,8 @@ from penaria.features.support.identity.domain.setup import (
     new_setup_token,
     setup_token_matches,
 )
-from penaria.features.support.identity.domain.throttle import (
-    FAILURES_EXPIRE_AFTER,
-    address_key,
-    check_not_blocked,
-)
+from penaria.features.support.identity.domain.throttle import address_key
+from penaria.features.support.identity.use_cases.attempts import count_attempt
 from penaria.features.support.identity.use_cases.sessions import start_session
 
 
@@ -37,7 +34,7 @@ class NeedsSetup:
     async def execute(self) -> bool:
         """Whether no account can sign in yet."""
         async with self._uow.query() as tx:
-            return not await tx.passwords.any()
+            return not await tx.users.any_account()
 
 
 class IssueSetupToken:
@@ -47,7 +44,8 @@ class IssueSetupToken:
     async def execute(self) -> str | None:
         """A new setup token, replacing any earlier one, while the install needs setup; otherwise None."""
         async with self._uow.transaction() as tx:
-            if await tx.passwords.any():
+            await tx.setup_tokens.lock()
+            if await tx.users.any_account():
                 return None
             token, token_hash = new_setup_token()
             await tx.setup_tokens.replace(token_hash, datetime.now(UTC))
@@ -69,27 +67,35 @@ class CompleteSetup:
         display_name = check_display_name(display_name)
         locale = check_locale(locale)
         check_password(password)
-        password_hash = await self._hasher.hash(password)
         address = address_key(client.ip)
+        attempts = [] if address is None else [address]
         async with self._uow.transaction() as tx:
-            # Locks the token: of two attempts at once, the second sees the install set up.
-            stored = await tx.setup_tokens.current_for_update()
-            if await tx.passwords.any():
+            # Of two attempts at once, the second waits here and then sees the install set up.
+            await tx.setup_tokens.lock()
+            if await tx.users.any_account():
                 raise AlreadySetUpError("the install is already set up; sign in instead")
             now = datetime.now(UTC)
-            if address is not None:
-                check_not_blocked(await tx.failures.get([address]), now)
-            if setup_token_matches(token, stored):
-                user = await self._make_account(tx, username, display_name, locale)
-                await tx.passwords.set(user.id, password_hash, now)
-                await tx.setup_tokens.clear()
-                await tx.journal.append(
-                    [Event("account.setup_completed", None, Actor.user(user.id), {"user_id": str(user.id)})]
-                )
-                return user, await start_session(tx, user, client, now)
-            if address is not None:
-                await tx.failures.record([address], now, forget_before=now - FAILURES_EXPIRE_AFTER)
-        raise InvalidSetupTokenError("wrong setup token; take the one from the server's latest log")
+            await count_attempt(tx, attempts, now)
+            matches = setup_token_matches(token, await tx.setup_tokens.current())
+        # Committed before refusing, so a wrong token stays counted.
+        if not matches:
+            raise InvalidSetupTokenError("wrong setup token; take the one from the server's latest log")
+        password_hash = await self._hasher.hash(password)
+        async with self._uow.transaction() as tx:
+            # Checked again: another replica may have completed or restarted the setup meanwhile.
+            await tx.setup_tokens.lock()
+            if await tx.users.any_account():
+                raise AlreadySetUpError("the install is already set up; sign in instead")
+            if not setup_token_matches(token, await tx.setup_tokens.current()):
+                raise InvalidSetupTokenError("wrong setup token; take the one from the server's latest log")
+            await tx.failures.uncount(attempts)
+            user = await self._make_account(tx, username, display_name, locale)
+            await tx.passwords.set(user.id, password_hash, now)
+            await tx.setup_tokens.clear()
+            await tx.journal.append(
+                [Event("account.setup_completed", None, Actor.user(user.id), {"user_id": str(user.id)})]
+            )
+            return user, await start_session(tx, user, client, now)
 
     async def _make_account(self, tx: IdentityTransaction, username: str, display_name: str, locale: str) -> User:
         user = await tx.users.first()

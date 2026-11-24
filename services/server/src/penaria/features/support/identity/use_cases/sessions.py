@@ -12,12 +12,8 @@ from penaria.features.support.identity.domain.models import User
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, Session, hash_token
-from penaria.features.support.identity.domain.throttle import (
-    FAILURES_EXPIRE_AFTER,
-    account_key,
-    address_key,
-    check_not_blocked,
-)
+from penaria.features.support.identity.domain.throttle import account_key, address_key
+from penaria.features.support.identity.use_cases.attempts import attempt_succeeded, count_attempt
 
 
 class InvalidCredentialsError(UnauthenticatedError):
@@ -56,41 +52,32 @@ class SignIn:
     async def execute(self, *, username: str, password: str, client: Client) -> tuple[User, str]:
         """The account and a new session's token; every kind of failure answers the same."""
         username = normalize_username(username)
-        keys = [account_key(username)]
-        if (address := address_key(client.ip)) is not None:
-            keys.append(address)
+        account = account_key(username)
+        address = address_key(client.ip)
+        others = [] if address is None else [address]
         async with self._uow.transaction() as tx:
-            # Attempts on the same account or from the same address wait for each other, so parallel
-            # guesses cannot all pass the check before the first failure is counted.
-            await tx.failures.lock(keys)
-            check_not_blocked(await tx.failures.get(keys), datetime.now(UTC))
+            await count_attempt(tx, [account, *others], datetime.now(UTC))
             user = await tx.users.by_username(username)
             password_hash = None if user is None else await tx.passwords.get(user.id)
-            matches = await self._hasher.verify(password_hash, password)
-            now = datetime.now(UTC)
-            if user is None or password_hash is None or not matches or user.disabled_at is not None:
-                await tx.failures.record(keys, now, forget_before=now - FAILURES_EXPIRE_AFTER)
-                if user is not None:
-                    await tx.journal.append(
-                        [
-                            Event(
-                                "account.sign_in_failed",
-                                None,
-                                Actor.system(),
-                                {"user_id": str(user.id), "ip": client.ip},
-                            )
-                        ]
-                    )
-                token = None
-            else:
-                await tx.failures.clear(keys[0])
-                if self._hasher.needs_rehash(password_hash):
-                    await tx.passwords.set(user.id, await self._hasher.hash(password), now)
-                token = await start_session(tx, user, client, now)
-        # Raised after the transaction, so the failure it counted is kept.
-        if user is None or token is None:
+        matches = await self._hasher.verify(password_hash, password)
+        if user is None or password_hash is None or not matches or user.disabled_at is not None:
+            if user is not None:
+                await self._journal_failure(user, client)
             raise InvalidCredentialsError("wrong username or password")
+        new_hash = await self._hasher.hash(password) if self._hasher.needs_rehash(password_hash) else None
+        now = datetime.now(UTC)
+        async with self._uow.transaction() as tx:
+            await attempt_succeeded(tx, account, others)
+            if new_hash is not None:
+                await tx.passwords.set(user.id, new_hash, now)
+            token = await start_session(tx, user, client, now)
         return user, token
+
+    async def _journal_failure(self, user: User, client: Client) -> None:
+        async with self._uow.transaction() as tx:
+            await tx.journal.append(
+                [Event("account.sign_in_failed", None, Actor.system(), {"user_id": str(user.id), "ip": client.ip})]
+            )
 
 
 class SignOut:

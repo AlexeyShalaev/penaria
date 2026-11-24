@@ -70,7 +70,7 @@ class SettingsProvider(Provider):
 
     @provide
     def session_cookie(self) -> SessionCookie:
-        return SessionCookie(secure=self._settings.public_url.scheme == "https")
+        return SessionCookie(secure=self._settings.serves_https)
 
 
 class UnitOfWorkProvider(Provider):

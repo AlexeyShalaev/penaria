@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from penaria.apps.api.settings import Settings
+from penaria.apps.migrate.settings import Settings as MigrateSettings
 from penaria.common.settings import unknown_variables
 
 pytestmark = pytest.mark.unit
@@ -72,3 +73,8 @@ def test_a_short_secret_key_stops_the_process(monkeypatch: pytest.MonkeyPatch) -
 
     with pytest.raises(ValidationError, match="secret_key"):
         Settings()
+
+
+def test_migrate_accepts_the_variables_of_the_api() -> None:
+    # The unit tests' environment sets PENARIA_PUBLIC_URL and PENARIA_SECRET_KEY.
+    assert MigrateSettings().database.connection.database == "unit"

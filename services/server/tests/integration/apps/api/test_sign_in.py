@@ -1,11 +1,14 @@
 """Setup, sign-in, sessions and the account through the HTTP API, as the web app uses them."""
 
+import asyncio
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 import pytest
+from argon2 import PasswordHasher as Argon2Hasher
 from fastapi import FastAPI
 from servicewright.adapters.dishka import DishkaContainer
 from sqlalchemy import select, update
@@ -13,7 +16,8 @@ from sqlalchemy_foundation_kit import AsyncSQLAlchemyUnitOfWork
 
 from penaria.features.shared.actor import Actor
 from penaria.features.support.identity.domain.models import User
-from penaria.features.support.identity.infra.orm import SessionDB
+from penaria.features.support.identity.domain.sessions import Client, Session
+from penaria.features.support.identity.infra.orm import PasswordDB, SessionDB, SignInFailureDB
 from penaria.features.support.identity.use_cases.homes import CreateHome
 from penaria.features.support.identity.use_cases.setup import IssueSetupToken
 from penaria.features.support.platform.infra.orm import JournalEventDB
@@ -52,6 +56,21 @@ async def sign_in(client: httpx.AsyncClient, password: str = OWNER["password"], 
 
 async def uow_of(container: DishkaContainer) -> AsyncSQLAlchemyUnitOfWork[PenariaTransaction]:
     return await container.container.get(AsyncSQLAlchemyUnitOfWork[PenariaTransaction])
+
+
+async def fail_to_sign_in(client: httpx.AsyncClient, times: int, username: str = OWNER["username"]) -> list[int]:
+    statuses = []
+    for _ in range(times):
+        response = await client.post("/sign-in", json={"username": username, "password": WRONG})
+        statuses.append(response.status_code)
+    return statuses
+
+
+def from_address(new_client: NewClient, app: FastAPI, ip: str) -> httpx.AsyncClient:
+    return new_client(transport=httpx.ASGITransport(app=app, client=(ip, 1)))
+
+
+UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
 # Setup
@@ -315,6 +334,196 @@ async def test_reading_from_another_site_is_not_refused(api: httpx.AsyncClient) 
     assert (await api.get("/me", headers={"origin": "https://evil.example"})).status_code == 200
 
 
+# More on sessions
+
+
+async def test_a_forged_cookie_answers_401(new_client: NewClient, api: httpx.AsyncClient) -> None:
+    response = await new_client(cookies={"penaria_session": "forged"}).get("/me")
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "unauthenticated"
+
+
+async def test_the_username_is_not_case_sensitive(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    response = await new_client().post("/sign-in", json={"username": " OWNER ", "password": OWNER["password"]})
+
+    assert response.status_code == 200
+    assert response.json()["username"] == "owner"
+
+
+async def test_using_a_session_keeps_it_open(api: httpx.AsyncClient, container: DishkaContainer) -> None:
+    long_ago = datetime.now(UTC) - timedelta(days=29)
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(update(SessionDB).values(last_seen_at=long_ago))
+
+    assert (await api.get("/me")).status_code == 200
+    async with (await uow_of(container)).query() as tx:
+        last_seen = await tx.session.scalar(select(SessionDB.last_seen_at))
+    assert last_seen is not None
+    assert datetime.now(UTC) - last_seen < timedelta(minutes=1)
+
+
+async def test_ended_sessions_are_not_listed_or_ended_again(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    await sign_in(new_client(headers={"user-agent": "Old phone"}))
+    await sign_in(new_client(headers={"user-agent": "Tablet"}))
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(
+            update(SessionDB)
+            .where(SessionDB.user_agent == "Old phone")
+            .values(last_seen_at=datetime.now(UTC) - timedelta(days=31))
+        )
+
+    listed = [s["user_agent"] for s in (await api.get("/me/sessions")).json() if not s["current"]]
+    revoked = (await api.post("/me/sessions:revoke-others")).json()
+
+    assert listed == ["Tablet"]
+    assert revoked == {"revoked": 1}
+
+
+async def test_ending_the_current_session_signs_out(api: httpx.AsyncClient) -> None:
+    [current] = (await api.get("/me/sessions")).json()
+
+    response = await api.delete(f"/me/sessions/{current['id']}")
+
+    assert response.status_code == 204
+    assert 'penaria_session=""' in response.headers["set-cookie"]
+    assert (await api.get("/me")).status_code == 401
+
+
+async def test_a_session_of_another_account_cannot_be_ended(api: httpx.AsyncClient, container: DishkaContainer) -> None:
+    other = User(display_name="Neighbour", locale="en", username="neighbour")
+    session, _ = Session.start(other.id, Client(user_agent=None, ip=None), datetime.now(UTC))
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.users.add(other)
+        await tx.sessions.add(session)
+
+    response = await api.delete(f"/me/sessions/{session.id}")
+
+    assert response.json()["code"] == "session_not_found"
+    async with (await uow_of(container)).query() as tx:
+        revoked_at = await tx.session.scalar(select(SessionDB.revoked_at).where(SessionDB.id == session.id))
+    assert revoked_at is None
+
+
+async def test_a_change_of_one_field_keeps_the_other(api: httpx.AsyncClient) -> None:
+    await api.patch("/me", json={"locale": "ru"})
+    response = await api.patch("/me", json={"display_name": "Alex"})
+
+    assert matches(response.json(), account(display_name="Alex", locale="ru"))
+
+
+async def test_a_hash_made_with_older_parameters_is_redone_on_sign_in(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    old = Argon2Hasher(time_cost=1, memory_cost=8192, parallelism=1).hash(OWNER["password"])
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(update(PasswordDB).values(hash=old))
+
+    assert (await sign_in(new_client())).status_code == 200
+
+    async with (await uow_of(container)).query() as tx:
+        stored = await tx.session.scalar(select(PasswordDB.hash))
+    assert stored is not None
+    assert not Argon2Hasher().check_needs_rehash(stored)
+    assert (await sign_in(new_client())).status_code == 200
+
+
+@pytest.mark.parametrize("public_url", ["https://test"])
+async def test_on_https_the_session_cookie_is_secure(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    signed_in = await sign_in(new_client())
+    signed_out = await api.post("/sign-out")
+
+    assert "Secure" in signed_in.headers["set-cookie"]
+    assert "Secure" in signed_out.headers["set-cookie"]
+
+
+# Limits on guessing
+
+
+async def test_failures_from_one_address_block_it_for_every_username(
+    api: httpx.AsyncClient, new_client: NewClient, app: FastAPI
+) -> None:
+    guesser = from_address(new_client, app, "192.0.2.1")
+    statuses = [(await fail_to_sign_in(guesser, 1, username=f"user{n}"))[0] for n in range(5)]
+
+    blocked = await sign_in(guesser)
+
+    assert statuses == [401] * 5
+    assert blocked.status_code == 429
+    assert (await sign_in(from_address(new_client, app, "198.51.100.1"))).status_code == 200
+
+
+async def test_an_ipv6_household_is_one_address(api: httpx.AsyncClient, new_client: NewClient, app: FastAPI) -> None:
+    for n in range(1, 6):
+        await fail_to_sign_in(from_address(new_client, app, f"2001:db8:1:2::{n}"), 1, username=f"user{n}")
+
+    assert (await sign_in(from_address(new_client, app, "2001:db8:1:2::99"))).status_code == 429
+
+
+async def test_parallel_guesses_are_counted_one_by_one(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    attacker = new_client()
+
+    responses = await asyncio.gather(*(sign_in(attacker, password=WRONG) for _ in range(10)))
+
+    assert sorted(r.status_code for r in responses) == [401] * 5 + [429] * 5
+
+
+async def test_a_success_forgives_the_account_s_failures(
+    api: httpx.AsyncClient, new_client: NewClient, app: FastAPI
+) -> None:
+    # Two addresses, so only the account's counter could reach five.
+    home, office = from_address(new_client, app, "192.0.2.1"), from_address(new_client, app, "192.0.2.2")
+    await fail_to_sign_in(home, 4)
+    assert (await sign_in(home)).status_code == 200
+    await fail_to_sign_in(office, 4)
+
+    assert (await sign_in(office)).status_code == 200
+
+
+async def test_failures_are_forgotten_after_an_hour(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    client = new_client()
+    await fail_to_sign_in(client, 5)
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(
+            update(SignInFailureDB).values(last_at=datetime.now(UTC) - timedelta(hours=1, minutes=1))
+        )
+    await fail_to_sign_in(client, 1)
+
+    assert (await sign_in(client)).status_code == 200
+
+
+async def test_wrong_current_passwords_are_limited(api: httpx.AsyncClient) -> None:
+    body = {"current_password": WRONG, "new_password": NEW}
+    statuses = [(await api.post("/me/password", json=body)).status_code for _ in range(5)]
+
+    blocked = await api.post("/me/password", json={**body, "current_password": OWNER["password"]})
+
+    assert statuses == [400] * 5
+    assert blocked.status_code == 429
+
+
+async def test_wrong_setup_tokens_are_limited(anonymous: httpx.AsyncClient, setup_token: str) -> None:
+    statuses = [(await anonymous.post("/setup", json={**OWNER, "token": "0" * 32})).status_code for _ in range(5)]
+
+    blocked = await anonymous.post("/setup", json={**OWNER, "token": setup_token})
+
+    assert statuses == [403] * 5
+    assert blocked.status_code == 429
+
+
+async def test_of_two_setups_at_once_one_succeeds(new_client: NewClient, setup_token: str) -> None:
+    first, second = await asyncio.gather(
+        new_client().post("/setup", json={**OWNER, "token": setup_token}),
+        new_client().post("/setup", json={**OWNER, "username": "second", "token": setup_token}),
+    )
+
+    assert sorted([first.status_code, second.status_code]) == [200, 409]
+
+
 # The journal
 
 
@@ -322,17 +531,40 @@ async def test_account_events_are_journalled_without_a_home(
     anonymous: httpx.AsyncClient, setup_token: str, new_client: NewClient, container: DishkaContainer
 ) -> None:
     await anonymous.post("/setup", json={**OWNER, "token": setup_token})
-    await sign_in(new_client(), password=WRONG)
+    phone = new_client()
+    await sign_in(phone, password=WRONG)
+    await sign_in(phone)
+    await anonymous.patch("/me", json={"display_name": "Alex"})
+    await anonymous.post("/me/password", json={"current_password": OWNER["password"], "new_password": NEW})
     await anonymous.post("/sign-out")
 
     async with (await uow_of(container)).query() as tx:
         rows = (
-            await tx.session.execute(select(JournalEventDB.type, JournalEventDB.home_id, JournalEventDB.actor))
+            await tx.session.execute(
+                select(
+                    JournalEventDB.type, JournalEventDB.home_id, JournalEventDB.actor, JournalEventDB.payload
+                ).order_by(JournalEventDB.seq)
+            )
         ).all()
 
-    assert [(type_, home_id, actor["kind"]) for type_, home_id, actor in sorted(rows)] == [
-        ("account.setup_completed", None, "user"),
-        ("account.sign_in_failed", None, "system"),
-        ("account.signed_in", None, "user"),
-        ("account.signed_out", None, "user"),
+    user_id = rows[0].payload["user_id"]
+    events = [(row.type, row.home_id, row.actor["kind"], _shape(row.payload)) for row in rows]
+    assert UUID_PATTERN.match(user_id)
+    assert events == [
+        ("account.setup_completed", None, "user", {"user_id": "uuid"}),
+        ("account.signed_in", None, "user", {"user_id": "uuid", "session_id": "uuid", "ip": "127.0.0.1"}),
+        ("account.sign_in_failed", None, "system", {"user_id": "uuid", "ip": "127.0.0.1"}),
+        ("account.signed_in", None, "user", {"user_id": "uuid", "session_id": "uuid", "ip": "127.0.0.1"}),
+        ("account.updated", None, "user", {"user_id": "uuid", "display_name": "Alex"}),
+        ("account.password_changed", None, "user", {"user_id": "uuid", "sessions_ended": 1}),
+        ("session.revoked", None, "user", {"user_id": "uuid", "session_id": "uuid"}),
+        ("account.signed_out", None, "user", {"user_id": "uuid", "session_id": "uuid"}),
     ]
+    assert {row.payload["user_id"] for row in rows} == {user_id}
+
+
+def _shape(payload: dict[str, Any]) -> dict[str, Any]:
+    """The payload with its ids replaced by "uuid", so it compares whole."""
+    return {
+        key: "uuid" if isinstance(value, str) and UUID_PATTERN.match(value) else value for key, value in payload.items()
+    }

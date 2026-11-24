@@ -53,12 +53,18 @@ def database_settings(test_database_url: str) -> DatabaseSettings:
 
 
 @pytest.fixture
-def settings(database_settings: DatabaseSettings) -> Settings:
+def public_url() -> str:
+    """``PENARIA_PUBLIC_URL`` of the tests; a test parametrizes it to run on another."""
+    return PUBLIC_URL
+
+
+@pytest.fixture
+def settings(database_settings: DatabaseSettings, public_url: str) -> Settings:
     return Settings.model_validate(
         {
             "server": HttpServerSettings(),
             "database": database_settings,
-            "public_url": PUBLIC_URL,
+            "public_url": public_url,
             "secret_key": "test-secret-key-of-at-least-32-characters",
         }
     )
@@ -93,13 +99,13 @@ async def app(container: DishkaContainer, settings: Settings) -> AsyncIterator[F
 
 
 @pytest.fixture
-async def new_client(app: FastAPI) -> AsyncIterator[Callable[..., httpx.AsyncClient]]:
+async def new_client(app: FastAPI, public_url: str) -> AsyncIterator[Callable[..., httpx.AsyncClient]]:
     """Make HTTP clients of the app, each with its own cookies, like separate browsers."""
     clients: list[httpx.AsyncClient] = []
 
     def make(**kwargs: Any) -> httpx.AsyncClient:
         kwargs.setdefault("transport", httpx.ASGITransport(app=app))
-        client = httpx.AsyncClient(base_url=f"{PUBLIC_URL}/api/v1", **kwargs)
+        client = httpx.AsyncClient(base_url=f"{public_url}/api/v1", **kwargs)
         clients.append(client)
         return client
 
@@ -110,7 +116,7 @@ async def new_client(app: FastAPI) -> AsyncIterator[Callable[..., httpx.AsyncCli
 
 @pytest.fixture
 async def setup_token(container: DishkaContainer, app: FastAPI) -> str:
-    """The token the server would print on its first start."""
+    """The token the server would print on its first start (once the app has opened its scope)."""
     token = await (await container.container.get(IssueSetupToken)).execute()
     assert token is not None
     return token

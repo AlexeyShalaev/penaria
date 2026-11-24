@@ -5,6 +5,7 @@ from servicewright.adapters.fastapi import HttpServerSettings
 
 from penaria.common.database import DatabaseSettings
 from penaria.common.settings import PenariaSettings
+from penaria.common.urls import origin_of
 
 # Later steps of sign-in derive encryption keys from it; shorter keys are too easy to guess.
 SECRET_KEY_MIN_LENGTH = 32
@@ -27,7 +28,8 @@ class Settings(PenariaSettings):
     @property
     def public_origin(self) -> str:
         """The ``Origin`` header a browser sends from the install's own pages."""
-        url = self.public_url
-        default_port = {"http": 80, "https": 443}[url.scheme]
-        port = "" if url.port in (None, default_port) else f":{url.port}"
-        return f"{url.scheme}://{url.host}{port}"
+        return origin_of(str(self.public_url))
+
+    @property
+    def serves_https(self) -> bool:
+        return self.public_url.scheme == "https"

@@ -15,14 +15,14 @@ Only environment variables, all named `PENARIA_*`; `__` reaches into a section: 
 
 The database: `PENARIA_DATABASE__CONNECTION__HOST`, `..._PORT`, `..._USER`, `..._PASSWORD` (required) and `..._DATABASE` (required); the pool under `PENARIA_DATABASE__POOL__*`. PostgreSQL 15 or newer, with the `ltree` and `pg_trgm` extensions available (the first migration creates them).
 
-The api process also needs:
+The api process also needs these; the migrate process accepts them too, so one environment serves every process of the image:
 
 | Variable | Meaning |
 |---|---|
 | `PENARIA_PUBLIC_URL` | Required. The address people open, such as `https://home.example.org`: the root of a site, without a path. Requests that change something are refused when the browser says they come from another site (`Origin`), and the session cookie is `Secure` when it is `https` |
 | `PENARIA_SECRET_KEY` | Required, at least 32 characters, such as the output of `openssl rand -hex 32`. Later versions encrypt stored secrets with it, so keep it and never change it |
 
-Behind a reverse proxy, let the server trust its `X-Forwarded-For` so that the session list and the sign-in limits see people's addresses rather than the proxy's: `PENARIA_SERVER__UVICORN__FORWARDED_ALLOW_IPS=<the proxy's address>`.
+Behind a reverse proxy, let the server trust its `X-Forwarded-For`, so that the session list and the sign-in limits see people's addresses rather than the proxy's: `PENARIA_SERVER__UVICORN__FORWARDED_ALLOW_IPS=<the proxy's address>`. Without it everyone signs in from the proxy's address, and five wrong passwords by anyone make everyone wait.
 
 ## HTTP API
 

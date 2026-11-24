@@ -31,3 +31,18 @@ async def test_a_hash_made_with_other_parameters_is_redone() -> None:
 async def test_a_corrupt_hash_fails_loudly() -> None:
     with pytest.raises(RuntimeError, match="not a valid Argon2 hash"):
         await Argon2PasswordHasher().verify("not-a-hash", "tulip garden")
+
+
+async def test_no_account_still_spends_a_verification(monkeypatch: pytest.MonkeyPatch) -> None:
+    hasher = Argon2PasswordHasher()
+    checked: list[str] = []
+    verify = PasswordHasher.verify
+
+    def spy(self: PasswordHasher, password_hash: str, password: str) -> bool:
+        checked.append(password)
+        return verify(self, password_hash, password)
+
+    monkeypatch.setattr(PasswordHasher, "verify", spy)
+
+    assert not await hasher.verify(None, "tulip garden")
+    assert checked == ["tulip garden"]

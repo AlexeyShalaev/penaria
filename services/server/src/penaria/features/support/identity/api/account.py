@@ -11,7 +11,6 @@ from servicewright.adapters.fastapi import UnitScopeDep
 
 from penaria.features.shared.http import SIGNED_IN
 from penaria.features.support.identity.api.cookies import SessionCookie
-from penaria.features.support.identity.domain.accounts import PASSWORD_MAX_LENGTH
 from penaria.features.support.identity.domain.models import User
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, Session
 from penaria.features.support.identity.use_cases.account import (
@@ -27,8 +26,12 @@ from penaria.features.support.identity.use_cases.setup import CompleteSetup, Nee
 
 # What a session keeps of the browser's description of itself.
 USER_AGENT_MAX_LENGTH = 512
+# Bounds on what a request may carry, so nothing absurd reaches the slow password hash; the domain
+# rules (accounts.py) are stricter and answer with a reason the interface can show.
+NAME_INPUT_MAX_LENGTH = 200
+PASSWORD_INPUT_MAX_LENGTH = 1024
 
-public_router = APIRouter(prefix="/api/v1", tags=["sign-in"])
+sign_in_router = APIRouter(prefix="/api/v1", tags=["sign-in"])
 router = APIRouter(prefix="/api/v1", tags=["account"], dependencies=[SIGNED_IN])
 
 
@@ -60,15 +63,15 @@ class SetupStatusOut(BaseModel):
 
 class SetupIn(BaseModel):
     token: str = Field(min_length=1, max_length=200, description="The setup token from the server's log")
-    username: str = Field(min_length=1, max_length=100)
+    username: str = Field(min_length=1, max_length=NAME_INPUT_MAX_LENGTH)
     display_name: str = Field(min_length=1, max_length=200)
-    password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH * 4)
+    password: str = Field(min_length=1, max_length=PASSWORD_INPUT_MAX_LENGTH)
     locale: str = Field(examples=["en"])
 
 
 class SignInIn(BaseModel):
-    username: str = Field(min_length=1, max_length=100)
-    password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH * 4)
+    username: str = Field(min_length=1, max_length=NAME_INPUT_MAX_LENGTH)
+    password: str = Field(min_length=1, max_length=PASSWORD_INPUT_MAX_LENGTH)
 
 
 class AccountPatch(BaseModel):
@@ -77,8 +80,8 @@ class AccountPatch(BaseModel):
 
 
 class PasswordChangeIn(BaseModel):
-    current_password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH * 4)
-    new_password: str = Field(min_length=1, max_length=PASSWORD_MAX_LENGTH * 4)
+    current_password: str = Field(min_length=1, max_length=PASSWORD_INPUT_MAX_LENGTH)
+    new_password: str = Field(min_length=1, max_length=PASSWORD_INPUT_MAX_LENGTH)
 
 
 class SessionOut(BaseModel):
@@ -105,12 +108,12 @@ class RevokedOut(BaseModel):
     revoked: int
 
 
-@public_router.get("/setup")
+@sign_in_router.get("/setup")
 async def setup_status(scope: UnitScopeDep) -> SetupStatusOut:
     return SetupStatusOut(needed=await (await scope.get(NeedsSetup)).execute())
 
 
-@public_router.post("/setup")
+@sign_in_router.post("/setup")
 async def complete_setup(
     body: Annotated[SetupIn, Body()], request: Request, response: Response, scope: UnitScopeDep
 ) -> AccountOut:
@@ -126,7 +129,7 @@ async def complete_setup(
     return AccountOut.of(user)
 
 
-@public_router.post("/sign-in")
+@sign_in_router.post("/sign-in")
 async def sign_in(
     body: Annotated[SignInIn, Body()], request: Request, response: Response, scope: UnitScopeDep
 ) -> AccountOut:

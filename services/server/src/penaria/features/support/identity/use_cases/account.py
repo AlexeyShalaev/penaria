@@ -13,7 +13,8 @@ from penaria.features.support.identity.domain.models import User
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import CurrentSession, Session
-from penaria.features.support.identity.domain.throttle import FAILURES_EXPIRE_AFTER, account_key, check_not_blocked
+from penaria.features.support.identity.domain.throttle import account_key
+from penaria.features.support.identity.use_cases.attempts import attempt_succeeded, count_attempt
 
 
 class SessionNotFoundError(NotFoundError):
@@ -38,21 +39,22 @@ class UpdateAccount:
         self._uow = uow
 
     async def execute(self, current: CurrentSession, *, display_name: str | None, locale: str | None) -> User:
-        changes: dict[str, str] = {}
-        if display_name is not None:
-            changes["display_name"] = check_display_name(display_name)
-        if locale is not None:
-            changes["locale"] = check_locale(locale)
+        new_name = None if display_name is None else check_display_name(display_name)
+        new_locale = None if locale is None else check_locale(locale)
         async with self._uow.transaction() as tx:
-            user = await _load(tx, current)
-            if "display_name" in changes:
-                user.display_name = changes["display_name"]
-            if "locale" in changes:
-                user.locale = changes["locale"]
-            await tx.users.save(user)
-            await tx.journal.append(
-                [Event("account.updated", None, Actor.user(user.id), {"user_id": str(user.id), **changes})]
-            )
+            user = await tx.users.get_for_update(current.user_id)
+            if user is None:
+                raise RuntimeError(f"the user ({current.user_id}) of an open session does not exist")
+            changes: dict[str, str] = {}
+            if new_name is not None and new_name != user.display_name:
+                user.display_name = changes["display_name"] = new_name
+            if new_locale is not None and new_locale != user.locale:
+                user.locale = changes["locale"] = new_locale
+            if changes:
+                await tx.users.save(user)
+                await tx.journal.append(
+                    [Event("account.updated", None, Actor.user(user.id), {"user_id": str(user.id), **changes})]
+                )
         return user
 
 
@@ -65,37 +67,33 @@ class ChangePassword:
 
     async def execute(self, current: CurrentSession, *, current_password: str, new_password: str) -> None:
         check_password(new_password)
-        new_hash = await self._hasher.hash(new_password)
         async with self._uow.transaction() as tx:
             user = await _load(tx, current)
-            # Guessing the current password from a stolen session is limited like signing in.
             if user.username is None:
                 raise RuntimeError(f"the user ({user.id}) of an open session has no username")
-            keys = [account_key(user.username)]
-            await tx.failures.lock(keys)
-            now = datetime.now(UTC)
-            check_not_blocked(await tx.failures.get(keys), now)
-            matches = await self._hasher.verify(await tx.passwords.get(user.id), current_password)
-            if matches:
-                await tx.failures.clear(keys[0])
-                await tx.passwords.set(user.id, new_hash, now)
-                revoked = await tx.sessions.revoke_all_but(user.id, current.id, now)
-                await tx.journal.append(
-                    [
-                        Event(
-                            "account.password_changed",
-                            None,
-                            Actor.user(user.id),
-                            {"user_id": str(user.id), "sessions_ended": len(revoked)},
-                        ),
-                        *_revoked_events(current, revoked),
-                    ]
-                )
-            else:
-                await tx.failures.record(keys, now, forget_before=now - FAILURES_EXPIRE_AFTER)
-        # Raised after the transaction, so the failure it counted is kept.
-        if not matches:
+            # Guessing the current password from a stolen session is limited like signing in.
+            account = account_key(user.username)
+            await count_attempt(tx, [account], datetime.now(UTC))
+            password_hash = await tx.passwords.get(user.id)
+        if not await self._hasher.verify(password_hash, current_password):
             raise WrongPasswordError("the current password is wrong")
+        new_hash = await self._hasher.hash(new_password)
+        now = datetime.now(UTC)
+        async with self._uow.transaction() as tx:
+            await attempt_succeeded(tx, account)
+            await tx.passwords.set(user.id, new_hash, now)
+            revoked = await tx.sessions.revoke_all_but(user.id, current.id, now)
+            await tx.journal.append(
+                [
+                    Event(
+                        "account.password_changed",
+                        None,
+                        Actor.user(user.id),
+                        {"user_id": str(user.id), "sessions_ended": len(revoked)},
+                    ),
+                    *_revoked_events(current, revoked),
+                ]
+            )
 
 
 class ListSessions:

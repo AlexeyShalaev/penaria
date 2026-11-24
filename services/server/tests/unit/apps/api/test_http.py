@@ -21,3 +21,17 @@ async def test_liveness_answers_ok() -> None:
         response = await client.get("/system/health/livez")
 
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("public_url", "warned"),
+    [("http://192.168.1.10", True), ("http://localhost:5173", False), ("https://home.example.org", False)],
+)
+def test_plain_http_beyond_this_machine_is_warned_about(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, public_url: str, warned: bool
+) -> None:
+    monkeypatch.setenv("PENARIA_PUBLIC_URL", public_url)
+
+    build_http(Settings())
+
+    assert any("plain HTTP" in record.getMessage() for record in caplog.records) is warned
