@@ -1,0 +1,214 @@
+# Sign-in
+
+- **Status:** proposed, waiting for the author's review.
+- **Date:** 2026-11-24.
+- **Scope:** how people, guests and devices prove who they are to a Penaria install:
+  - the first start of an install;
+  - accounts and sign-in methods;
+  - sessions and tokens;
+  - invitations and guest links;
+  - recovery.
+
+What a principal may do once known is [core-model.md](core-model.md), section 11. This document only decides who the principal is.
+
+The decisions follow v0.3:
+- the web uses a session cookie;
+- integrations and devices use bearer tokens;
+- sign-in is by passkey, or by password with a second factor for owners and admins;
+- guest links expire and can be revoked in one click;
+- an operator's OIDC provider is optional.
+
+Decisions beyond v0.3 are marked **Proposed** and listed in [Open questions](#11-open-questions).
+
+Not covered:
+- **Hubs.** They pair with a one-time code and then use mTLS; this belongs to the hub design.
+- **Signing in through the Telegram bot or mini app.** It reuses the account linking of section 4.4 and arrives with the bot.
+
+## 1. Threats
+
+A registry is an inventory of valuables with an address, and the smart-home part opens gates. The design defends against:
+
+| Threat | Defence |
+|---|---|
+| Someone reaches a fresh install before its owner | The setup token (section 2) |
+| Password guessing | Rate limits and backoff (section 7); passkeys first; a second factor for owners and admins |
+| A stolen session cookie | `HttpOnly`, `Secure` and `SameSite=Lax` cookies; sessions bound to an idle timeout; every session visible and revocable |
+| Cross-site requests | `SameSite=Lax`, plus an `Origin` check on every request that changes something |
+| A leaked guest link or token | Only a hash of the secret is stored; expiry; one-click revoke; a guest sees only guest-visible things |
+| Account enumeration | Sign-in and recovery answer the same for an unknown and a known account |
+
+## 2. The first start
+
+A fresh install has no users. **Proposed: the server prints a one-time setup token to its log on first start. The setup screen asks for it before creating the owner account.**
+
+A self-hosted install is often reachable from a network before its owner opens it. Letting the first visitor become the owner, as some home products do, hands the house to whoever comes first. A token in the log proves access to the machine. It costs one copy and paste, and the Compose quickstart prints the command to read it.
+
+The setup screen creates:
+- the first user;
+- their first sign-in method, a passkey or a password;
+- their first home, as the welcome screen does now.
+
+The token is single-use. Restarting the server before setup prints a new one and invalidates the old.
+
+**Upgrading from the current single-user mode.** The one local user that every request acts as today becomes the account that setup completes. Its homes and history stay theirs.
+
+## 3. Accounts
+
+| Field | Meaning |
+|---|---|
+| `username` | Unique, case-insensitive, used to sign in. Chosen at setup or when accepting an invitation |
+| `display_name` | What others in the home see |
+| `email` | Optional. Used only when the install has SMTP (sign-in links, notifications). Unique when present |
+| `locale` | The interface language |
+| `disabled_at` | An admin of the install can disable an account. Every session ends at once |
+
+**Proposed: a username, with email optional.** Many self-hosted installs have no SMTP, and nothing should depend on one. Email adds recovery and notifications when SMTP is configured.
+
+**Proposed: the install has its own admin role, separate from home roles.** An install may host several households. Who may disable accounts, see every home's size or configure OIDC is a property of the install, not of a home. The setup account becomes the install admin and can make others admins.
+
+## 4. Sign-in methods
+
+### 4.1 Passkeys
+
+Passkeys are WebAuthn credentials, built into phones and browsers. **Proposed: passkeys are the first method the interface offers.** They cannot be phished, guessed or reused across sites, and family members already have them on their phones.
+
+- A user may register several passkeys and name them, for example "Alexey's phone".
+- The relying party id is the install's host name, taken from `PENARIA_PUBLIC_URL`.
+- Library: `webauthn` (py_webauthn).
+
+### 4.2 Passwords
+
+For browsers and people without passkeys:
+- At least 12 characters. No composition rules, as NIST SP 800-63B advises.
+- Checked against a built-in list of the most common passwords.
+- Stored as Argon2id hashes (`argon2-cffi`), re-hashed when the parameters change.
+
+### 4.3 Second factor
+
+TOTP, an authenticator app, with ten single-use recovery codes. Passkeys need no second factor.
+
+**Proposed: required for owners and install admins who sign in with a password, and optional for everyone else.**
+- An owner who has only a password is asked to add TOTP or a passkey right after sign-in.
+- An owner cannot act on owner-level commands until they do.
+
+### 4.4 External identity (OIDC)
+
+When the operator configures it (`PENARIA_AUTH__OIDC__*`: issuer, client id, secret), the sign-in screen offers "Sign in with <provider>". Examples are Authentik, Keycloak or a Google Workspace.
+
+- An identity links to an account by the provider's `sub`, never by email alone.
+- **Proposed: a first sign-in through OIDC creates an account only if the operator allows it** (`..._ALLOW_SIGN_UP`, off by default). Otherwise the person needs an invitation first, and linking happens on acceptance.
+- Library: `authlib`.
+
+The same table of linked identities later holds Telegram accounts, linked from the bot.
+
+## 5. Sessions
+
+A browser signs in once and holds a session.
+
+- **Storage.** The session is a random 256-bit token in a cookie named `penaria_session`, set `HttpOnly`, `Secure` (except on `localhost`), `SameSite=Lax` and `Path=/`. The server stores only a SHA-256 hash of the token, with the user, the time created, the time last seen, the user agent and the IP address.
+- **Lifetime.** **Proposed:** a session ends after 30 days without use, and in any case after 180 days.
+- **Sensitive commands need a recent sign-in, within 10 minutes:** adding a sign-in method, transferring ownership, changing roles. A session older than that asks for the passkey or password again.
+- **Revocation.** The account page lists every session: device, place and last use. Each one can be ended. Signing out ends the current one, and disabling the account ends them all.
+- **CSRF.** The server refuses any request that changes something if its `Origin` does not match `PENARIA_PUBLIC_URL`. The `SameSite=Lax` cookie does the rest. No CSRF tokens are needed, because the API takes only JSON.
+- **Placement.** Sessions live in PostgreSQL, so any API replica can check them. A cache for that check can come with Redis later.
+
+Every request resolves its actor once, in the API process, from the session cookie or a bearer token. That `Actor` reaches the use cases exactly as it does today; only the provider changes from "the local user" to "the request's principal".
+
+## 6. Invitations, guest links and device tokens
+
+### 6.1 Invitations
+
+An admin of a home, or anyone with `members.manage`, creates an invitation. It carries:
+- a role and a scope, as the grant will have;
+- an expiry for the invitation itself (default 7 days);
+- an expiry for the grant, when the role requires one.
+
+It is shared as a link or a QR code holding a secret token. Only a hash of the token is stored.
+
+- **Accepting.** Opening the link asks the person to sign in, or to create an account with a username and their first method. The grant is then created.
+- **Single use.** **Proposed:** an invitation can be used once. A second family member needs a second link.
+- **Ownership.** The owner invitation of core-model section 3 is this same invitation with the role `owner` and the "leave when accepted" mark.
+- **Revocation.** An invitation can be revoked until accepted. Accepting one is journalled (`grant.created`, with the invitation id).
+
+### 6.2 Guest links
+
+**A guest needs no account.** The link creates a grant to a `link` principal (core-model 11.2). Its expiry is required; the default for the guest preset is 3 days.
+
+- Opening the link exchanges its token for a guest session, a cookie as in section 5. The guest session ends when the grant expires or is revoked.
+- Revoking the grant ends every guest session made from it, in one click.
+- **Proposed: the link can be reused until it expires.** A QR code on the fridge should work for every guest of the weekend.
+- Anything else a guest opens shows a screen that says so.
+
+### 6.3 Device and integration tokens
+
+A smart mirror or a script is a `device` principal, with grants like anyone else. For example: view and tasks on the house, and control of the hall light.
+
+- It authenticates with `Authorization: Bearer pnr_<random>`. The prefix lets secret scanners recognise leaked tokens.
+- The server stores only a hash of the token. The token is shown once, when created, and can be revoked.
+- Device tokens never expire on their own. Each shows when it was last used.
+
+## 7. Abuse
+
+- **Rate limits.** Sign-in, setup, invitation acceptance and TOTP checks are limited per account and per IP address: 5 failures, then a doubling delay up to 15 minutes. The limit lives in PostgreSQL, or in Redis when the install runs several API replicas.
+- **The same answer for every failure.** Sign-in and recovery never reveal whether an account exists. Password checks against an unknown user still spend the Argon2 time.
+- **The journal.** Every sign-in, failed sign-in, new method, revoked session and accepted invitation is journalled under the account. The account page shows it.
+
+## 8. Recovery
+
+- **With SMTP:** "forgot password" sends a one-time link that is valid for 30 minutes.
+- **Without SMTP:** a home admin can create a reset link for a member, valid for 24 hours. It is shown on screen to pass on by hand.
+- **When the last owner is locked out:** the operator runs `python -m penaria.apps.cli users reset <username>`, which prints a one-time reset link. Access to the server is access to the house.
+- **Recovery codes** from section 4.3 replace a lost second factor.
+
+## 9. Configuration
+
+| Variable | Meaning |
+|---|---|
+| `PENARIA_PUBLIC_URL` | The address people open, such as `https://home.example.org`. Required. Sets the passkey relying party, the `Origin` check and the links in invitations |
+| `PENARIA_AUTH__OIDC__ISSUER`, `..._CLIENT_ID`, `..._CLIENT_SECRET`, `..._ALLOW_SIGN_UP` | Optional OIDC |
+| `PENARIA_SMTP__*` | Optional email (its own design, with notifications) |
+
+## 10. Storage
+
+New tables, all `identity_*`, alongside the ones of core-model section 12:
+
+```sql
+-- identity_users gains: username (unique, lower), email (unique when present),
+--   install_admin bool, disabled_at.
+CREATE TABLE identity_passwords (user_id uuid PRIMARY KEY REFERENCES identity_users, hash text NOT NULL, changed_at timestamptz NOT NULL);
+CREATE TABLE identity_passkeys (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES identity_users, credential_id bytea UNIQUE NOT NULL,
+  public_key bytea NOT NULL, sign_count bigint NOT NULL, name text NOT NULL, last_used_at timestamptz);
+CREATE TABLE identity_totp (user_id uuid PRIMARY KEY REFERENCES identity_users, secret bytea NOT NULL, recovery_codes text[] NOT NULL);
+CREATE TABLE identity_external_identities (provider text, subject text, user_id uuid NOT NULL REFERENCES identity_users,
+  PRIMARY KEY (provider, subject));
+CREATE TABLE identity_sessions (id uuid PRIMARY KEY, token_hash bytea UNIQUE NOT NULL, user_id uuid REFERENCES identity_users,
+  grant_id uuid REFERENCES identity_grants,         -- guest sessions: the link's grant
+  created_at timestamptz NOT NULL, last_seen_at timestamptz NOT NULL, authenticated_at timestamptz NOT NULL,
+  user_agent text, ip inet, revoked_at timestamptz,
+  CHECK ((user_id IS NULL) <> (grant_id IS NULL)));
+CREATE TABLE identity_invitations (id uuid PRIMARY KEY, home_id uuid NOT NULL, token_hash bytea UNIQUE NOT NULL, role_id uuid NOT NULL,
+  scope_entity_id uuid, grant_expires_at timestamptz, leave_when_accepted bool NOT NULL DEFAULT false,
+  created_by uuid NOT NULL, expires_at timestamptz NOT NULL, accepted_at timestamptz, accepted_by uuid, revoked_at timestamptz);
+CREATE TABLE identity_tokens (id uuid PRIMARY KEY, token_hash bytea UNIQUE NOT NULL, principal_type text NOT NULL,
+  principal_id uuid NOT NULL, name text NOT NULL, created_at timestamptz NOT NULL, last_used_at timestamptz, revoked_at timestamptz);
+```
+
+A guest link's secret is stored as a token for its `link` principal.
+
+The TOTP secret is encrypted with a key derived from `PENARIA_SECRET_KEY`, a new required variable. The quickstart generates it.
+
+## 11. Open questions
+
+| # | Question | Recommendation |
+|---|---|---|
+| 1 | A setup token from the log, rather than "first visitor becomes owner" (section 2) | Yes |
+| 2 | A username, with email optional (section 3) | Yes: many installs have no SMTP |
+| 3 | An install admin role apart from home roles (section 3) | Yes: one install may host several households |
+| 4 | Passkeys first, and passwords as the fallback (4.1, 4.2) | Yes |
+| 5 | A second factor required for owners and install admins who use a password (4.3) | Yes |
+| 6 | OIDC creates accounts only if the operator allows it (4.4) | Yes; off by default |
+| 7 | Sessions: 30 days idle, 180 days at most; a recent sign-in for sensitive commands (5) | Yes |
+| 8 | Invitations are single-use; guest links are reusable until they expire (6.1, 6.2) | Yes |
+| 9 | Device tokens without expiry, with last use shown and revocation (6.3) | Yes |
+| 10 | Recovery without SMTP through an admin's link and a CLI command (8) | Yes |
+| 11 | The order of work | 1) accounts, passwords, sessions, setup token, sign-out, account page; 2) passkeys; 3) invitations and guest links; 4) TOTP; 5) device tokens; 6) OIDC. Each is a pull request, and the demo keeps working after each |
