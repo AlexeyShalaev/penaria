@@ -1,5 +1,7 @@
 import {useState} from 'react'
 
+import {toggled} from '@/shared/lib/set'
+
 const key = (homeId: string) => `penaria.expanded.${homeId}`
 
 function read(homeId: string): Set<string> | null {
@@ -28,19 +30,11 @@ export function useExpanded(homeId: string, initial: readonly string[]) {
   const own = saved.homeId === homeId ? saved.ids : read(homeId)
   const expanded = own ?? new Set(initial)
 
-  const update = (change: (ids: Set<string>) => void) => {
-    const next = new Set(expanded)
-    change(next)
-    write(homeId, next)
-    setSaved({homeId, ids: next})
+  const save = (ids: Set<string>) => {
+    write(homeId, ids)
+    setSaved({homeId, ids})
   }
-  const toggle = (id: string) =>
-    update((ids) => {
-      if (!ids.delete(id)) ids.add(id)
-    })
-  const open = (ids: readonly string[]) =>
-    update((current) => {
-      for (const id of ids) current.add(id)
-    })
+  const toggle = (id: string) => save(toggled(expanded, id))
+  const open = (ids: readonly string[]) => save(new Set([...expanded, ...ids]))
   return {expanded, toggle, open}
 }

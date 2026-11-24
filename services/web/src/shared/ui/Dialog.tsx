@@ -15,19 +15,24 @@ type Props = {
 export function Dialog({title, closeLabel, onClose, children}: Props) {
   const titleId = useId()
   const panel = useRef<HTMLDivElement>(null)
+  // Callers pass a new onClose on every render; focus moves only when the dialog opens and closes.
+  const close = useRef(onClose)
+  useEffect(() => {
+    close.current = onClose
+  })
 
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
     panel.current?.querySelector<HTMLElement>('input, select, textarea, button:not([data-close])')?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') close.current()
     }
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
       previous?.focus()
     }
-  }, [onClose])
+  }, [])
 
   return (
     <div className={styles.backdrop} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>

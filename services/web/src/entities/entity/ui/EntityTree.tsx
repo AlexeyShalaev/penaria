@@ -1,16 +1,15 @@
-import {Check, ChevronDown, ChevronRight, Lock, Users} from 'lucide-react'
+import {Check, ChevronDown, ChevronRight} from 'lucide-react'
 import type {CSSProperties, ReactNode} from 'react'
 import {useTranslation} from 'react-i18next'
 import {Link} from 'react-router'
 
-import {describeError} from '@/shared/api'
-import {Badge, ErrorState, IconTile, Loading} from '@/shared/ui'
+import {Badge, IconTile, QueryState} from '@/shared/ui'
 
 import {type EntitySummary, useChildren} from '../api/entities'
-import {KIND_ICON, STRUCTURAL_KINDS} from '../model/kinds'
+import {KIND_ICON, PRIVACY_ICON, STRUCTURAL_KINDS} from '../model/kinds'
 import styles from './EntityTree.module.css'
 
-export type TreeSelection = {
+type TreeSelection = {
   selectedId: string | null
   canSelect: (entity: EntitySummary) => boolean
   onSelect: (entity: EntitySummary) => void
@@ -40,31 +39,23 @@ export function EntityTree(props: Props) {
 }
 
 function Level(props: Props & {parentId: string | null; depth: number}) {
-  const {t} = useTranslation()
   const children = useChildren(props.homeId, props.parentId, props.includeArchived)
-  const indent = {'--depth': props.depth} as CSSProperties
-
-  if (children.isPending) {
-    return (
-      <li className={styles.note} style={indent}>
-        <Loading label={t('common.loading')} />
-      </li>
-    )
-  }
-  if (children.isError) {
-    return (
-      <li className={styles.note} style={indent}>
-        <ErrorState
-          message={describeError(children.error, t)}
-          retryLabel={t('common.retry')}
-          onRetry={() => void children.refetch()}
-        />
-      </li>
-    )
-  }
-  const visible = children.data.filter((entity) => entity.id !== props.hiddenId)
-  if (visible.length === 0 && props.depth === 0 && props.empty) return <li>{props.empty}</li>
-  return visible.map((entity) => <Row key={entity.id} {...props} entity={entity} />)
+  return (
+    <QueryState
+      query={children}
+      wrap={(state) => (
+        <li className={styles.note} style={{'--depth': props.depth} as CSSProperties}>
+          {state}
+        </li>
+      )}
+    >
+      {(entities) => {
+        const visible = entities.filter((entity) => entity.id !== props.hiddenId)
+        if (visible.length === 0 && props.depth === 0 && props.empty) return <li>{props.empty}</li>
+        return visible.map((entity) => <Row key={entity.id} {...props} entity={entity} />)
+      }}
+    </QueryState>
+  )
 }
 
 function Row(props: Props & {entity: EntitySummary; depth: number}) {
@@ -72,6 +63,9 @@ function Row(props: Props & {entity: EntitySummary; depth: number}) {
   const {entity, depth, select} = props
   const open = props.expanded.has(entity.id)
   const selected = select?.selectedId === entity.id
+  // The count leaves archived entities out, so with them shown any place may have something inside.
+  const expandable = entity.children > 0 || !!props.includeArchived
+  const PrivacyIcon = PRIVACY_ICON[entity.privacy]
   const content = (
     <>
       <IconTile icon={KIND_ICON[entity.kind]} size="sm" accent={entity.kind === 'property'} />
@@ -82,10 +76,7 @@ function Row(props: Props & {entity: EntitySummary; depth: number}) {
           {entity.children > 0 && ` · ${t('tree.inside', {count: entity.children})}`}
         </span>
       </span>
-      {entity.privacy === 'private' && <Lock className={styles.marker} role="img" aria-label={t('privacy.private')} />}
-      {entity.privacy === 'guest_visible' && (
-        <Users className={styles.marker} role="img" aria-label={t('privacy.guest_visible')} />
-      )}
+      {PrivacyIcon && <PrivacyIcon className={styles.marker} role="img" aria-label={t(`privacy.${entity.privacy}`)} />}
       {entity.archived_at !== null && <Badge>{t('entity.archived')}</Badge>}
       {select ? (
         selected && <Check className={styles.check} aria-hidden />
@@ -101,7 +92,7 @@ function Row(props: Props & {entity: EntitySummary; depth: number}) {
         style={{'--depth': depth} as CSSProperties}
       >
         <span className={styles.toggleSlot}>
-          {entity.children > 0 && (
+          {expandable && (
             <button
               type="button"
               className={styles.toggle}

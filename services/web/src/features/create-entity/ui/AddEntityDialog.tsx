@@ -6,18 +6,19 @@ import {
   type EntityDetail,
   KIND_ICON,
   type Kind,
+  NameFields,
+  type Place,
   PlacePicker,
-  PRIVACIES,
   type Privacy,
+  PrivacyField,
+  QuantityFields,
   useCreateEntity,
 } from '@/entities/entity'
 import {describeError} from '@/shared/api'
 import {splitList} from '@/shared/lib/text'
-import {Button, Chip, Dialog, Field, FormActions, FormError, FormLayout, Select, TextInput} from '@/shared/ui'
+import {Button, Chip, Dialog, FormActions, FormError, FormLayout} from '@/shared/ui'
 
 import styles from './AddEntityDialog.module.css'
-
-export type Place = {id: string; kind: Kind; name: string}
 
 type Props = {
   homeId: string
@@ -29,15 +30,17 @@ type Props = {
   onCreated: (entity: EntityDetail) => void
 }
 
-export function AddEntityDialog({homeId, canChangePlace, onClose, onCreated, ...props}: Props) {
+export function AddEntityDialog({homeId, parent: initialParent, canChangePlace, onClose, onCreated}: Props) {
   const {t} = useTranslation()
   const create = useCreateEntity(homeId)
   const kindLabelId = useId()
-  const [parent, setParent] = useState(props.parent)
+  const [parent, setParent] = useState(initialParent)
   const [picking, setPicking] = useState(false)
   const kinds = childKinds(parent?.kind ?? null)
-  const [chosenKind, setKind] = useState<Kind | undefined>(kinds[0])
+  const [chosenKind, setChosenKind] = useState<Kind | undefined>(kinds[0])
   const kind = chosenKind && kinds.includes(chosenKind) ? chosenKind : kinds[0]
+  // Only things are counted; the fields are left out, and so are their values, for anything else.
+  const countable = kind === 'item'
   const [name, setName] = useState('')
   const [aliases, setAliases] = useState('')
   const [quantity, setQuantity] = useState('')
@@ -53,8 +56,8 @@ export function AddEntityDialog({homeId, canChangePlace, onClose, onCreated, ...
         parent_id: parent?.id ?? null,
         name: name.trim(),
         aliases: splitList(aliases),
-        quantity: quantity.trim() || null,
-        unit: unit.trim() || null,
+        quantity: countable ? quantity.trim() || null : null,
+        unit: countable ? unit.trim() || null : null,
         privacy,
       },
       {onSuccess: onCreated},
@@ -70,7 +73,7 @@ export function AddEntityDialog({homeId, canChangePlace, onClose, onCreated, ...
       <form onSubmit={submit}>
         <FormLayout>
           {canChangePlace && (
-            <div className={styles.place}>
+            <div className={styles.group}>
               <span className={styles.label}>{t('create.place')}</span>
               <div className={styles.placeRow}>
                 <span className={styles.placeName}>{parent ? parent.name : t('picker.top')}</span>
@@ -90,7 +93,7 @@ export function AddEntityDialog({homeId, canChangePlace, onClose, onCreated, ...
             </div>
           )}
 
-          <div className={styles.place}>
+          <div className={styles.group}>
             <span className={styles.label} id={kindLabelId}>
               {t('create.kind')}
             </span>
@@ -104,7 +107,7 @@ export function AddEntityDialog({homeId, canChangePlace, onClose, onCreated, ...
                     role="radio"
                     aria-checked={option === kind}
                     icon={KIND_ICON[option]}
-                    onClick={() => setKind(option)}
+                    onClick={() => setChosenKind(option)}
                   >
                     {t(`kinds.${option}`)}
                   </Chip>
@@ -113,42 +116,14 @@ export function AddEntityDialog({homeId, canChangePlace, onClose, onCreated, ...
             )}
           </div>
 
-          <Field label={t('fields.name')}>
-            <TextInput value={name} onChange={(event) => setName(event.target.value)} required maxLength={200} />
-          </Field>
-          <Field label={t('fields.aliases')} hint={t('fields.aliasesHint')}>
-            <TextInput value={aliases} onChange={(event) => setAliases(event.target.value)} />
-          </Field>
-          {kind === 'item' && (
-            <div className={styles.pair}>
-              <Field label={t('fields.quantity')}>
-                <TextInput
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="any"
-                  value={quantity}
-                  onChange={(event) => setQuantity(event.target.value)}
-                />
-              </Field>
-              <Field label={t('fields.unit')}>
-                <TextInput
-                  value={unit}
-                  placeholder={t('fields.unitPlaceholder')}
-                  onChange={(event) => setUnit(event.target.value)}
-                />
-              </Field>
-            </div>
+          <NameFields name={{value: name, onChange: setName}} aliases={{value: aliases, onChange: setAliases}} />
+          {countable && (
+            <QuantityFields
+              quantity={{value: quantity, onChange: setQuantity}}
+              unit={{value: unit, onChange: setUnit}}
+            />
           )}
-          <Field label={t('fields.privacy')}>
-            <Select value={privacy} onChange={(event) => setPrivacy(event.target.value as Privacy)}>
-              {PRIVACIES.map((option) => (
-                <option key={option} value={option}>
-                  {t(`privacy.${option}`)}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <PrivacyField value={privacy} onChange={setPrivacy} />
 
           {create.isError && <FormError>{describeError(create.error, t)}</FormError>}
           <FormActions>

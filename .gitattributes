@@ -12,6 +12,5 @@
 uv.lock linguist-generated=true -diff
 pnpm-lock.yaml linguist-generated=true -diff
 
-# Generated from the code: the OpenAPI document of the server and the web app's API types.
-services/server/openapi.json linguist-generated=true
+# Generated from services/server/openapi.json, which stays visible in reviews: it shows API changes.
 services/web/src/shared/api/schema.gen.ts linguist-generated=true

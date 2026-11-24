@@ -40,11 +40,6 @@
   color: var(--info-text);
 }
 
-.ai {
-  background: var(--ai-soft);
-  color: var(--ai);
-}
-
 .dot::before {
   content: '';
   width: 6px;

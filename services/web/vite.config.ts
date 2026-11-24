@@ -15,6 +15,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // The time zone the browser reports, so tests of the defaults do not depend on the machine.
+    env: {TZ: 'Europe/Berlin'},
     coverage: {reporter: ['text', 'lcov']},
   },
 })

@@ -12,7 +12,7 @@ export type EntityChanges = Schemas['EntityPatch']
 
 const HISTORY_LIMIT = 100
 
-export const treeKeys = {
+const treeKeys = {
   all: ['tree'] as const,
   children: (homeId: string, parentId: string | null, includeArchived: boolean) =>
     ['tree', 'children', homeId, parentId, includeArchived] as const,
@@ -56,18 +56,26 @@ export function useHistory(entityId: string) {
   })
 }
 
-/** A change to the tree: the answer replaces the entity, everything else in the tree is read again. */
+/**
+ * A change to the tree: the answer replaces the entity, and the rest of the tree on screen is read
+ * again in the background (a move or an archive changes lists and counts around it). That is not
+ * awaited, so a dialog closes as soon as the change is saved.
+ */
 function useTreeMutation<T>(change: (input: T) => Promise<EntityDetail>) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: change,
-    onSuccess: async (entity) => {
-      queryClient.setQueryData(treeKeys.entity(entity.id), entity)
-      await queryClient.invalidateQueries({queryKey: treeKeys.all})
+    onSuccess: (entity) => {
+      const key = treeKeys.entity(entity.id)
+      queryClient.setQueryData(key, entity)
+      void queryClient.invalidateQueries({
+        queryKey: treeKeys.all,
+        predicate: (query) => query.queryKey.join('/') !== key.join('/'),
+      })
     },
-    onError: async (error) => {
+    onError: (error) => {
       // Someone else changed it first: show what is there now.
-      if (isApiError(error) && error.status === 409) await queryClient.invalidateQueries({queryKey: treeKeys.all})
+      if (isApiError(error) && error.status === 409) void queryClient.invalidateQueries({queryKey: treeKeys.all})
     },
   })
 }

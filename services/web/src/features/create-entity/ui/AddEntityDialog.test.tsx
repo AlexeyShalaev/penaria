@@ -6,7 +6,9 @@ import {mockApi} from '@/test/api'
 import {detail, entity, HOME_ID} from '@/test/fixtures'
 import {renderAt} from '@/test/render'
 
-import {AddEntityDialog, type Place} from './AddEntityDialog'
+import type {Place} from '@/entities/entity'
+
+import {AddEntityDialog} from './AddEntityDialog'
 
 function renderDialog(parent: Place | null, canChangePlace = false) {
   const onCreated = vi.fn()
@@ -82,5 +84,22 @@ describe('AddEntityDialog', () => {
         },
       },
     ])
+  })
+
+  it('leaves out the quantity when the kind chosen is not a thing', async () => {
+    const created = detail({id: 'shelf', name: 'Shelf', kind: 'container', parent_id: 'storage'})
+    const calls = mockApi({[`POST /api/v1/homes/${HOME_ID}/entities`]: created})
+    const onCreated = renderDialog({id: 'storage', kind: 'space', name: 'Storage room'})
+
+    fireEvent.click(screen.getByRole('radio', {name: 'Thing'}))
+    fireEvent.change(screen.getByLabelText('Quantity'), {target: {value: '2'}})
+    fireEvent.change(screen.getByLabelText('Unit'), {target: {value: 'kg'}})
+    fireEvent.click(screen.getByRole('radio', {name: 'Storage'}))
+    fireEvent.change(screen.getByLabelText('Name'), {target: {value: 'Shelf'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Add'}))
+
+    await vi.waitFor(() => expect(onCreated).toHaveBeenCalled())
+    expect(screen.queryByLabelText('Quantity')).not.toBeInTheDocument()
+    expect(calls[0]?.body).toMatchObject({kind: 'container', quantity: null, unit: null})
   })
 })

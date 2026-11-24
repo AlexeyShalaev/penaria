@@ -3,7 +3,7 @@ import type {ReactNode} from 'react'
 
 import styles from './Badge.module.css'
 
-export type Tone = 'neutral' | 'ok' | 'warn' | 'danger' | 'info' | 'ai'
+export type Tone = 'neutral' | 'ok' | 'warn' | 'danger' | 'info'
 
 export function Badge(props: {children: ReactNode; tone?: Tone; icon?: LucideIcon; dot?: boolean; title?: string}) {
   const {children, tone = 'neutral', icon: Icon, dot, title} = props

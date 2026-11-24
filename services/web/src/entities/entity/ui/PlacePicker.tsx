@@ -2,6 +2,7 @@ import {Check, Home} from 'lucide-react'
 import {useState} from 'react'
 import {useTranslation} from 'react-i18next'
 
+import {toggled} from '@/shared/lib/set'
 import {IconTile} from '@/shared/ui'
 
 import type {EntitySummary} from '../api/entities'
@@ -25,12 +26,7 @@ type Props = {
 export function PlacePicker(props: Props) {
   const {t} = useTranslation()
   const [expanded, setExpanded] = useState(() => new Set(props.initiallyExpanded))
-  const toggle = (id: string) =>
-    setExpanded((current) => {
-      const next = new Set(current)
-      if (!next.delete(id)) next.add(id)
-      return next
-    })
+  const toggle = (id: string) => setExpanded((current) => toggled(current, id))
   return (
     <div className={styles.picker}>
       {props.allowTop && (

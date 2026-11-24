@@ -1,8 +1,4 @@
-"""``python -m penaria.apps.api.openapi``: print the OpenAPI document of the API, no database needed.
-
-The output is committed as ``services/server/openapi.json``; the web app generates its API client
-from that file, and a unit test fails when it no longer matches the code.
-"""
+"""``python -m penaria.apps.api.openapi``: print the API's OpenAPI document, no database needed."""
 
 import asyncio
 import json
@@ -20,7 +16,7 @@ from penaria.apps.api.entrypoint import ROUTERS, SERVICE_NAME
 DOCUMENT_VERSION = "1"
 
 
-def build_schema() -> dict[str, Any]:
+async def build_schema() -> dict[str, Any]:
     entrypoint = FastApiEntrypoint(config=HttpServerSettings().to_config(version=DOCUMENT_VERSION), routers=ROUTERS)
     # Building the app resolves nothing from the container, so the in-memory doubles stand in for it.
     context = ServiceContext(
@@ -28,12 +24,12 @@ def build_schema() -> dict[str, Any]:
         app_scope=FakeScope(),
         health=HealthRegistry(),
     )
-    app: FastAPI = asyncio.run(entrypoint.build_app(context))
+    app: FastAPI = await entrypoint.build_app(context)
     return app.openapi()
 
 
 def render_schema() -> str:
-    return json.dumps(build_schema(), indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    return json.dumps(asyncio.run(build_schema()), indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
 def main() -> None:

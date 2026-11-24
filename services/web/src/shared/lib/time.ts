@@ -28,3 +28,8 @@ export function browserTimeZone(): string {
 export function timeZones(): string[] {
   return Intl.supportedValuesOf('timeZone')
 }
+
+/** "America/New_York" -> "America/New York". */
+export function formatTimeZone(zone: string): string {
+  return zone.replaceAll('_', ' ')
+}

@@ -1,12 +1,20 @@
 import {type FormEvent, useState} from 'react'
 import {useTranslation} from 'react-i18next'
 
-import {type EntityDetail, PRIVACIES, type Privacy, STATUSES, type Status, useUpdateEntity} from '@/entities/entity'
-import {describeError, type Schemas} from '@/shared/api'
+import {
+  type EntityChanges,
+  type EntityDetail,
+  NameFields,
+  type Privacy,
+  PrivacyField,
+  QuantityFields,
+  STATUSES,
+  type Status,
+  useUpdateEntity,
+} from '@/entities/entity'
+import {describeError} from '@/shared/api'
 import {splitList} from '@/shared/lib/text'
-import {Button, Dialog, Field, FormActions, FormError, FormLayout, Select, TextInput} from '@/shared/ui'
-
-import styles from './EditEntityDialog.module.css'
+import {Button, Dialog, Field, FormActions, FormError, FormLayout, Select} from '@/shared/ui'
 
 type Props = {entity: EntityDetail; onClose: () => void}
 
@@ -31,7 +39,7 @@ export function EditEntityDialog({entity, onClose}: Props) {
   )
 }
 
-type Changes = Omit<Schemas['EntityPatch'], 'version'>
+type Changes = Omit<EntityChanges, 'version'>
 
 function EditForm(props: {
   entity: EntityDetail
@@ -49,6 +57,7 @@ function EditForm(props: {
   const [status, setStatus] = useState<Status>(entity.status)
   const [privacy, setPrivacy] = useState<Privacy>(entity.privacy)
 
+  // Only what changed is sent: a field left alone never overwrites someone else's change to it.
   const submit = (event: FormEvent) => {
     event.preventDefault()
     const changes: Changes = {}
@@ -65,51 +74,18 @@ function EditForm(props: {
   return (
     <form onSubmit={submit}>
       <FormLayout>
-        <Field label={t('fields.name')}>
-          <TextInput value={name} onChange={(event) => setName(event.target.value)} required maxLength={200} />
+        <NameFields name={{value: name, onChange: setName}} aliases={{value: aliases, onChange: setAliases}} />
+        <QuantityFields quantity={{value: quantity, onChange: setQuantity}} unit={{value: unit, onChange: setUnit}} />
+        <Field label={t('fields.status')}>
+          <Select value={status} onChange={(event) => setStatus(event.target.value as Status)}>
+            {STATUSES.map((option) => (
+              <option key={option} value={option}>
+                {t(`status.${option}`)}
+              </option>
+            ))}
+          </Select>
         </Field>
-        <Field label={t('fields.aliases')} hint={t('fields.aliasesHint')}>
-          <TextInput value={aliases} onChange={(event) => setAliases(event.target.value)} />
-        </Field>
-        <div className={styles.pair}>
-          <Field label={t('fields.quantity')}>
-            <TextInput
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
-              value={quantity}
-              onChange={(event) => setQuantity(event.target.value)}
-            />
-          </Field>
-          <Field label={t('fields.unit')}>
-            <TextInput
-              value={unit}
-              placeholder={t('fields.unitPlaceholder')}
-              onChange={(event) => setUnit(event.target.value)}
-            />
-          </Field>
-        </div>
-        <div className={styles.pair}>
-          <Field label={t('fields.status')}>
-            <Select value={status} onChange={(event) => setStatus(event.target.value as Status)}>
-              {STATUSES.map((option) => (
-                <option key={option} value={option}>
-                  {t(`status.${option}`)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t('fields.privacy')}>
-            <Select value={privacy} onChange={(event) => setPrivacy(event.target.value as Privacy)}>
-              {PRIVACIES.map((option) => (
-                <option key={option} value={option}>
-                  {t(`privacy.${option}`)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
+        <PrivacyField value={privacy} onChange={setPrivacy} />
         {props.error && <FormError>{props.error}</FormError>}
         <FormActions>
           <Button variant="secondary" onClick={props.onCancel}>

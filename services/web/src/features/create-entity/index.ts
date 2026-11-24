@@ -1,1 +1,1 @@
-export {AddEntityDialog, type Place} from './ui/AddEntityDialog'
+export {AddEntityDialog} from './ui/AddEntityDialog'

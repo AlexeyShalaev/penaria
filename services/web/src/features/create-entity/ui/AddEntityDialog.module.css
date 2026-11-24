@@ -1,4 +1,4 @@
-.place {
+.group {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -30,10 +30,4 @@
 .note {
   color: var(--text-muted);
   font-size: var(--fs-sm);
-}
-
-.pair {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--sp-3);
 }

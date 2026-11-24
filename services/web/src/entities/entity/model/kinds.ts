@@ -1,4 +1,16 @@
-import {Cpu, DoorOpen, House, Layers, type LucideIcon, MapPinHouse, Network, Package, Tag} from 'lucide-react'
+import {
+  Cpu,
+  DoorOpen,
+  House,
+  Layers,
+  Lock,
+  type LucideIcon,
+  MapPinHouse,
+  Network,
+  Package,
+  Tag,
+  Users,
+} from 'lucide-react'
 
 import type {Schemas} from '@/shared/api'
 
@@ -6,17 +18,9 @@ export type Kind = Schemas['Kind']
 export type Status = Schemas['Status']
 export type Privacy = Schemas['Privacy']
 export type ArchiveReason = Schemas['ArchiveReason']
+export type Place = Schemas['PlaceOut']
 
-export const KINDS: readonly Kind[] = [
-  'property',
-  'building',
-  'floor',
-  'space',
-  'container',
-  'item',
-  'device',
-  'system',
-]
+const KINDS: readonly Kind[] = ['property', 'building', 'floor', 'space', 'container', 'item', 'device', 'system']
 export const STATUSES: readonly Status[] = ['present', 'missing', 'lent', 'in_repair']
 export const PRIVACIES: readonly Privacy[] = ['normal', 'guest_visible', 'private']
 export const ARCHIVE_REASONS: readonly ArchiveReason[] = ['discarded', 'sold', 'given_away', 'used_up', 'merged']
@@ -57,3 +61,10 @@ export const KIND_ICON: Record<Kind, LucideIcon> = {
 
 /** Places that structure the home rather than hold things; the tree shows their names in bold. */
 export const STRUCTURAL_KINDS: ReadonlySet<Kind> = new Set(['property', 'building', 'floor'])
+
+/** The mark of a place that not everyone sees the same way; none for normal privacy. */
+export const PRIVACY_ICON: Record<Privacy, LucideIcon | null> = {
+  normal: null,
+  guest_visible: Users,
+  private: Lock,
+}

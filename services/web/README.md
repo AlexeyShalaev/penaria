@@ -19,6 +19,8 @@ make api                    # regenerate the types
 
 `make check` (and CI) fails when the generated types do not match the document.
 
+The app calls the API on its own origin (`/api`, `/system`): the dev server proxies them to the server on :8000, and an install must route them to `penaria-server` the same way in front of `penaria-web`.
+
 ## Commands
 
 | Task                    | Command        |

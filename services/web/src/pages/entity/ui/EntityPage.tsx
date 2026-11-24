@@ -1,4 +1,4 @@
-import {Archive, ArchiveRestore, Check, Lock, MoveRight, Pencil, Plus, SearchX, Users} from 'lucide-react'
+import {Archive, ArchiveRestore, Check, MoveRight, Pencil, Plus, SearchX} from 'lucide-react'
 import {useState} from 'react'
 import {useTranslation} from 'react-i18next'
 import {Link, useParams} from 'react-router'
@@ -13,21 +13,37 @@ import {
   EntityTree,
   FreshnessBadge,
   KIND_ICON,
+  PRIVACY_ICON,
   type Status,
   useEntity,
   useRestoreEntity,
   useVerifyEntity,
 } from '@/entities/entity'
 import {describeError, isApiError} from '@/shared/api'
+import {toggled} from '@/shared/lib/set'
 import {formatDateTime, formatRelative} from '@/shared/lib/time'
-import {Badge, Breadcrumbs, Button, Card, Empty, ErrorState, IconTile, Loading, Tabs, type Tone} from '@/shared/ui'
+import {
+  Badge,
+  Breadcrumbs,
+  Button,
+  Card,
+  CardTitle,
+  Empty,
+  ErrorState,
+  Facts,
+  IconTile,
+  Loading,
+  PageTitle,
+  Tabs,
+  type Tone,
+} from '@/shared/ui'
 
 import styles from './EntityPage.module.css'
 import {History} from './History'
 
 const STATUS_TONE: Record<Status, Tone> = {present: 'neutral', missing: 'danger', lent: 'info', in_repair: 'warn'}
 
-type Dialog = 'add' | 'edit' | 'move' | 'archive'
+type OpenDialog = 'add' | 'edit' | 'move' | 'archive'
 
 export function EntityPage() {
   const {t} = useTranslation()
@@ -61,7 +77,7 @@ export function EntityPage() {
 function EntityView({entity}: {entity: EntityDetail}) {
   const {t, i18n} = useTranslation()
   const [tab, setTab] = useState<'contents' | 'history'>('contents')
-  const [dialog, setDialog] = useState<Dialog | null>(null)
+  const [dialog, setDialog] = useState<OpenDialog | null>(null)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const verify = useVerifyEntity(entity.id)
   const restore = useRestoreEntity(entity.id)
@@ -69,14 +85,11 @@ function EntityView({entity}: {entity: EntityDetail}) {
   const editable = entity.can_edit && !archived
   const canAddInside = editable && childKinds(entity.kind).length > 0
   const close = () => setDialog(null)
-  const actionError = verify.error ?? restore.error
+  // Only the error of the action on screen: an archived entity offers Restore, a live one the rest.
+  const actionError = archived ? restore.error : verify.error
+  const PrivacyIcon = PRIVACY_ICON[entity.privacy]
 
-  const toggle = (id: string) =>
-    setExpanded((current) => {
-      const next = new Set(current)
-      if (!next.delete(id)) next.add(id)
-      return next
-    })
+  const toggle = (id: string) => setExpanded((current) => toggled(current, id))
 
   return (
     <>
@@ -94,7 +107,7 @@ function EntityView({entity}: {entity: EntityDetail}) {
             <IconTile icon={KIND_ICON[entity.kind]} size="lg" accent />
             <div className={styles.heroText}>
               <span className={styles.kind}>{t(`kinds.${entity.kind}`)}</span>
-              <h1 className={styles.title}>{entity.name}</h1>
+              <PageTitle className={styles.title}>{entity.name}</PageTitle>
               <div className={styles.badges}>
                 <FreshnessBadge freshness={entity.freshness} verifiedAt={entity.verified_at} />
                 <Badge tone={STATUS_TONE[entity.status]}>{t(`status.${entity.status}`)}</Badge>
@@ -108,8 +121,7 @@ function EntityView({entity}: {entity: EntityDetail}) {
                         })}
                   </Badge>
                 )}
-                {entity.privacy === 'private' && <Badge icon={Lock}>{t('privacy.private')}</Badge>}
-                {entity.privacy === 'guest_visible' && <Badge icon={Users}>{t('privacy.guest_visible')}</Badge>}
+                {PrivacyIcon && <Badge icon={PrivacyIcon}>{t(`privacy.${entity.privacy}`)}</Badge>}
                 {archived && <Badge tone="warn">{t('entity.archived')}</Badge>}
               </div>
               {entity.aliases.length > 0 && (
@@ -118,7 +130,7 @@ function EntityView({entity}: {entity: EntityDetail}) {
             </div>
           </header>
 
-          {entity.archived_at !== null && (
+          {entity.archived_at && (
             <p className={styles.notice}>
               {t('entity.archivedNotice', {when: formatRelative(new Date(entity.archived_at), i18n.language)})}
               {entity.archive_reason && ` ${t(`archiveReason.${entity.archive_reason}`)}.`}
@@ -193,24 +205,23 @@ function EntityView({entity}: {entity: EntityDetail}) {
         </div>
 
         <Card as="section" className={styles.aside} aria-label={t('entity.where')}>
-          <h2 className={styles.cardTitle}>{t('entity.where')}</h2>
+          <CardTitle>{t('entity.where')}</CardTitle>
           <p className={styles.path}>
             {entity.path.length ? entity.path.map((place) => place.name).join(' → ') : t('picker.top')}
           </p>
-          <dl className={styles.facts}>
-            <dt>{t('fields.kind')}</dt>
-            <dd>{t(`kinds.${entity.kind}`)}</dd>
-            <dt>{t('fields.status')}</dt>
-            <dd>{t(`status.${entity.status}`)}</dd>
-            <dt>{t('fields.privacy')}</dt>
-            <dd>{t(`privacy.${entity.privacy}`)}</dd>
-            <dt>{t('entity.lastChecked')}</dt>
-            <dd>
-              {entity.verified_at
-                ? formatDateTime(new Date(entity.verified_at), i18n.language)
-                : t('entity.neverChecked')}
-            </dd>
-          </dl>
+          <Facts
+            items={[
+              {label: t('fields.kind'), value: t(`kinds.${entity.kind}`)},
+              {label: t('fields.status'), value: t(`status.${entity.status}`)},
+              {label: t('fields.privacy'), value: t(`privacy.${entity.privacy}`)},
+              {
+                label: t('entity.lastChecked'),
+                value: entity.verified_at
+                  ? formatDateTime(new Date(entity.verified_at), i18n.language)
+                  : t('entity.neverChecked'),
+              },
+            ]}
+          />
         </Card>
       </div>
 

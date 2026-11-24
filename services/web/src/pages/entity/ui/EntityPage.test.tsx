@@ -1,7 +1,8 @@
-import {fireEvent, screen, within} from '@testing-library/react'
+import {cleanup, fireEvent, screen, within} from '@testing-library/react'
 import {Route} from 'react-router'
-import {describe, expect, it} from 'vitest'
+import {describe, expect, it, vi} from 'vitest'
 
+import type {EntityDetail} from '@/entities/entity'
 import {type ApiCall, mockApi, problem} from '@/test/api'
 import {detail, entity, HOME_ID} from '@/test/fixtures'
 import {renderAt} from '@/test/render'
@@ -63,10 +64,12 @@ describe('EntityPage', () => {
   })
 
   it('confirms the entity is here', async () => {
+    vi.useFakeTimers({toFake: ['Date']})
+    vi.setSystemTime(new Date('2026-11-24T12:00:00Z'))
     const calls = mockApi(
       pageWith('POST /api/v1/entities/vacuum:verify', {
         ...VACUUM,
-        verified_at: new Date().toISOString(),
+        verified_at: '2026-11-24T11:59:50Z',
         freshness: 'fresh',
       }),
     )
@@ -150,7 +153,7 @@ describe('EntityPage', () => {
     const calls = mockApi(
       pageWith('POST /api/v1/entities/vacuum:archive', {
         ...VACUUM,
-        archived_at: new Date().toISOString(),
+        archived_at: '2026-11-24T11:00:00Z',
         archive_reason: 'sold',
         version: 4,
       }),
@@ -167,6 +170,106 @@ describe('EntityPage', () => {
     ])
   })
 
+  it('sends nothing when the form is saved unchanged', async () => {
+    const calls = mockApi(PAGE)
+    renderEntity()
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Edit'}))
+    fireEvent.click(screen.getByRole('button', {name: 'Save'}))
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(writes(calls)).toEqual([])
+  })
+
+  it('clears the quantity and the unit and replaces the other names', async () => {
+    const counted = {...VACUUM, quantity: '2', unit: 'pcs', aliases: ['hoover']}
+    const calls = mockApi({
+      ...pageWith('PATCH /api/v1/entities/vacuum', {...counted, quantity: null, unit: null, version: 4}),
+      'GET /api/v1/entities/vacuum': counted,
+    })
+    renderEntity()
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Edit'}))
+    fireEvent.change(screen.getByLabelText('Quantity'), {target: {value: ''}})
+    fireEvent.change(screen.getByLabelText('Unit'), {target: {value: ''}})
+    fireEvent.change(screen.getByLabelText('Other names'), {target: {value: 'robot, cleaner'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Save'}))
+
+    await vi.waitFor(() => expect(writes(calls)).toHaveLength(1))
+    expect(writes(calls)[0]?.body).toEqual({version: 3, aliases: ['robot', 'cleaner'], quantity: null, unit: ''})
+  })
+
+  it('restores an archived entity', async () => {
+    const archived = {...VACUUM, archived_at: '2026-11-24T11:00:00Z', archive_reason: 'sold' as const}
+    let current: EntityDetail = archived
+    const calls = mockApi({
+      ...PAGE,
+      'GET /api/v1/entities/vacuum': () => current,
+      'POST /api/v1/entities/vacuum:restore': () => {
+        current = {...VACUUM, version: 4}
+        return current
+      },
+    })
+    renderEntity()
+
+    expect(await screen.findByText(/Archived .* Sold\./)).toBeVisible()
+    expect(screen.queryByRole('button', {name: "It's here"})).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', {name: 'Restore'}))
+
+    expect(await screen.findByRole('button', {name: "It's here"})).toBeVisible()
+    expect(writes(calls)).toEqual([
+      {method: 'POST', path: '/api/v1/entities/vacuum:restore', search: '', body: {version: 3}},
+    ])
+  })
+
+  it('adds inside the entity', async () => {
+    const calls = mockApi({
+      ...PAGE,
+      'POST /api/v1/homes/00000000-0000-4000-8000-000000000001/entities': detail({
+        id: 'bag',
+        name: 'Dust bags',
+        kind: 'item',
+        parent_id: 'vacuum',
+      }),
+    })
+    renderEntity()
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Add inside'}))
+    const dialog = screen.getByRole('dialog', {name: 'Add inside Vacuum cleaner'})
+    fireEvent.click(within(dialog).getByRole('radio', {name: 'Thing'}))
+    fireEvent.change(within(dialog).getByLabelText('Name'), {target: {value: 'Dust bags'}})
+    fireEvent.click(within(dialog).getByRole('button', {name: 'Add'}))
+
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(writes(calls)[0]?.body).toEqual({
+      kind: 'item',
+      parent_id: 'vacuum',
+      name: 'Dust bags',
+      aliases: [],
+      quantity: null,
+      unit: null,
+      privacy: 'normal',
+    })
+  })
+
+  it('offers no move for a property and nothing to add inside a device', async () => {
+    mockApi({
+      'GET /api/v1/entities/flat': detail({id: 'flat', name: 'Flat', kind: 'property'}),
+      [`${ENTITIES}?parent_id=flat`]: [],
+      'GET /api/v1/entities/router': detail({id: 'router', name: 'Router', kind: 'device'}),
+      [`${ENTITIES}?parent_id=router`]: [],
+    })
+
+    renderAt('/entities/flat', <Route path="/entities/:entityId" element={<EntityPage />} />)
+    expect(await screen.findByRole('button', {name: 'Add inside'})).toBeVisible()
+    expect(screen.queryByRole('button', {name: 'Move'})).not.toBeInTheDocument()
+    cleanup()
+
+    renderAt('/entities/router', <Route path="/entities/:entityId" element={<EntityPage />} />)
+    expect(await screen.findByRole('button', {name: 'Move'})).toBeVisible()
+    expect(screen.queryByRole('button', {name: 'Add inside'})).not.toBeInTheDocument()
+  })
+
   it('offers no changes to someone who may only look', async () => {
     mockApi({...PAGE, 'GET /api/v1/entities/vacuum': {...VACUUM, can_edit: false}})
 
@@ -180,7 +283,7 @@ describe('EntityPage', () => {
   it('tells the history in sentences', async () => {
     mockApi({
       ...PAGE,
-      'GET /api/v1/entities/vacuum/history': [
+      'GET /api/v1/entities/vacuum/history?limit=100': [
         {
           id: 'e2',
           type: 'entity.moved',

@@ -4,18 +4,16 @@ import type {TFunction} from 'i18next'
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
-  readonly params: Record<string, unknown>
 
-  constructor(status: number, code: string, detail: string, params: Record<string, unknown> = {}) {
+  constructor(status: number, code: string, detail: string) {
     super(detail || code)
     this.name = 'ApiError'
     this.status = status
     this.code = code
-    this.params = params
   }
 }
 
-type Problem = {code?: unknown; detail?: unknown; params?: unknown}
+type Problem = {code?: unknown; detail?: unknown}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -30,7 +28,6 @@ export async function unwrap<T>(call: Promise<{data?: T; error?: unknown; respon
     response.status,
     typeof problem.code === 'string' ? problem.code : 'http_error',
     typeof problem.detail === 'string' ? problem.detail : response.statusText,
-    isObject(problem.params) ? problem.params : {},
   )
 }
 

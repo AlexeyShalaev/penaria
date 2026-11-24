@@ -1,11 +1,17 @@
-import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {QueryClientProvider} from '@tanstack/react-query'
 import {render} from '@testing-library/react'
 import type {ReactNode} from 'react'
 import {MemoryRouter, Routes} from 'react-router'
 
-/** Renders routes at `url` with a fresh query cache that does not retry. */
+import {createQueryClient} from '@/shared/api'
+
+/** Renders routes at `url` with a fresh query cache, set up as the app's but without retries. */
 export function renderAt(url: string, routes: ReactNode) {
-  const queryClient = new QueryClient({defaultOptions: {queries: {retry: false}, mutations: {retry: false}}})
+  const queryClient = createQueryClient()
+  queryClient.setDefaultOptions({
+    queries: {...queryClient.getDefaultOptions().queries, retry: false},
+    mutations: {retry: false},
+  })
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[url]}>

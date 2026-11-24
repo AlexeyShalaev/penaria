@@ -48,9 +48,8 @@ function describeChange(field: string, value: Change | null, t: TFunction): stri
     case 'name':
       return t('history.renamed', {from: text(value.from), to: text(value.to)})
     case 'aliases':
-      return (value.to as string[]).length
-        ? t('history.aliases', {to: (value.to as string[]).join(', ')})
-        : t('history.aliasesCleared')
+      if (!Array.isArray(value.to)) return t('history.other')
+      return value.to.length ? t('history.aliases', {to: value.to.join(', ')}) : t('history.aliasesCleared')
     case 'quantity':
     case 'unit':
       return value.to === null ? t(`history.${field}Cleared`) : t(`history.${field}`, {to: text(value.to)})

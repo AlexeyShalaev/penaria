@@ -3,7 +3,7 @@ import {useTranslation} from 'react-i18next'
 
 import {type Home, useCreateHome} from '@/entities/home'
 import {describeError} from '@/shared/api'
-import {browserTimeZone, timeZones} from '@/shared/lib/time'
+import {browserTimeZone, formatTimeZone, timeZones} from '@/shared/lib/time'
 import {Button, Field, FormActions, FormError, FormLayout, Select, TextInput} from '@/shared/ui'
 
 export function CreateHomeForm(props: {onCreated: (home: Home) => void}) {
@@ -37,7 +37,7 @@ export function CreateHomeForm(props: {onCreated: (home: Home) => void}) {
           <Select value={timezone} onChange={(event) => setTimezone(event.target.value)}>
             {zones.map((zone) => (
               <option key={zone} value={zone}>
-                {zone.replaceAll('_', ' ')}
+                {formatTimeZone(zone)}
               </option>
             ))}
           </Select>
