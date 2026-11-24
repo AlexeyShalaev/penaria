@@ -6,14 +6,19 @@ readme = "README.md"
 requires-python = ">=3.15"
 license = "AGPL-3.0-only"
 dependencies = [
+    "alembic>=1.20.1",
+    "asyncpg>=0.32.0",
     "servicewright[dishka,fastapi,settings]>=0.15.0",
+    "sqlalchemy-foundation-kit[dishka,settings]>=0.5.2",
 ]
 
 [project.scripts]
 penaria-api = "penaria.apps.api.__main__:main"
+penaria-migrate = "penaria.apps.migrate.__main__:main"
 
 [dependency-groups]
 dev = [
+    "alembic-gauntlet>=0.3.1",
     "httpx>=0.28.1",
     "import-linter>=2.17",
     "mypy>=2.4.1",
@@ -53,6 +58,7 @@ python_version = "3.15"
 strict = true
 files = ["src", "tests"]
 mypy_path = ["src"]
+plugins = ["pydantic.mypy"]
 explicit_package_bases = true
 
 [tool.pytest.ini_options]
@@ -63,7 +69,7 @@ pythonpath = ["src"]
 addopts = ["--strict-markers", "--strict-config", "--tb=short"]
 markers = [
     "unit: fast tests without external services",
-    "integration: tests against PostgreSQL, S3, Qdrant or Temporal from scripts/tests",
+    "integration: tests against the development stack (make dev-up), TEST_DATABASE_URL for PostgreSQL",
 ]
 
 [tool.coverage.run]
@@ -77,10 +83,10 @@ include_external_packages = true
 
 [[tool.importlinter.contracts]]
 id = "top-level"
-name = "apps -> modules | integrations -> features -> common"
+name = "apps -> migrations -> modules | integrations -> features -> common"
 type = "layers"
 containers = ["penaria"]
-layers = ["apps", "modules | integrations", "features", "common"]
+layers = ["apps", "migrations", "modules | integrations", "features", "common"]
 
 [[tool.importlinter.contracts]]
 id = "apps-independent"

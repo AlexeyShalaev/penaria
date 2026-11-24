@@ -2,7 +2,7 @@
 SERVICES := server web
 
 .DEFAULT_GOAL := help
-.PHONY: help install fmt check test hooks hadolint workflows change changelog
+.PHONY: help install fmt check test hooks hadolint workflows change changelog dev-up dev-down dev-reset
 
 help:  ## Show the commands
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  make %-10s %s\n", $$1, $$2}'
@@ -38,3 +38,15 @@ hooks:  ## Install the git hooks (pre-commit and commit-msg)
 
 hadolint:  ## Lint every Dockerfile with .hadolint.yaml, as CI does
 	@for f in services/*/Dockerfile; do echo "$$f"; docker run --rm -i -v "$(CURDIR)/.hadolint.yaml:/.hadolint.yaml:ro" hadolint/hadolint hadolint --config /.hadolint.yaml - < $$f || exit 1; done
+
+DEV_COMPOSE := docker compose -f scripts/dev/compose.yaml
+
+dev-up:  ## Start PostgreSQL (:55432) and S3 (:59000, console :59001) for local development
+	$(DEV_COMPOSE) up -d --wait postgres s3
+	$(DEV_COMPOSE) run --rm s3-bucket
+
+dev-down:  ## Stop the development infrastructure, keeping its data
+	$(DEV_COMPOSE) down
+
+dev-reset:  ## Stop the development infrastructure and delete its data
+	$(DEV_COMPOSE) down --volumes

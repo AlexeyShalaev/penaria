@@ -24,6 +24,23 @@ jobs:
     defaults:
       run:
         working-directory: services/server
+    services:
+      # The oldest PostgreSQL we support; development runs the newest (scripts/dev/compose.yaml).
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: penaria
+          POSTGRES_PASSWORD: penaria
+          POSTGRES_DB: penaria_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U penaria -d penaria_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://penaria:penaria@localhost:5432/penaria_test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -125,11 +142,25 @@ jobs:
       - name: Smoke
         run: |
           set -euo pipefail
+          image="penaria-${{ matrix.service }}:ci"
           case "${{ matrix.service }}" in
-            server) port=8000; path=/system/health/readyz ;;
-            web)    port=8080; path=/ ;;
+            server)
+              port=8000; path=/system/health/readyz
+              # The server needs its database: migrate it with the image, then start the api.
+              docker network create smoke
+              docker run -d --name db --network smoke \
+                -e POSTGRES_USER=penaria -e POSTGRES_PASSWORD=penaria -e POSTGRES_DB=penaria postgres:15-alpine
+              until docker exec db pg_isready -U penaria -d penaria >/dev/null 2>&1; do sleep 1; done
+              db_env=(-e PENARIA_DATABASE__CONNECTION__HOST=db -e PENARIA_DATABASE__CONNECTION__USER=penaria
+                      -e PENARIA_DATABASE__CONNECTION__PASSWORD=penaria -e PENARIA_DATABASE__CONNECTION__DATABASE=penaria)
+              docker run --rm --network smoke "${db_env[@]}" "$image" python -m penaria.apps.migrate upgrade
+              docker run -d --name smoke --network smoke -p "$port:$port" "${db_env[@]}" "$image"
+              ;;
+            web)
+              port=8080; path=/
+              docker run -d --name smoke -p "$port:$port" "$image"
+              ;;
           esac
-          docker run -d --name smoke -p "$port:$port" "penaria-${{ matrix.service }}:ci"
           for _ in $(seq 1 30); do
             curl -fsS "http://127.0.0.1:$port$path" >/dev/null && { echo "up"; exit 0; }
             sleep 2
