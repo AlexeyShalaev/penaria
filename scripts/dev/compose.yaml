@@ -38,6 +38,22 @@ services:
       timeout: 3s
       retries: 30
 
+  # Mailpit catches every email Penaria sends and shows it at http://localhost:58025; nothing leaves the
+  # machine. Connect it in Settings: server 127.0.0.1, port 51025, no encryption, no login.
+  mail:
+    image: axllent/mailpit:v1.33.0
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports:
+      - "127.0.0.1:51025:1025"
+      - "127.0.0.1:58025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   s3-bucket:
     image: pgsty/silo:RELEASE.2026-11-12T00-00-00Z
     depends_on:
