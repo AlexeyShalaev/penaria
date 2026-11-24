@@ -131,8 +131,9 @@ def test_a_provider_must_be_https_unless_it_is_on_the_machine(monkeypatch: pytes
         Settings()
 
 
-def test_a_provider_on_the_machine_may_use_http(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider_variables(monkeypatch, "http://localhost:5556/dex")
+@pytest.mark.parametrize("issuer", ["http://localhost:5556/dex", "http://127.0.0.1:5556/dex", "http://[::1]:5556/dex"])
+def test_a_provider_on_the_machine_may_use_http(monkeypatch: pytest.MonkeyPatch, issuer: str) -> None:
+    provider_variables(monkeypatch, issuer)
 
     assert Settings().auth.oidc is not None
 

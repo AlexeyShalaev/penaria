@@ -394,7 +394,7 @@ class AccountLinkRepository(Protocol):
 class ExternalIdentityRepository(Protocol):
     async def add(self, identity: ExternalIdentity) -> None: ...
 
-    async def by_subject(self, provider: str, subject: str) -> tuple[ExternalIdentity, User] | None:
+    async def by_subject(self, issuer: str, subject: str) -> tuple[ExternalIdentity, User] | None:
         """The identity at the provider, with the account it is linked to."""
         ...
 
@@ -402,8 +402,8 @@ class ExternalIdentityRepository(Protocol):
         """The account's identities, the oldest first."""
         ...
 
-    async def remove(self, user_id: UUID, identity_id: UUID) -> bool:
-        """Unlink one of the account's identities; whether there was such an identity."""
+    async def remove(self, user_id: UUID, identity_id: UUID) -> None:
+        """Unlink one of the account's identities."""
         ...
 
 

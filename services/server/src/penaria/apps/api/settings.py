@@ -9,13 +9,12 @@ from servicewright.adapters.fastapi import HttpServerSettings
 
 from penaria.common.database import DatabaseSettings
 from penaria.common.settings import PenariaSettings
-from penaria.common.urls import origin_of
+from penaria.common.urls import is_loopback, origin_of
 from penaria.features.shared.errors import InvalidError
+from penaria.features.support.identity.api.cookies import OIDC_CALLBACK_PATH
 from penaria.features.support.identity.domain.links import PublicLinks
 from penaria.features.support.identity.domain.mailbox import DEFAULT_PORTS, MailboxFields, MailSecurity
 
-# A provider on the machine itself may answer over plain http, as a development one does.
-LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1"})
 # Stored secrets are encrypted with keys derived from it; shorter keys are too easy to guess.
 SECRET_KEY_MIN_LENGTH = 32
 
@@ -70,8 +69,8 @@ class OidcSettings(BaseModel):
     @classmethod
     def _an_issuer(cls, issuer: str) -> str:
         parts = urlsplit(issuer)
-        local = parts.hostname in LOOPBACK_NAMES
-        secure = parts.scheme == "https" or (parts.scheme == "http" and local)
+        # A provider on the machine itself may answer over plain http, as a development one does.
+        secure = parts.scheme == "https" or (parts.scheme == "http" and is_loopback(parts.hostname))
         if not secure or parts.query or parts.fragment:
             raise ValueError(
                 "an https address without a query, such as https://auth.example.org/application/o/penaria/"
@@ -140,7 +139,7 @@ class Settings(PenariaSettings):
     @property
     def oidc_redirect_uri(self) -> str:
         """Where the provider sends the browser back: register it with the provider."""
-        return f"{self.public_origin}/api/v1/auth/oidc/callback"
+        return self.public_origin + OIDC_CALLBACK_PATH
 
     @property
     def serves_https(self) -> bool:

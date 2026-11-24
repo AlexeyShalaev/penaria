@@ -5,6 +5,7 @@ import {describe, expect, it} from 'vitest'
 import {mockApi} from '@/test/api'
 import {renderAt} from '@/test/render'
 
+import {PROBLEMS} from '../model/problems'
 import {ExternalSignInPage} from './ExternalSignInPage'
 
 function renderAtProblem(problem: string) {
@@ -26,5 +27,13 @@ describe('ExternalSignInPage', () => {
     renderAtProblem('something-new')
 
     expect(await screen.findByRole('heading', {name: 'the sign-in provider did not sign you in'})).toBeVisible()
+  })
+
+  it.each(PROBLEMS)('explains %s in words of its own', async (problem) => {
+    mockApi({'GET /api/v1/auth/config': {oidc: {name: 'Authentik'}}})
+    renderAtProblem(problem)
+
+    await screen.findByRole('heading', {level: 1})
+    expect(document.body.textContent).not.toMatch(/provider\.problems/)
   })
 })

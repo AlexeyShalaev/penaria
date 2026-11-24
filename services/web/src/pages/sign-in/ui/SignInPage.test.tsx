@@ -1,6 +1,6 @@
 import {fireEvent, screen} from '@testing-library/react'
 import {Route} from 'react-router'
-import {describe, expect, it, vi} from 'vitest'
+import {afterEach, describe, expect, it, vi} from 'vitest'
 
 import {MAIL_OFF, mockApi, problem} from '@/test/api'
 import {account} from '@/test/fixtures'
@@ -22,6 +22,8 @@ function renderPage() {
 const SIGNED_OUT = {'GET /api/v1/setup': {needed: false}, 'GET /api/v1/me': problem(401, 'unauthenticated')}
 
 describe('SignInPage', () => {
+  afterEach(() => window.history.replaceState(null, '', '/'))
+
   it('offers a passkey first, and the password below it', async () => {
     mockPasskeys()
     mockApi({...MAIL_OFF, ...SIGNED_OUT})

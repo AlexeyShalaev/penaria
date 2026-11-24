@@ -22,7 +22,7 @@ def upgrade() -> None:
     op.create_table(
         "identity_external_identities",
         sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column("provider", sa.Text(), nullable=False),
+        sa.Column("issuer", sa.Text(), nullable=False),
         sa.Column("subject", sa.Text(), nullable=False),
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("email", sa.Text(), nullable=True),
@@ -36,15 +36,15 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("identity_external_identities_pkey")),
     )
     op.create_index(
-        "identity_external_identities_provider_subject_key",
+        "identity_external_identities_issuer_subject_key",
         "identity_external_identities",
-        ["provider", "subject"],
+        ["issuer", "subject"],
         unique=True,
     )
     op.create_index(
-        "identity_external_identities_user_id_provider_key",
+        "identity_external_identities_user_id_issuer_key",
         "identity_external_identities",
-        ["user_id", "provider"],
+        ["user_id", "issuer"],
         unique=True,
     )
     op.create_table(
@@ -92,10 +92,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Forgets every linked identity: accounts made through the provider, which have no password, can then sign
+    # in only after the operator's reset command (python -m penaria.apps.cli users reset).
     op.execute("SET LOCAL lock_timeout = '5s'")
     op.drop_index(op.f("identity_oidc_flows_expires_at_idx"), table_name="identity_oidc_flows")
     op.drop_index("identity_oidc_flows_address_idx", table_name="identity_oidc_flows")
     op.drop_table("identity_oidc_flows")
-    op.drop_index("identity_external_identities_user_id_provider_key", table_name="identity_external_identities")
-    op.drop_index("identity_external_identities_provider_subject_key", table_name="identity_external_identities")
+    op.drop_index("identity_external_identities_user_id_issuer_key", table_name="identity_external_identities")
+    op.drop_index("identity_external_identities_issuer_subject_key", table_name="identity_external_identities")
     op.drop_table("identity_external_identities")

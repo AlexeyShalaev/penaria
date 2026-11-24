@@ -28,7 +28,6 @@ export {
 } from './api/passkeys'
 export {
   type ExternalIdentity,
-  type SignInMethods,
   useAuthConfig,
   useReauthenticateWithProvider,
   useSignInMethods,

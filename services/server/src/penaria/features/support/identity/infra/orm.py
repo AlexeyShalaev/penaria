@@ -340,14 +340,13 @@ class ExternalIdentityDB(Base):
 
     __tablename__ = "identity_external_identities"
     __table_args__ = (
-        Index("identity_external_identities_provider_subject_key", "provider", "subject", unique=True),
+        Index("identity_external_identities_issuer_subject_key", "issuer", "subject", unique=True),
         # One identity per provider and account: linking another replaces nothing silently.
-        Index("identity_external_identities_user_id_provider_key", "user_id", "provider", unique=True),
+        Index("identity_external_identities_user_id_issuer_key", "user_id", "issuer", unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
-    # The provider's issuer.
-    provider: Mapped[str] = mapped_column(Text)
+    issuer: Mapped[str] = mapped_column(Text)
     subject: Mapped[str] = mapped_column(Text)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"))
     email: Mapped[str | None] = mapped_column(Text)

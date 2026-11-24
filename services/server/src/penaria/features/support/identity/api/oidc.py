@@ -16,7 +16,7 @@ from servicewright.adapters.fastapi import UnitScopeDep
 
 from penaria.features.shared.http import SIGNED_IN
 from penaria.features.support.identity.api.account import SecondFactorFields, client_of
-from penaria.features.support.identity.api.cookies import OIDC_COOKIE, SessionCookie
+from penaria.features.support.identity.api.cookies import OIDC_CALLBACK_PATH, OIDC_COOKIE, SessionCookie
 from penaria.features.support.identity.api.people import TokenIn
 from penaria.features.support.identity.domain.oidc import ExternalIdentity, ExternalSignIn
 from penaria.features.support.identity.domain.sessions import CurrentSession
@@ -42,8 +42,9 @@ SIGN_IN_PAGE = "/sign-in"
 # What the provider passes back is short; anything longer is not its answer.
 CALLBACK_PARAM_MAX_LENGTH = 2048
 
-public_router = APIRouter(prefix="/api/v1", tags=["sign-in"])
-router = APIRouter(prefix="/api/v1", tags=["account"], dependencies=[SIGNED_IN])
+API_PREFIX = "/api/v1"
+public_router = APIRouter(prefix=API_PREFIX, tags=["sign-in"])
+router = APIRouter(prefix=API_PREFIX, tags=["account"], dependencies=[SIGNED_IN])
 
 
 class OidcConfigOut(BaseModel):
@@ -95,8 +96,8 @@ class SignInMethodsOut(BaseModel):
 @public_router.get("/auth/config")
 async def auth_config(scope: UnitScopeDep) -> AuthConfigOut:
     """How people may sign in here beyond passwords and passkeys."""
-    external = await scope.get(ExternalSignIn | None)  # type: ignore[arg-type]
-    return AuthConfigOut(oidc=None if external is None else OidcConfigOut(name=external.provider.name))
+    external = await scope.get(ExternalSignIn)
+    return AuthConfigOut(oidc=None if external.provider is None else OidcConfigOut(name=external.name))
 
 
 @public_router.post("/auth/oidc:sign-in")
@@ -118,7 +119,9 @@ async def start_oidc_invitation(
     return await _started(scope, response, started)
 
 
-@public_router.get("/auth/oidc/callback", response_class=RedirectResponse, status_code=status.HTTP_303_SEE_OTHER)
+@public_router.get(
+    OIDC_CALLBACK_PATH.removeprefix(API_PREFIX), response_class=RedirectResponse, status_code=status.HTTP_303_SEE_OTHER
+)
 async def oidc_callback(
     request: Request,
     scope: UnitScopeDep,

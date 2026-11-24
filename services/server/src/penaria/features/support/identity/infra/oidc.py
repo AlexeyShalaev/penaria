@@ -5,7 +5,6 @@ reads the provider's errors and checks the discovery document; joserfc, authlib'
 ID token's signature against the provider's keys and its claims.
 """
 
-import asyncio
 import time
 from typing import Any
 
@@ -31,11 +30,8 @@ DEFAULT_ALGORITHM = "RS256"
 
 
 class AuthlibOidcProvider:
-    def __init__(
-        self, *, issuer: str, name: str, client_id: str, client_secret: str, scopes: str, redirect_uri: str
-    ) -> None:
+    def __init__(self, *, issuer: str, client_id: str, client_secret: str, scopes: str, redirect_uri: str) -> None:
         self._issuer = issuer
-        self._name = name
         self._client_id = client_id
         self._client_secret = client_secret
         self._scopes = scopes
@@ -43,15 +39,10 @@ class AuthlibOidcProvider:
         self._metadata: dict[str, Any] | None = None
         self._metadata_read_at = 0.0
         self._keys: KeySet | None = None
-        self._lock = asyncio.Lock()
 
     @property
     def issuer(self) -> str:
         return self._issuer
-
-    @property
-    def name(self) -> str:
-        return self._name
 
     async def authorization_url(self, *, state: str, nonce: str, code_verifier: str, reauthenticate: bool) -> str:
         metadata = await self._discover()
@@ -80,6 +71,11 @@ class AuthlibOidcProvider:
         algorithms = sorted(
             ALGORITHMS.intersection(metadata.get("id_token_signing_alg_values_supported", [DEFAULT_ALGORITHM]))
         )
+        # joserfc reads an empty list as "any algorithm", the client secret's HS256 among them.
+        if not algorithms:
+            raise ProviderError(
+                "the provider signs ID tokens with no algorithm Penaria accepts (RS256, ES256 and the like)"
+            )
         try:
             return jwt.decode(id_token, await self._signing_keys(metadata, refresh=False), algorithms=algorithms).claims
         except JoseError:
@@ -114,42 +110,44 @@ class AuthlibOidcProvider:
             email_verified=claims.get("email_verified") is True,
             name=_text(claims.get("name")),
             preferred_username=_text(claims.get("preferred_username")),
+            auth_time=claims["auth_time"] if isinstance(claims.get("auth_time"), int) else None,
         )
 
+    # Requests that find the cache empty or stale each read the document, rather than waiting in turn behind
+    # one that may hang on an unreachable provider until its deadline; the copies they keep are the same.
     async def _discover(self) -> dict[str, Any]:
-        async with self._lock:
-            if self._metadata is not None and time.monotonic() - self._metadata_read_at < DISCOVERY_TTL_SECONDS:
-                return self._metadata
-            url = self._issuer.rstrip("/") + "/.well-known/openid-configuration"
-            document = await self._get_json(url)
-            metadata = OpenIDProviderMetadata(document)
-            try:
-                metadata.validate_issuer()
-                metadata.validate_authorization_endpoint()
-                metadata.validate_token_endpoint()
-                metadata.validate_jwks_uri()
-            except ValueError as exc:
-                raise ProviderError(f"the provider's discovery document is not usable: {exc}") from exc
-            # The issuer it names must be the one configured, exactly (OpenID Connect Discovery, 4.3).
-            if document["issuer"] != self._issuer:
-                raise ProviderError(
-                    f"the provider names its issuer {document['issuer']!r}, not {self._issuer!r}: "
-                    "set PENARIA_AUTH__OIDC__ISSUER to exactly that"
-                )
-            self._metadata, self._metadata_read_at = document, time.monotonic()
-            return document
+        if self._metadata is not None and time.monotonic() - self._metadata_read_at < DISCOVERY_TTL_SECONDS:
+            return self._metadata
+        url = self._issuer.rstrip("/") + "/.well-known/openid-configuration"
+        document = await self._get_json(url)
+        metadata = OpenIDProviderMetadata(document)
+        try:
+            metadata.validate_issuer()
+            metadata.validate_authorization_endpoint()
+            metadata.validate_token_endpoint()
+            metadata.validate_jwks_uri()
+        except ValueError as exc:
+            raise ProviderError(f"the provider's discovery document is not usable: {exc}") from exc
+        # The issuer it names must be the one configured, exactly (OpenID Connect Discovery, 4.3).
+        if document["issuer"] != self._issuer:
+            raise ProviderError(
+                f"the provider names its issuer {document['issuer']!r}, not {self._issuer!r}: "
+                "set PENARIA_AUTH__OIDC__ISSUER to exactly that"
+            )
+        self._metadata, self._metadata_read_at = document, time.monotonic()
+        return document
 
     async def _signing_keys(self, metadata: dict[str, Any], *, refresh: bool) -> KeySet:
-        async with self._lock:
-            if self._keys is not None and not refresh:
-                return self._keys
-            document = await self._get_json(metadata["jwks_uri"])
-            try:
-                keys = KeySet.import_key_set(document)  # type: ignore[arg-type]
-            except (JoseError, ValueError, KeyError, TypeError) as exc:
-                raise ProviderError(f"the provider's keys cannot be read: {exc}") from exc
-            self._keys = keys
-            return keys
+        if self._keys is not None and not refresh:
+            return self._keys
+        document = await self._get_json(metadata["jwks_uri"])
+        try:
+            # joserfc types the set as its own TypedDict; the provider's JSON is checked by the import itself.
+            keys = KeySet.import_key_set(document)  # type: ignore[arg-type]
+        except (JoseError, ValueError, KeyError, TypeError) as exc:
+            raise ProviderError(f"the provider's keys cannot be read: {exc}") from exc
+        self._keys = keys
+        return keys
 
     async def _get_json(self, url: str) -> dict[str, Any]:
         try:

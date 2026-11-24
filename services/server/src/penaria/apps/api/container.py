@@ -176,19 +176,18 @@ class SettingsProvider(Provider):
         )
 
     @provide
-    def external_sign_in(self) -> ExternalSignIn | None:
+    def external_sign_in(self) -> ExternalSignIn:
         oidc = self._settings.auth.oidc
         if oidc is None:
-            return None
+            return ExternalSignIn()
         provider = AuthlibOidcProvider(
             issuer=oidc.issuer,
-            name=oidc.display_name,
             client_id=oidc.client_id,
             client_secret=oidc.client_secret.get_secret_value(),
             scopes=oidc.scopes,
             redirect_uri=self._settings.oidc_redirect_uri,
         )
-        return ExternalSignIn(provider=provider, allow_sign_up=oidc.allow_sign_up)
+        return ExternalSignIn(provider=provider, name=oidc.display_name, allow_sign_up=oidc.allow_sign_up)
 
     @provide
     def operator_mailbox(self) -> OperatorMailbox:
