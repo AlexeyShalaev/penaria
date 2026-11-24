@@ -41,7 +41,7 @@ describe('TwoStepSignIn', () => {
 
     fireEvent.click(await screen.findByRole('button', {name: 'Set up an authenticator app'}))
     expect(await screen.findByRole('img', {name: 'QR code for the authenticator app'})).toBeVisible()
-    expect(screen.getByLabelText('Key')).toHaveValue('JBSW Y3DP EHPK 3PXP JBSW Y3DP EHPK 3PXP')
+    expect(screen.getByLabelText('Key')).toHaveTextContent('JBSW Y3DP EHPK 3PXP JBSW Y3DP EHPK 3PXP')
     fireEvent.change(screen.getByLabelText('Code from the app'), {target: {value: '123 456'}})
     fireEvent.click(screen.getByRole('button', {name: 'Turn on'}))
 

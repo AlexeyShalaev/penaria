@@ -1,5 +1,5 @@
 import {Smartphone} from 'lucide-react'
-import {type FormEvent, useState} from 'react'
+import {type FormEvent, useId, useState} from 'react'
 import {useTranslation} from 'react-i18next'
 
 import {useConfirmTotp, useRecentSignIn, useStartTotp} from '@/entities/account'
@@ -22,6 +22,7 @@ export function TotpSetup(props: {onStarted?: () => void; onDone?: () => void; o
   const confirm = useConfirmTotp()
   const recent = useRecentSignIn()
   const [code, setCode] = useState('')
+  const keyId = useId()
 
   const begin = () => {
     confirm.reset()
@@ -61,14 +62,14 @@ export function TotpSetup(props: {onStarted?: () => void; onDone?: () => void; o
       <form className={styles.side} onSubmit={submit}>
         <FormLayout>
           <p className={styles.text}>{t('twoStep.scan')}</p>
-          <Field label={t('twoStep.key')}>
-            <TextInput
-              className={styles.key}
-              value={groups(secret)}
-              readOnly
-              onFocus={(event) => event.currentTarget.select()}
-            />
-          </Field>
+          <div className={styles.keyField}>
+            <span id={keyId} className={styles.keyLabel}>
+              {t('twoStep.key')}
+            </span>
+            <code className={styles.key} aria-labelledby={keyId}>
+              {groups(secret)}
+            </code>
+          </div>
           <Field label={t('twoStep.code')} hint={t('twoStep.codeHint')}>
             <TextInput
               value={code}

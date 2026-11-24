@@ -25,9 +25,29 @@
   font-size: var(--fs-sm);
 }
 
+.keyField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.keyLabel {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* The whole key, wrapped rather than cut, and selected in one tap to copy. */
 .key {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-sunken);
   font-family: var(--font-mono);
+  font-size: var(--fs-sm);
   letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  user-select: all;
 }
 
 .state {
