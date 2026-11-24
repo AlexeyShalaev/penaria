@@ -1,10 +1,10 @@
 # Core model
 
-- **Status:** proposed, waiting for the author's review.
+- **Status:** accepted on 2026-11-24, with two changes from review: roles are data with permissions chosen per role (section 11.1), and a home may have several owners (section 3).
 - **Date:** 2026-11-24.
 - **Scope:** the data model of the core and the rules every change follows: homes, the entity tree, aspects, relations, provenance, freshness, the journal, changesets and access.
 
-This document turns the core sections of the v0.3 product design into decisions precise enough to write the schema and the first use cases from. It keeps v0.3's decisions and fills the gaps v0.3 left open. Each new decision is marked **Proposed** and listed again in [Open questions](#16-open-questions). The examples are synthetic.
+This document turns the core sections of the v0.3 product design into decisions precise enough to write the schema and the first use cases from. It keeps v0.3's decisions and fills the gaps v0.3 left open. Each decision that goes beyond v0.3 is marked **Decision** and listed again in [Decisions beyond v0.3](#16-decisions-beyond-v03). The examples are synthetic.
 
 Not covered here; each gets a document of its own when its code is near:
 
@@ -51,7 +51,13 @@ A home is the unit of tenancy. A family may keep a flat and a country house in o
 
 A home has a name, a time zone (IANA, such as `Europe/Moscow`), and a default locale for content the system writes (notifications, generated task titles). The interface language is each user's own setting.
 
-**Proposed: ownership is a grant, not a column.** v0.3 has both `homes.owner_id` and an `owner` role, which can disagree. This design keeps only the grant. A home has exactly one active `owner` grant, scoped to the whole home and without an expiry. A partial unique index enforces it. Transferring ownership is one command that swaps the two grants.
+**Decision: ownership is a grant, and a home may have several owners.** v0.3 has both `homes.owner_id` and an `owner` role, which can disagree. This design keeps only the grant.
+
+- An owner grant goes to a user, covers the whole home and never expires.
+- Owners are equal. Only an owner can add or remove owners, and only an owner can delete the home.
+- A home always has at least one owner. Revoking an owner grant, or an owner leaving, is refused for the last one. The command locks the home row (`SELECT ... FOR UPDATE`), so two owners cannot remove each other at the same moment.
+- A new owner is invited and becomes an owner only on accepting. **Transferring ownership** is the same invitation marked "leave when accepted": once the new owner accepts, the old owner's grant is revoked in the same transaction.
+- Adding or removing an owner is journalled, and every owner is notified.
 
 ## 4. The entity tree
 
@@ -70,9 +76,9 @@ The tree answers one question: **where is it physically?** Logical groupings, su
 | `device` | A thing a module can talk to: an actuator, a sensor, a mirror | `space`, `container`, `item` |
 | `system` | A logical engineering system: heating, water supply, ventilation | `property`, `building`, `system` |
 
-**Proposed: a system has no physical children.** A boiler is a `device` in the boiler room. The heating system is a `system` under the building. The boiler joins the system through a `part_of` relation. v0.3 left this open. With this rule a boiler has one place in the tree, and a system can still list its parts and own maintenance schedules.
+**Decision: a system has no physical children.** A boiler is a `device` in the boiler room. The heating system is a `system` under the building. The boiler joins the system through a `part_of` relation. v0.3 left this open. With this rule a boiler has one place in the tree, and a system can still list its parts and own maintenance schedules.
 
-**Proposed: containment is checked in the domain.** The database checks only that `kind` is one of the eight values. Moving an entity re-checks the rule for the new parent. The rules can then be relaxed later without a migration.
+**Decision: containment is checked in the domain.** The database checks only that `kind` is one of the eight values. Moving an entity re-checks the rule for the new parent. The rules can then be relaxed later without a migration.
 
 The tree is at most 32 levels deep. A deeper move is refused. That is far beyond any real home, and it bounds every query on a path.
 
@@ -95,9 +101,9 @@ The tree is at most 32 levels deep. A deeper move is refused. That is far beyond
 | `version` | Increases on every change to this row or its aspects; used for optimistic locking |
 | `created_at`, `updated_at` | Timestamps, UTC |
 
-**Proposed: archiving is not a status.** v0.3 mixed both into one `status` column. An archived drill may also have been lent when it was archived, and restoring it should bring back how it was. So `status` describes where a live entity is, and `archived_at` says whether it is still part of the home. Archived entities are never deleted, because "you threw it out in March" is a useful answer. Archived entities and their subtrees are hidden by default and can be included on request.
+**Decision: archiving is not a status.** v0.3 mixed both into one `status` column. An archived drill may also have been lent when it was archived, and restoring it should bring back how it was. So `status` describes where a live entity is, and `archived_at` says whether it is still part of the home. Archived entities are never deleted, because "you threw it out in March" is a useful answer. Archived entities and their subtrees are hidden by default and can be included on request.
 
-Deleting an entity for real is an admin command for mistakes, such as a duplicate created by hand. It is allowed only while nothing references the entity, and it is journalled like any other command.
+Deleting an entity for real is a command for mistakes, needing `home.manage`, such as a duplicate created by hand. It is allowed only while nothing references the entity, and it is journalled like any other command.
 
 ### 4.3 The path
 
@@ -127,7 +133,7 @@ An aspect type is declared in code, by the core or by a module's manifest, and r
 
 An entity has at most one aspect of each type. Several values of one kind, such as two warranties, are an array inside the aspect.
 
-**Proposed: schemas carry i18n keys, not labels.** The web app builds forms from aspect schemas, and the UI has no hard-coded strings. A schema therefore names a key, such as `"x-i18n": "aspect.core.purchase.price"`, and the owning code ships the `en` and `ru` texts. The rule is the same for the core and for modules.
+**Decision: schemas carry i18n keys, not labels.** The web app builds forms from aspect schemas, and the UI has no hard-coded strings. A schema therefore names a key, such as `"x-i18n": "aspect.core.purchase.price"`, and the owning code ships the `en` and `ru` texts. The rule is the same for the core and for modules.
 
 ### 5.2 Validation and new versions
 
@@ -140,7 +146,7 @@ Writes always store the current version. A schema never goes back a version.
 
 ### 5.3 When a module is switched off
 
-Its aspects stay in the database: hidden in the interface, read-only, and back when the module is switched on again. Removing a module's data from a home is an explicit admin command, which goes through a changeset so it can be reviewed and reverted.
+Its aspects stay in the database: hidden in the interface, read-only, and back when the module is switched on again. Removing a module's data from a home is an explicit command, needing `modules.manage`, which goes through a changeset so it can be reviewed and reverted.
 
 ### 5.4 The first core aspects
 
@@ -182,7 +188,7 @@ The core relation types:
 
 Modules add types under their namespace, such as `knx.group_link`.
 
-**Proposed: relations link entities only.** v0.3 also had `documented_by`, `serviced_by` and `lent_to`, but their targets are not entities:
+**Decision: relations link entities only.** v0.3 also had `documented_by`, `serviced_by` and `lent_to`, but their targets are not entities:
 
 - a document is an attachment, which already points at its entity;
 - people and contacts are not things in the house.
@@ -200,7 +206,7 @@ Every field that holds a value can say where the value came from. A provenance r
 
 A direct edit by a person records `source=user`, `status=confirmed`. A field with no record is treated the same way. Most fields are typed in by hand, and an extra row for each would add nothing.
 
-**Proposed: one value per field, and conflicts live in changesets.** v0.3 says the system shows both values when an import disagrees with a person. It does not say where the second value is kept. This design keeps it as a proposal:
+**Decision: one value per field, and conflicts live in changesets.** v0.3 says the system shows both values when an import disagrees with a person. It does not say where the second value is kept. This design keeps it as a proposal:
 
 1. The value in the aspect is the accepted one, and its provenance row describes it.
 2. A source may overwrite a value directly only if its status is at least as strong as the current one. The order is `confirmed` > `observed` > `assumed` > `unknown`; within the same status, the newer value wins.
@@ -227,7 +233,7 @@ Verifying sets `verified_at` and `verified_by`. These verify an entity:
 - confirming the entity in a photo revision;
 - moving it, because whoever moves a thing has seen it.
 
-**Proposed thresholds:**
+**Thresholds:**
 
 | Kind | Threshold |
 |---|---|
@@ -253,7 +259,7 @@ Commands from HTTP take an `Idempotency-Key`, so a retry from a phone on a bad c
 
 ### 9.2 State first, journal beside it
 
-**Proposed: the core is not event-sourced.** The tables hold the current state, and that state is the truth. The journal is an append-only record of what happened, used for:
+**Decision: the core is not event-sourced.** The tables hold the current state, and that state is the truth. The journal is an append-only record of what happened, used for:
 
 - the history of an entity ("where was the vacuum cleaner in March?");
 - the audit trail ("who turned the light on at 3 a.m.?");
@@ -276,13 +282,13 @@ Rebuilding state by replaying events would make every schema change a replay pro
 | `at` | When it happened, UTC |
 | `payload` | What changed. Ids, plus the names they had then, so history reads well after a rename |
 
-The core event types: `entity.created`, `entity.updated`, `entity.moved`, `entity.verified`, `entity.archived`, `entity.restored`, `aspect.set`, `aspect.removed`, `relation.added`, `relation.removed`, `changeset.opened`, `changeset.applied`, `changeset.rejected`, `changeset.reverted`, `grant.created`, `grant.revoked`. Other contexts add theirs, such as `task.done`, in their own designs.
+The core event types: `entity.created`, `entity.updated`, `entity.moved`, `entity.verified`, `entity.archived`, `entity.restored`, `aspect.set`, `aspect.removed`, `relation.added`, `relation.removed`, `changeset.opened`, `changeset.applied`, `changeset.rejected`, `changeset.reverted`, `role.created`, `role.updated`, `role.deleted`, `grant.created`, `grant.revoked`. Other contexts add theirs, such as `task.done`, in their own designs.
 
 ### 9.4 Reading the journal safely
 
 `seq` comes from a sequence, and transactions commit in a different order than they take numbers. A reader that asks for "everything after 41" can see 43 while 42 is still uncommitted, move its cursor to 43 and lose 42 for ever. Every reader of the journal, the hub sync included, avoids this the same way.
 
-**Proposed: readers follow transactions, not the sequence.**
+**Decision: readers follow transactions, not the sequence.**
 
 - Every event row stores the id of the transaction that wrote it: `tx xid8 DEFAULT pg_current_xact_id()`.
 - A reader reads only rows whose transaction is older than the oldest transaction still running: `tx < pg_snapshot_xmin(pg_current_snapshot())`. Such a transaction has finished, so no row of it can appear later.
@@ -292,7 +298,7 @@ A row skipped this way is never lost: it is read on the next pass, once its tran
 
 ### 9.5 Where the journal lives
 
-**Proposed: in a schema of its own, `journal`, owned by the platform context.** v0.3 put it in `registry`, but identity, changes and maintenance write events too. Every context appends through one port from the shared kernel. The table is partitioned by month on `at` with pg-partsmith, and kept for ever by default: history is a feature, and a home's export includes it.
+**Decision: in a schema of its own, `journal`, owned by the platform context.** v0.3 put it in `registry`, but identity, changes and maintenance write events too. Every context appends through one port from the shared kernel. The table is partitioned by month on `at` with pg-partsmith, and kept for ever by default: history is a feature, and a home's export includes it.
 
 ## 10. Changesets
 
@@ -329,43 +335,65 @@ draft --> open --> applied | partially_applied | rejected
 
 - Small edits by a person in the interface, such as a rename or a move, apply directly without a changeset.
 - Auto-accept is off by default. A home can turn it on for chosen origins above a confidence threshold. Auto-accepted operations are still journalled with their changeset.
-- Proposing needs `edit`, or the `entities:propose` permission of a module. Applying needs `edit` on the target of every operation.
+- Proposing needs `entities.edit`, or the `entities:propose` permission of a module. Deciding needs `changes.apply` on the target of every operation.
 - The changes context owns changesets but never writes entities itself. It calls the registry's public application port, so the registry stays the only writer of the tree.
 
 ## 11. Access
 
 ### 11.1 Roles and permissions
 
-The permissions are those of v0.3:
+**Decision: roles are data.** Each home has its own roles, and a role is a set of permissions an admin ticks as checkboxes. A new home starts with five preset roles. They can be edited, except `owner`, and more roles can be added.
 
-- `view`;
-- `edit`;
-- `control`;
-- `control_critical`;
-- `tasks`;
-- `private`;
-- `admin`.
+The permissions refine v0.3's seven:
 
-**Proposed: a fixed set of roles for v1.** Custom roles come later, if households ask for them.
+| Permission | Allows | Implies |
+|---|---|---|
+| `entities.view` | See entities, their aspects, files and history; ask the assistant about them | |
+| `entities.view_private` | See private entities and their subtrees (section 11.3) | `entities.view` |
+| `entities.edit` | Create, change, move, archive and verify entities; propose changesets | `entities.view` |
+| `changes.apply` | Accept, reject and revert changesets | `entities.edit` |
+| `devices.control` | Use devices' ordinary capabilities | `entities.view` |
+| `devices.control_critical` | Heating, locks, gates, pumps | `devices.control` |
+| `tasks.view` | See tasks | `entities.view` |
+| `tasks.complete` | Mark tasks done, with evidence | `tasks.view` |
+| `tasks.manage` | Create and change schedules | `tasks.complete` |
+| `members.manage` | Invite people, give and revoke grants | `entities.view` |
+| `roles.manage` | Create, change and delete roles | `members.manage` |
+| `modules.manage` | Switch modules on and off, change their settings, pair hubs | `entities.view` |
+| `home.manage` | The home's name, time zone and settings, auto-accept rules | `entities.view` |
 
-| Role | Permissions |
-|---|---|
-| `owner` | all; the only role that can delete the home or transfer ownership |
-| `admin` | all |
-| `family` | view, edit, control, tasks |
-| `guest` | view (guest-visible only, section 11.3), control |
-| `contractor` | view, tasks |
+- A role is saved with its implied permissions added, so the check is a plain lookup. The interface ticks the implied boxes as you tick the others.
+- **Modules add permissions** under their namespace, declared in the manifest, such as `knx.bus_monitor`. They appear as more checkboxes.
+- **No escalation.** A person can give a grant only with a role whose permissions they hold themselves over that scope, and can put into a role only permissions they hold over the whole home. Owners hold everything.
+
+A role also has:
+
+- **all permissions**: the role holds every permission, including those that modules add later;
+- **guest view**: the role sees only guest-visible entities (section 11.3);
+- **expiry required**: every grant with this role must end, after a default duration the inviter can change.
+
+The presets:
+
+| Role | Permissions | Other |
+|---|---|---|
+| `owner` | All permissions, plus the owner's rights: owners and deleting the home (section 3) | Cannot be edited or deleted |
+| `admin` | All permissions | |
+| `family` | `entities.edit`, `changes.apply`, `devices.control`, `tasks.complete` | |
+| `guest` | `entities.view`, `devices.control` | Guest view; expiry required, three days by default |
+| `contractor` | `tasks.complete` | |
+
+A preset keeps a translated name until someone renames it. A role with active grants cannot be deleted. A changed role applies at once to everyone who holds it, and the change is journalled.
 
 ### 11.2 Grants
 
-A grant gives a role to a principal (`user`, `device` or `link`) over a scope, which is an entity's subtree or the whole home. It may have an expiry; for a guest the expiry is required and defaults to three days. A grant is revoked by setting `revoked_at`, never by deleting the row, so the journal can explain past access.
+A grant gives a role to a principal (`user`, `device` or `link`) over a scope, which is an entity's subtree or the whole home. It may have an expiry, and must have one if its role requires it or if the principal is a guest link. A grant is revoked by setting `revoked_at`, never by deleting the row, so the journal can explain past access.
 
-What a principal may do with an entity is the union of the permissions of its active grants whose scope contains the entity: the whole home, or `scope.path @> entity.path`. The query for one entity reads that entity's path once. A list query puts the same condition into SQL, so access is filtered in the query, not after it.
+What a principal may do with an entity is the union of the permissions of the roles of its active grants whose scope contains the entity: the whole home, or `scope.path @> entity.path`. The query for one entity reads that entity's path once. A list query puts the same condition into SQL, so access is filtered in the query, not after it.
 
 ### 11.3 Privacy
 
-- **`private`** hides an entity and its whole subtree from anyone without the `private` permission. A safe hides what is inside it. `core.address` and plan sheets are private whatever their entity's flag.
-- **`guest_visible`** marks what a guest may see. A guest sees guest-visible entities in their scope, plus only the names of their ancestors, so that "the towels are in the bathroom cabinet" makes sense.
+- **`private`** hides an entity and its whole subtree from anyone without `entities.view_private`. A safe hides what is inside it. `core.address` and plan sheets are private whatever their entity's flag.
+- **`guest_visible`** marks what a role with guest view may see. Such a role sees guest-visible entities in its scope, plus only the names of their ancestors, so that "the towels are in the bathroom cabinet" makes sense.
 - **`normal`** is everything else.
 
 The assistant and search apply the same rules before the model sees anything.
@@ -374,7 +402,7 @@ The assistant and search apply the same rules before the model sees anything.
 
 A module or the assistant acts on behalf of a person. What it may do is the intersection of that person's permissions and the permissions the module's manifest declares. A hub automation acts on behalf of the person who created it, and it stops when that person loses access.
 
-**Proposed: no row-level security in PostgreSQL for v1.** Access is checked in the application layer, in one place per query, and tested there. Row-level security as a second line of defence would complicate pooled connections and migrations. It can be added later without changing the model.
+**Decision: no row-level security in PostgreSQL for v1.** Access is checked in the application layer, in one place per query, and tested there. Row-level security as a second line of defence would complicate pooled connections and migrations. It can be added later without changing the model.
 
 ## 12. Storage layout
 
@@ -392,19 +420,31 @@ CREATE TABLE identity.homes (
   id uuid PRIMARY KEY, name text NOT NULL, timezone text NOT NULL, locale text NOT NULL,
   settings jsonb NOT NULL DEFAULT '{}'
 );
+CREATE TABLE identity.roles (
+  id uuid PRIMARY KEY,
+  home_id uuid NOT NULL REFERENCES identity.homes ON DELETE CASCADE,
+  preset text CHECK (preset IN ('owner', 'admin', 'family', 'guest', 'contractor')),
+  name text,                                    -- NULL: the preset's translated name
+  all_permissions bool NOT NULL DEFAULT false,
+  permissions text[] NOT NULL DEFAULT '{}',     -- implied permissions included
+  guest_view bool NOT NULL DEFAULT false,
+  expiry_required bool NOT NULL DEFAULT false, default_duration interval,
+  CHECK (preset IS NOT NULL OR name IS NOT NULL),
+  CHECK (NOT expiry_required OR default_duration IS NOT NULL),
+  UNIQUE (home_id, preset)
+);
+CREATE UNIQUE INDEX ON identity.roles (home_id, lower(name)) WHERE name IS NOT NULL;
 CREATE TABLE identity.grants (
   id uuid PRIMARY KEY,
   home_id uuid NOT NULL REFERENCES identity.homes ON DELETE CASCADE,
   principal_type text NOT NULL CHECK (principal_type IN ('user', 'device', 'link')),
   principal_id uuid NOT NULL,
-  role text NOT NULL CHECK (role IN ('owner', 'admin', 'family', 'guest', 'contractor')),
+  role_id uuid NOT NULL REFERENCES identity.roles,
   scope_entity_id uuid REFERENCES registry.entities,  -- NULL: the whole home
   expires_at timestamptz, revoked_at timestamptz,
-  CHECK (role <> 'owner' OR (scope_entity_id IS NULL AND expires_at IS NULL)),
-  CHECK (role <> 'guest' OR expires_at IS NOT NULL)
+  CHECK (principal_type <> 'link' OR expires_at IS NOT NULL)
+  -- owner and "expiry required" rules depend on the role: checked in the domain
 );
-CREATE UNIQUE INDEX grants_one_owner ON identity.grants (home_id)
-  WHERE role = 'owner' AND revoked_at IS NULL;
 CREATE INDEX ON identity.grants (principal_id) WHERE revoked_at IS NULL;
 
 -- registry
@@ -511,7 +551,7 @@ How the schema maps onto aggregates:
 | Context | Package | Holds |
 |---|---|---|
 | registry | `features/core/registry` | entities, the tree, aspects, relations, provenance, freshness |
-| identity | `features/support/identity` | users, homes, grants, the access check |
+| identity | `features/support/identity` | users, homes, roles, grants, the access check |
 | changes | `features/support/changes` | changesets, duplicate detection, apply and revert |
 | platform | `features/support/platform` | the journal, aspect and relation type registration, modules later |
 | shared kernel | `features/shared` | ids, `Actor`, `Kind`, permission names, the journal port, the access port |
@@ -525,7 +565,9 @@ Inside each feature the layers are `api -> use_cases -> domain`, with `infra` im
 | "Where is the vacuum cleaner?" | Trigram and full-text match on name and aliases, then `path` gives "House › Ground floor › Storage room", with freshness from `verified_at` |
 | Enter a room from a photo in ten minutes | The assistant builds one changeset of `create_entity` and `set_aspect` operations with `photo_ai`/`observed` provenance; the person ticks them |
 | Find the washing machine's warranty and receipt | `core.warranty` and `core.purchase` on the item; the receipt is an attachment |
-| Give a guest access for the weekend | A `guest` grant on the house, expiring Sunday evening; only guest-visible entities show |
+| Give a guest access for the weekend | A grant with the `guest` role on the house, expiring Sunday evening; only guest-visible entities show |
+| Let an electrician into the distribution board only | A grant with the `contractor` role, or a custom role, scoped to the board's subtree |
+| Hand the country house to a son | An owner invitation marked "leave when accepted" |
 | An ETS import that disagrees with a hand-entered model | The import's value is weaker than `confirmed`, so it becomes an open operation shown on the field |
 | A switched-off KNX module | `knx.*` aspects hidden but kept; the actuator is still an item in the distribution board |
 
@@ -535,27 +577,27 @@ Inside each feature the layers are `api -> use_cases -> domain`, with `infra` im
    - PostgreSQL through sqlalchemy-foundation-kit, and Alembic migrations tested with alembic-gauntlet in CI;
    - the `identity`, `registry` and `journal` schemas from section 12;
    - a development stack in `scripts/dev` with PostgreSQL and S3.
-2. **The first use cases:** create a home with its owner grant, and create, move, rename, archive and verify entities, with journal events and access checks.
+2. **The first use cases:** create a home with its preset roles and owner grant, and create, move, rename, archive and verify entities, with journal events and access checks.
 3. **Designs of their own** for documents, the module manifest and access/sign-in, before their code.
 
-## 16. Open questions
+## 16. Decisions beyond v0.3
 
-Every **Proposed** decision above, in one list, with the recommendation:
+The author accepted every decision below on 2026-11-24, two of them with changes.
 
-| # | Question | Recommendation |
+| # | Decision | Section |
 |---|---|---|
-| 1 | Ownership as a grant, with no `owner_id` on the home (section 3) | Yes: one source of truth |
-| 2 | Containment rules per kind, checked in the domain (4.1) | Yes, with the table as written |
-| 3 | A system is logical; parts join it by `part_of` (4.1) | Yes: the tree stays physical |
-| 4 | Archiving apart from `status` (4.2) | Yes |
-| 5 | Relations link entities only; loans and contacts go elsewhere (6) | Yes |
-| 6 | One value per field; disagreements are changeset operations (7) | Yes: one review flow for everything |
-| 7 | Freshness thresholds per kind (8) | Start with the table; tune on real use |
-| 8 | State-based core with a journal, not event sourcing (9.2) | Yes |
-| 9 | The journal's own schema; readers follow `(tx, seq)` below the oldest running transaction (9.4, 9.5) | Yes |
-| 10 | Fixed roles for v1 (11.1) | Yes |
-| 11 | No row-level security for v1 (11.4) | Yes; revisit before a hosted offering |
-| 12 | Schemas carry i18n keys (5.1) | Yes: the interface has no hard-coded strings |
-| 13 | Internal event delivery | Let internal handlers read the journal by cursor, like a log. The outbox then only serves external brokers, and Kafka stays optional. This is the open question about events; it gets its own short design |
-| 14 | A shared product catalogue (one card for identical items) | Not in v1: `core.product` on each item; a catalogue can come later without changing entities |
-| 15 | Custom fields defined by a household | Not in v1: aspect types are declared in code only |
+| 1 | Ownership is a grant; a home may have several owners, always at least one; transfer is an invitation that revokes the old owner on acceptance | 3 |
+| 2 | Containment rules per kind, checked in the domain | 4.1 |
+| 3 | A system is logical; its parts join it by `part_of`, so the tree stays physical | 4.1 |
+| 4 | Archiving is separate from `status` | 4.2 |
+| 5 | Schemas carry i18n keys, not labels | 5.1 |
+| 6 | Relations link entities only; loans are an aspect, contacts belong to maintenance | 6 |
+| 7 | One value per field; disagreements are changeset operations | 7 |
+| 8 | Freshness thresholds per kind, to be tuned on real use | 8 |
+| 9 | State-based core with a journal, not event sourcing | 9.2 |
+| 10 | Journal readers follow `(tx, seq)` below the oldest running transaction | 9.4 |
+| 11 | The journal has its own schema, owned by the platform context | 9.5 |
+| 12 | Roles are data: permissions as checkboxes, five presets per home, modules add permissions, no escalation | 11.1 |
+| 13 | No row-level security in v1; revisit before a hosted offering | 11.4 |
+| 14 | Internal handlers read the journal by cursor, like a log; the outbox serves only external brokers, so Kafka stays optional. A short design of its own follows | 9.4 |
+| 15 | Not in v1: a shared product catalogue (`core.product` sits on each item) and custom fields defined by a household (aspect types are declared in code) | 5 |

@@ -4,4 +4,4 @@ A new area of Penaria gets a design here before its code. A design states the de
 
 | Document | Covers | Status |
 |---|---|---|
-| [Core model](core-model.md) | Homes, the entity tree, aspects, relations, provenance, freshness, the journal, changesets, access | Proposed |
+| [Core model](core-model.md) | Homes, the entity tree, aspects, relations, provenance, freshness, the journal, changesets, access | Accepted |
