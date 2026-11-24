@@ -6,6 +6,7 @@ import {Link, useNavigate, useParams} from 'react-router'
 import {NewAccountForm} from '@/features/accept-invitation'
 import {SignInForm} from '@/features/sign-in'
 import {useAccount, useSignOut} from '@/entities/account'
+import {useHomesChanged} from '@/entities/home'
 import {
   type InvitationPreview,
   placeLabel,
@@ -83,14 +84,19 @@ function Accept(props: {token: string; name: string}) {
   const {t} = useTranslation()
   const navigate = useNavigate()
   const accept = useAcceptInvitation(props.token)
+  const homesChanged = useHomesChanged()
   const signOut = useSignOut()
+  const joined = async (homeId: string) => {
+    await homesChanged()
+    navigate(`/homes/${homeId}/places`)
+  }
   return (
     <div className={styles.accept}>
       <p className={styles.text}>{t('invitation.signedInAs', {name: props.name})}</p>
       {accept.isError && <FormError>{describeError(accept.error, t)}</FormError>}
       <Button
         disabled={accept.isPending}
-        onClick={() => accept.mutate(undefined, {onSuccess: (home) => navigate(`/homes/${home.id}/places`)})}
+        onClick={() => accept.mutate(undefined, {onSuccess: (home) => void joined(home.id)})}
       >
         {t('invitation.accept')}
       </Button>
@@ -119,7 +125,7 @@ function SignInOrCreate(props: {token: string}) {
       {mode === 'new' ? (
         <>
           <p className={styles.text}>{t('invitation.newAccountText')}</p>
-          <NewAccountForm token={props.token} onJoined={(_, homeId) => navigate(`/homes/${homeId}/places`)} />
+          <NewAccountForm token={props.token} onJoined={(homeId) => navigate(`/homes/${homeId}/places`)} />
         </>
       ) : (
         <>

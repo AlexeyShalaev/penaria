@@ -928,16 +928,6 @@
             "title": "Created At",
             "type": "string"
           },
-          "created_by": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PersonOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "expires_at": {
             "format": "date-time",
             "title": "Expires At",
@@ -948,6 +938,16 @@
             "format": "uuid",
             "title": "Grant Id",
             "type": "string"
+          },
+          "granted_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "format": "uuid",
@@ -993,7 +993,7 @@
           "expires_at",
           "created_at",
           "last_used_at",
-          "created_by"
+          "granted_by"
         ],
         "title": "GuestLinkOut",
         "type": "object"
@@ -1143,19 +1143,6 @@
       },
       "InvitationIn": {
         "properties": {
-          "expires_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "When the link stops working; 7 days by default",
-            "title": "Expires At"
-          },
           "grant_expires_at": {
             "anyOf": [
               {
@@ -1192,6 +1179,14 @@
             ],
             "description": "Omit for the whole home",
             "title": "Scope Entity Id"
+          },
+          "valid_days": {
+            "default": 7,
+            "description": "For how many days the link works",
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Valid Days",
+            "type": "integer"
           }
         },
         "required": [

@@ -3,17 +3,20 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
-from penaria.features.shared.access import Access, Permission
+from penaria.features.shared.access import Access, Permission, PermissionDeniedError
 from penaria.features.shared.errors import ConflictError, ForbiddenError, InvalidError, NotFoundError
 from penaria.features.shared.ids import new_id
 from penaria.features.support.identity.domain.models import Grant, PrincipalType, Role
 from penaria.features.support.identity.domain.permissions import GUEST_GRANT_DURATION
 from penaria.features.support.identity.domain.sessions import new_secret
 
-INVITATION_LIFETIME = timedelta(days=7)
-INVITATION_MAX_LIFETIME = timedelta(days=30)
+INVITATION_DAYS = 7
+INVITATION_MAX_DAYS = 30
+# A guest link is for a visit; one meant to outlast a season is a family member's access instead.
+LINK_MAX_LIFETIME = timedelta(days=90)
 LINK_NAME_MAX_LENGTH = 100
 
 
@@ -39,6 +42,12 @@ class LastOwnerError(ConflictError):
     """A home always has at least one owner (core-model.md, 3)."""
 
     code = "last_owner"
+
+
+class OwnGrantError(ForbiddenError):
+    """Nobody changes their own access: a time-limited admin must not lift their own end."""
+
+    code = "own_grant"
 
 
 class OwnerGrantError(ConflictError):
@@ -89,26 +98,54 @@ class GuestLinkEndedError(ConflictError):
     code = "guest_link_ended"
 
 
+class RevokeReason(StrEnum):
+    REVOKED = "revoked"
+    LEFT = "left"
+    TRANSFERRED = "transferred"
+    # A guest link whose maker can no longer give it, having lost or changed their own access.
+    GIVER_LOST_ACCESS = "giver_lost_access"
+
+
 def check_can_give(access: Access, role: Role) -> None:
     """Refuse giving ``role`` by someone with ``access`` over the place: no escalation (core-model.md, 11.1).
 
     The same rule decides who may change or take back a grant: only someone who could have given it.
     """
+    refusal = _refusal(access, role)
+    if refusal is not None:
+        raise refusal
+
+
+def can_give(access: Access, role: Role) -> bool:
+    return _refusal(access, role) is None
+
+
+def _refusal(access: Access, role: Role) -> ForbiddenError | None:
     if not access.can(Permission.MEMBERS_MANAGE):
-        raise ForbiddenError(
-            f"needs {Permission.MEMBERS_MANAGE.value}",
-            code="permission_denied",
-            params={"permission": Permission.MEMBERS_MANAGE},
-        )
+        return PermissionDeniedError(Permission.MEMBERS_MANAGE)
     if role.is_owner and not access.owner:
-        raise EscalationError("only an owner can make or remove owners")
+        return EscalationError("only an owner can make or remove owners")
     if role.all_permissions and not access.all_permissions:
-        raise EscalationError("this role holds every permission, and you do not")
+        return EscalationError("this role holds every permission, and you do not")
     missing = set() if access.all_permissions else role.permissions - access.permissions
     if missing:
-        raise EscalationError("this role holds permissions you do not", params={"permissions": sorted(missing)})
+        return EscalationError("this role holds permissions you do not", params={"permissions": sorted(missing)})
     if access.guest_view and not role.guest_view:
-        raise EscalationError("this role sees more than guest-visible things, and you do not")
+        return EscalationError("this role sees more than guest-visible things, and you do not")
+    return None
+
+
+def grant_payload(grant: Grant, role: Role) -> dict[str, Any]:
+    """A grant as the journal records it."""
+    return {
+        "grant_id": str(grant.id),
+        "principal_type": grant.principal_type.value,
+        "principal_id": str(grant.principal_id),
+        "role_id": str(role.id),
+        "role": role.preset.value if role.preset else role.name,
+        "scope_entity_id": None if grant.scope_entity_id is None else str(grant.scope_entity_id),
+        "expires_at": None if grant.expires_at is None else grant.expires_at.isoformat(),
+    }
 
 
 def check_scope(role: Role, scope_entity_id: UUID | None) -> None:
@@ -140,11 +177,20 @@ def changed_expiry(role: Role, requested: datetime | None, now: datetime) -> dat
 
 
 def link_expiry(role: Role, requested: datetime | None, now: datetime) -> datetime:
-    """A guest link always ends: as requested, or after the role's default (three days for the guest role)."""
+    """A guest link always ends, within 90 days: as requested, or after the role's default.
+
+    A role with guest view need not require an end of the accounts that hold it, yet a link it is
+    given through always ends: three days, as the guest preset's, when the role names no default.
+    """
     if not role.guest_view:
         raise InvalidGrantError("a guest link gives a role with guest view", params={"field": "role_id"})
     if requested is None:
         return now + (role.default_duration or GUEST_GRANT_DURATION)
+    if requested > now + LINK_MAX_LIFETIME:
+        raise InvalidGrantError(
+            "a guest link works for 90 days at most",
+            params={"field": "expires_at", "max_days": LINK_MAX_LIFETIME.days},
+        )
     return _future(requested, now, "expires_at")
 
 
@@ -191,7 +237,7 @@ class Invitation:
         role: Role,
         created_by: UUID,
         scope_entity_id: UUID | None,
-        expires_at: datetime | None,
+        valid_days: int,
         grant_expires_at: datetime | None,
         leave_when_accepted: bool,
         now: datetime,
@@ -203,12 +249,13 @@ class Invitation:
                 "only an owner invitation can transfer ownership", params={"field": "leave_when_accepted"}
             )
         grant_ends = grant_expiry(role, grant_expires_at, now, field="grant_expires_at")
-        ends = now + INVITATION_LIFETIME if expires_at is None else _future(expires_at, now, "expires_at")
-        if ends > now + INVITATION_MAX_LIFETIME:
+        # Days rather than a moment, so a browser whose clock runs ahead is not refused the longest choice.
+        if not 1 <= valid_days <= INVITATION_MAX_DAYS:
             raise InvalidGrantError(
-                "an invitation is valid for 30 days at most",
-                params={"field": "expires_at", "max_days": INVITATION_MAX_LIFETIME.days},
+                "an invitation is valid for 1 to 30 days",
+                params={"field": "valid_days", "max_days": INVITATION_MAX_DAYS},
             )
+        ends = now + timedelta(days=valid_days)
         # An invitation never outlives the access it gives.
         if grant_ends is not None:
             ends = min(ends, grant_ends)

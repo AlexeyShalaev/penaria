@@ -1,4 +1,4 @@
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {useMutation, useQuery} from '@tanstack/react-query'
 
 import {api, type Schemas, unwrap} from '@/shared/api'
 
@@ -14,19 +14,9 @@ export function useInvitationPreview(token: string) {
   })
 }
 
-// The new home joins the switcher's list.
-function useJoined() {
-  const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({queryKey: ['homes'], exact: true})
-}
-
 /** Accepts the invitation with the signed-in account; the answer is the home now joined. */
 export function useAcceptInvitation(token: string) {
-  const joined = useJoined()
-  return useMutation({
-    mutationFn: () => unwrap(api.POST('/api/v1/invitations:accept', {body: {token}})),
-    onSuccess: joined,
-  })
+  return useMutation({mutationFn: () => unwrap(api.POST('/api/v1/invitations:accept', {body: {token}}))})
 }
 
 /** Makes an account through the invitation and accepts it; the new account is signed in. */

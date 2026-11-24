@@ -50,11 +50,11 @@ export function GuestOpenPage() {
   }
   return (
     <main className={styles.narrow}>
-      {open.isError ? (
+      {open.isError || account.isError ? (
         <Card className={styles.ended}>
           <IconTile icon={DoorOpen} size="lg" />
           <PageTitle>{t('guest.cannotOpen')}</PageTitle>
-          <p className={styles.muted}>{describeError(open.error, t)}</p>
+          <p className={styles.muted}>{describeError(open.error ?? account.error, t)}</p>
         </Card>
       ) : (
         <Loading label={t('guest.opening')} />

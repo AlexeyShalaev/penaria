@@ -105,8 +105,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("SET LOCAL lock_timeout = '5s'")
-    # Guests' sessions have no account to keep them under.
+    # Guests' sessions have no account to keep them under, and guest links lose their tokens: they end.
     op.execute("DELETE FROM identity_sessions WHERE user_id IS NULL")
+    op.execute("UPDATE identity_grants SET revoked_at = now() WHERE principal_type = 'link' AND revoked_at IS NULL")
     op.drop_constraint(op.f("identity_sessions_grant_id_fkey"), "identity_sessions", type_="foreignkey")
     op.drop_index(
         "identity_sessions_grant_id_idx", table_name="identity_sessions", postgresql_where=sa.text("revoked_at IS NULL")

@@ -1,5 +1,6 @@
 """People in a home through the HTTP API: invitations, members, ownership and guest links."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -7,13 +8,14 @@ from uuid import UUID
 import httpx
 import pytest
 from servicewright.adapters.dishka import DishkaContainer
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from penaria.features.support.identity.domain.models import Role
 from penaria.features.support.identity.infra.orm import GrantDB, InvitationDB, SessionDB
+from penaria.features.support.identity.use_cases import guest_links
 from penaria.features.support.platform.infra.orm import JournalEventDB
 from tests.integration.conftest import PUBLIC_URL
-from tests.integration.helpers import NewClient, uow_of
+from tests.integration.helpers import NewClient, shape, uow_of
 
 pytestmark = pytest.mark.integration
 
@@ -74,8 +76,14 @@ async def join(new_client: NewClient, token: str, username: str) -> httpx.AsyncC
     return client
 
 
-async def member(api: httpx.AsyncClient, new_client: NewClient, home_id: str, preset: str, username: str) -> Any:
-    return await join(new_client, await invite(api, home_id, preset), username)
+async def member(
+    api: httpx.AsyncClient, new_client: NewClient, home_id: str, preset: str, username: str, **body: Any
+) -> httpx.AsyncClient:
+    return await join(new_client, await invite(api, home_id, preset, **body), username)
+
+
+def later(**delta: float) -> str:
+    return (datetime.now(UTC) + timedelta(**delta)).isoformat()
 
 
 async def age_sign_ins(container: DishkaContainer) -> None:
@@ -230,12 +238,20 @@ async def test_an_invitation_lasts_seven_days_and_never_outlives_its_access(api:
 async def test_an_invitation_lasting_longer_than_thirty_days_is_refused(api: httpx.AsyncClient) -> None:
     ids = await make_home(api)
     role_id = (await roles(api, ids["home"]))["family"]
-    too_late = (datetime.now(UTC) + timedelta(days=31)).isoformat()
 
-    response = await api.post(f"/homes/{ids['home']}/invitations", json={"role_id": role_id, "expires_at": too_late})
+    response = await api.post(f"/homes/{ids['home']}/invitations", json={"role_id": role_id, "valid_days": 31})
 
-    assert response.status_code == 400
-    assert response.json()["params"] == {"field": "expires_at", "max_days": 30}
+    assert (response.status_code, response.json()["code"]) == (422, "validation_error")
+
+
+async def test_an_invitation_lasts_the_days_asked_for(api: httpx.AsyncClient) -> None:
+    ids = await make_home(api)
+    await invite(api, ids["home"], "family", valid_days=30)
+
+    [pending] = await ok(await api.get(f"/homes/{ids['home']}/invitations"))
+
+    lasts = datetime.fromisoformat(pending["expires_at"]) - datetime.fromisoformat(pending["created_at"])
+    assert lasts == timedelta(days=30)
 
 
 async def test_a_guest_invitation_gives_access_that_ends(api: httpx.AsyncClient, new_client: NewClient) -> None:
@@ -360,8 +376,8 @@ async def test_a_role_beyond_your_own_permissions_is_refused(
     assert allowed.status_code == 201
 
 
-async def invite_role(api: httpx.AsyncClient, home_id: str, role_id: str) -> str:
-    created = await ok(await api.post(f"/homes/{home_id}/invitations", json={"role_id": role_id}), 201)
+async def invite_role(api: httpx.AsyncClient, home_id: str, role_id: str, **body: Any) -> str:
+    created = await ok(await api.post(f"/homes/{home_id}/invitations", json={"role_id": role_id, **body}), 201)
     return str(created["url"]).removeprefix(f"{PUBLIC_URL}/invite/")
 
 
@@ -470,14 +486,25 @@ async def test_changing_a_role_needs_a_recent_sign_in(
     assert response.json()["code"] == "recent_sign_in_required"
 
 
-async def test_an_owners_grant_is_not_changed(api: httpx.AsyncClient) -> None:
+async def test_an_owners_grant_is_not_changed(api: httpx.AsyncClient, new_client: NewClient) -> None:
     ids = await make_home(api)
-    [me] = await ok(await api.get(f"/homes/{ids['home']}/members"))
+    await member(api, new_client, ids["home"], "owner", "second")
+    [theirs] = [m for m in await ok(await api.get(f"/homes/{ids['home']}/members")) if not m["you"]]
     family = (await roles(api, ids["home"]))["family"]
 
-    response = await api.patch(f"/homes/{ids['home']}/grants/{me['grants'][0]['id']}", json={"role_id": family})
+    response = await api.patch(f"/homes/{ids['home']}/grants/{theirs['grants'][0]['id']}", json={"role_id": family})
 
-    assert response.json()["code"] == "owner_grant"
+    assert (response.status_code, response.json()["code"]) == (409, "owner_grant")
+
+
+async def test_nobody_changes_their_own_access(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    admin = await member(api, new_client, ids["home"], "admin", "anna", grant_expires_at=later(days=2))
+    [mine] = [m for m in await ok(await admin.get(f"/homes/{ids['home']}/members")) if m["you"]]
+
+    response = await admin.patch(f"/homes/{ids['home']}/grants/{mine['grants'][0]['id']}", json={"expires_at": None})
+
+    assert (response.status_code, response.json()["code"]) == (403, "own_grant")
 
 
 async def test_revoking_a_members_access(api: httpx.AsyncClient, new_client: NewClient) -> None:
@@ -725,3 +752,439 @@ async def test_a_guest_session_is_not_an_account_session(api: httpx.AsyncClient)
     response = await api.get("/guest")
 
     assert response.status_code == 401
+
+
+# Between homes
+
+
+async def strangers_home(api: httpx.AsyncClient, new_client: NewClient, home_id: str) -> tuple[httpx.AsyncClient, str]:
+    """Another account and a home of its own, where the owner of the tests holds nothing."""
+    bob = await member(api, new_client, home_id, "family", "bob")
+    other = await make_home(bob, "Bob's flat")
+    return bob, other["home"]
+
+
+async def test_ids_of_another_home_reach_nothing(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    bob, bobs_home = await strangers_home(api, new_client, ids["home"])
+    await invite(bob, bobs_home, "guest")
+    [bobs_member] = await ok(await bob.get(f"/homes/{bobs_home}/members"))
+    bobs_grant = bobs_member["grants"][0]["id"]
+    [bobs_invitation] = await ok(await bob.get(f"/homes/{bobs_home}/invitations"))
+    bobs_family = (await roles(bob, bobs_home))["family"]
+    [_, mine] = await ok(await api.get(f"/homes/{ids['home']}/members"))
+    home = ids["home"]
+
+    responses = [
+        await api.patch(f"/homes/{home}/grants/{bobs_grant}", json={"expires_at": None}),
+        await api.delete(f"/homes/{home}/grants/{bobs_grant}"),
+        await api.delete(f"/homes/{home}/invitations/{bobs_invitation['id']}"),
+        await api.post(f"/homes/{home}/invitations", json={"role_id": bobs_family}),
+        await api.patch(f"/homes/{home}/grants/{mine['grants'][0]['id']}", json={"role_id": bobs_family}),
+    ]
+
+    assert [(r.status_code, r.json()["code"]) for r in responses] == [
+        (404, "grant_not_found"),
+        (404, "grant_not_found"),
+        (404, "invitation_not_found"),
+        (404, "role_not_found"),
+        (404, "role_not_found"),
+    ]
+    assert len(await ok(await bob.get(f"/homes/{bobs_home}/invitations"))) == 1
+    assert await home_names(bob) == ["Bob's flat", "Country house"]
+
+
+# Who may revoke an invitation
+
+
+async def test_revoking_invitations_follows_who_could_have_made_them(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    maria = await member(api, new_client, ids["home"], "family", "maria")
+    admin = await member(api, new_client, ids["home"], "admin", "anna")
+    await invite(api, ids["home"], "contractor")
+    [pending] = await ok(await api.get(f"/homes/{ids['home']}/invitations"))
+    url = f"/homes/{ids['home']}/invitations/{pending['id']}"
+
+    by_family = await maria.delete(url)
+    by_admin = await admin.delete(url)
+    again = await api.delete(url)
+
+    assert (by_family.status_code, by_family.json()["code"]) == (403, "permission_denied")
+    assert by_admin.status_code == 204
+    assert (again.status_code, again.json()["code"]) == (409, "invitation_revoked")
+
+
+async def test_an_accepted_invitation_cannot_be_revoked(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    ids = await make_home(api)
+    await join(new_client, await invite(api, ids["home"], "family"), "maria")
+    async with (await uow_of(container)).query() as tx:
+        invitation_id = await tx.session.scalar(select(InvitationDB.id))
+
+    response = await api.delete(f"/homes/{ids['home']}/invitations/{invitation_id}")
+
+    assert (response.status_code, response.json()["code"]) == (409, "invitation_used")
+
+
+# Access over one place
+
+
+async def doorkeeper_over_the_house(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer, ids: dict[str, str]
+) -> tuple[httpx.AsyncClient, Role]:
+    """Someone who manages people, and sees things, only in the house."""
+    keeper_role = Role(
+        home_id=UUID(ids["home"]),
+        preset=None,
+        name="Doorkeeper",
+        all_permissions=False,
+        permissions=frozenset({"members.manage", "entities.view"}),
+    )
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.roles.add_all([keeper_role])
+    token = await invite_role(api, ids["home"], str(keeper_role.id), scope_entity_id=ids["house"])
+    return await join(new_client, token, "keeper"), keeper_role
+
+
+async def test_access_over_a_place_gives_access_only_inside_it(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    ids = await make_home(api)
+    keeper, keeper_role = await doorkeeper_over_the_house(api, new_client, container, ids)
+    body = {"role_id": str(keeper_role.id)}
+    url = f"/homes/{ids['home']}/invitations"
+
+    inside = await keeper.post(url, json={**body, "scope_entity_id": ids["kitchen"]})
+    whole_home = await keeper.post(url, json=body)
+    members = await keeper.get(f"/homes/{ids['home']}/members")
+
+    assert inside.status_code == 201
+    assert (whole_home.status_code, whole_home.json()["code"]) == (403, "permission_denied")
+    assert (members.status_code, members.json()["code"]) == (403, "permission_denied")
+
+
+# Changing a grant
+
+
+async def maria_as(api: httpx.AsyncClient, new_client: NewClient, home_id: str, preset: str, **body: Any) -> str:
+    """Maria joins with the role; the id of her grant."""
+    await member(api, new_client, home_id, preset, "maria", **body)
+    [m] = [m for m in await ok(await api.get(f"/homes/{home_id}/members")) if m["person"]["username"] == "maria"]
+    return str(m["grants"][0]["id"])
+
+
+async def grant_of(api: httpx.AsyncClient, home_id: str, grant_id: str) -> dict[str, Any]:
+    grants = [g for m in await ok(await api.get(f"/homes/{home_id}/members")) for g in m["grants"]]
+    [grant] = [g for g in grants if g["id"] == grant_id]
+    return dict(grant)
+
+
+async def test_a_patch_changes_only_what_it_names(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    grant_id = await maria_as(api, new_client, ids["home"], "family", scope_entity_id=ids["kitchen"])
+    url = f"/homes/{ids['home']}/grants/{grant_id}"
+    contractor = (await roles(api, ids["home"]))["contractor"]
+
+    await ok(await api.patch(url, json={"role_id": contractor}), 204)
+    kept = await grant_of(api, ids["home"], grant_id)
+    await ok(await api.patch(url, json={"scope_entity_id": None}), 204)
+    whole = await grant_of(api, ids["home"], grant_id)
+
+    assert (kept["role"]["preset"], kept["scope"]["id"], kept["expires_at"]) == ("contractor", ids["kitchen"], None)
+    assert (whole["role"]["preset"], whole["scope"]) == ("contractor", None)
+
+
+async def test_a_role_that_must_end_gets_its_default_end(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    grant_id = await maria_as(api, new_client, ids["home"], "family")
+    guest = (await roles(api, ids["home"]))["guest"]
+
+    await ok(await api.patch(f"/homes/{ids['home']}/grants/{grant_id}", json={"role_id": guest}), 204)
+
+    ends = datetime.fromisoformat((await grant_of(api, ids["home"], grant_id))["expires_at"])
+    assert timedelta(days=3) - timedelta(minutes=1) < ends - datetime.now(UTC) <= timedelta(days=3)
+
+
+async def test_the_end_of_a_role_that_must_end_cannot_be_cleared(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    grant_id = await maria_as(api, new_client, ids["home"], "guest")
+
+    response = await api.patch(f"/homes/{ids['home']}/grants/{grant_id}", json={"expires_at": None})
+
+    assert (response.status_code, response.json()["params"]) == (400, {"field": "expires_at"})
+
+
+async def test_a_guest_links_grant_is_not_changed(api: httpx.AsyncClient) -> None:
+    ids = await make_home(api)
+    await guest_link(api, ids["home"])
+    [link] = await ok(await api.get(f"/homes/{ids['home']}/guest-links"))
+
+    response = await api.patch(f"/homes/{ids['home']}/grants/{link['grant_id']}", json={"expires_at": later(days=1)})
+
+    assert (response.status_code, response.json()["params"]) == (400, {"field": "grant"})
+
+
+# Races
+
+
+async def test_of_two_admins_demoting_each_other_one_wins(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    anna = await member(api, new_client, ids["home"], "admin", "anna")
+    boris = await member(api, new_client, ids["home"], "admin", "boris")
+    members = {
+        m["person"]["username"]: m["grants"][0]["id"] for m in await ok(await api.get(f"/homes/{ids['home']}/members"))
+    }
+    family = {"role_id": (await roles(api, ids["home"]))["family"]}
+
+    results = await asyncio.gather(
+        anna.patch(f"/homes/{ids['home']}/grants/{members['boris']}", json=family),
+        boris.patch(f"/homes/{ids['home']}/grants/{members['anna']}", json=family),
+    )
+
+    assert sorted(r.status_code for r in results) == [204, 403]
+
+
+async def test_an_invitation_accepted_twice_at_once_gives_one_grant(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    maria = await member(api, new_client, ids["home"], "guest", "maria")
+    other_home_owner, other_home = await strangers_home(api, new_client, ids["home"])
+    token = await invite(other_home_owner, other_home, "family")
+
+    results = await asyncio.gather(
+        maria.post("/invitations:accept", json={"token": token}),
+        api.post("/invitations:accept", json={"token": token}),
+    )
+
+    assert sorted(r.status_code for r in results) == [200, 409]
+
+
+# Leaving
+
+
+async def test_an_owner_leaves_while_another_owner_stays(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    ids = await make_home(api)
+    second = await member(api, new_client, ids["home"], "owner", "second")
+    await age_sign_ins(container)
+
+    too_old = await api.post(f"/homes/{ids['home']}:leave")
+    await ok(await second.post("/me/reauthenticate", json={"password": CHOSEN}), 204)
+    await ok(await second.post(f"/homes/{ids['home']}:leave"), 204)
+
+    assert (too_old.status_code, too_old.json()["code"]) == (403, "recent_sign_in_required")
+    assert await home_names(second) == []
+    assert await home_names(api) == ["Country house"]
+
+
+async def test_leaving_gives_up_every_grant_in_the_home(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    maria = await member(api, new_client, ids["home"], "contractor", "maria", scope_entity_id=ids["kitchen"])
+    await ok(await maria.post("/invitations:accept", json={"token": await invite(api, ids["home"], "guest")}))
+
+    await ok(await maria.post(f"/homes/{ids['home']}:leave"), 204)
+
+    assert await home_names(maria) == []
+    assert [m["person"]["username"] for m in await ok(await api.get(f"/homes/{ids['home']}/members"))] == ["owner"]
+
+
+# Guest links: limits and their makers
+
+
+async def test_guessing_guest_link_tokens_makes_the_address_wait(anonymous: httpx.AsyncClient) -> None:
+    statuses = [(await anonymous.post("/guest-sessions", json={"token": f"guess-{n}"})).status_code for n in range(6)]
+
+    assert statuses == [404, 404, 404, 404, 404, 429]
+
+
+async def test_a_household_opens_a_guest_link_many_times(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    token = await guest_link(api, ids["home"])
+
+    statuses = [(await new_client().post("/guest-sessions", json={"token": token})).status_code for _ in range(7)]
+
+    assert statuses == [200] * 7
+
+
+async def test_reopening_a_guest_link_keeps_the_browsers_session(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    ids = await make_home(api)
+    token = await guest_link(api, ids["home"])
+    guest = new_client()
+
+    for _ in range(3):
+        await ok(await guest.post("/guest-sessions", json={"token": token}))
+
+    async with (await uow_of(container)).query() as tx:
+        guest_sessions = await tx.session.scalar(
+            select(func.count()).select_from(SessionDB).where(SessionDB.grant_id.is_not(None))
+        )
+    assert guest_sessions == 1
+
+
+async def test_a_guest_link_keeps_a_bounded_number_of_visits_open(
+    api: httpx.AsyncClient, new_client: NewClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(guest_links, "GUEST_SESSIONS_MAX", 2)
+    ids = await make_home(api)
+    token = await guest_link(api, ids["home"])
+    first, second, third = new_client(), new_client(), new_client()
+
+    for guest in (first, second, third):
+        await ok(await guest.post("/guest-sessions", json={"token": token}))
+
+    assert [(await guest.get("/guest")).status_code for guest in (first, second, third)] == [401, 200, 200]
+
+
+async def test_a_guest_link_lasts_ninety_days_at_most(api: httpx.AsyncClient) -> None:
+    ids = await make_home(api)
+    guest = (await roles(api, ids["home"]))["guest"]
+
+    response = await api.post(
+        f"/homes/{ids['home']}/guest-links",
+        json={"name": "Summer", "role_id": guest, "expires_at": later(days=91)},
+    )
+
+    assert (response.status_code, response.json()["params"]) == (400, {"field": "expires_at", "max_days": 90})
+
+
+async def test_a_guest_link_ends_when_its_maker_loses_access(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    ids = await make_home(api)
+    admin = await member(api, new_client, ids["home"], "admin", "anna")
+    token = await guest_link(admin, ids["home"])
+    visitor = new_client()
+    await ok(await visitor.post("/guest-sessions", json={"token": token}))
+    [anna] = [m for m in await ok(await api.get(f"/homes/{ids['home']}/members")) if m["person"]["username"] == "anna"]
+
+    await ok(await api.delete(f"/homes/{ids['home']}/grants/{anna['grants'][0]['id']}"), 204)
+
+    assert (await visitor.get("/guest")).status_code == 401
+    assert await ok(await api.get(f"/homes/{ids['home']}/guest-links")) == []
+    assert (await last_events(container, 1))[0][2]["reason"] == "giver_lost_access"
+
+
+# The journal
+
+
+async def last_events(container: DishkaContainer, count: int) -> list[tuple[str, str, dict[str, Any]]]:
+    """The last events, oldest first: their type, actor kind and payload with ids as "uuid"."""
+    async with (await uow_of(container)).query() as tx:
+        rows = list(await tx.session.scalars(select(JournalEventDB).order_by(JournalEventDB.seq.desc()).limit(count)))
+    return [(row.type, row.actor["kind"], shape(row.payload)) for row in reversed(rows)]
+
+
+async def test_a_transfer_is_journalled(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    ids = await make_home(api)
+
+    await join(new_client, await invite(api, ids["home"], "owner", leave_when_accepted=True), "heir")
+
+    events = await last_events(container, 5)
+    owner = {"principal_type": "user", "role": "owner", "scope_entity_id": None, "expires_at": None}
+    assert events[1:4] == [
+        ("invitation.accepted", "user", {"invitation_id": "uuid", "user_id": "uuid", "grant_id": "uuid"}),
+        (
+            "grant.created",
+            "user",
+            {**owner, "grant_id": "uuid", "principal_id": "uuid", "role_id": "uuid", "invitation_id": "uuid"},
+        ),
+        (
+            "grant.revoked",
+            "user",
+            {**owner, "grant_id": "uuid", "principal_id": "uuid", "role_id": "uuid", "reason": "transferred"},
+        ),
+    ]
+
+
+async def test_a_new_home_journals_its_owner_grant_like_any_other(
+    api: httpx.AsyncClient, container: DishkaContainer
+) -> None:
+    await make_home(api)
+
+    [created] = [e for e in await last_events(container, 20) if e[0] == "grant.created"]
+
+    assert created[2] == {
+        "grant_id": "uuid",
+        "principal_type": "user",
+        "principal_id": "uuid",
+        "role_id": "uuid",
+        "role": "owner",
+        "scope_entity_id": None,
+        "expires_at": None,
+    }
+
+
+async def test_revoking_a_guest_link_is_journalled_with_its_visits(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer
+) -> None:
+    ids = await make_home(api)
+    token = await guest_link(api, ids["home"])
+    await ok(await new_client().post("/guest-sessions", json={"token": token}))
+    [link] = await ok(await api.get(f"/homes/{ids['home']}/guest-links"))
+
+    await ok(await api.delete(f"/homes/{ids['home']}/grants/{link['grant_id']}"), 204)
+
+    assert await last_events(container, 1) == [
+        (
+            "guest_link.revoked",
+            "user",
+            {"link_id": "uuid", "grant_id": "uuid", "sessions_ended": 1, "reason": "revoked"},
+        )
+    ]
+
+
+# What a member without private access, and a guest, learn of places
+
+
+async def test_history_leaves_out_private_places(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    safe = await ok(
+        await api.post(
+            f"/homes/{ids['home']}/entities",
+            json={"kind": "container", "name": "Safe", "parent_id": ids["study"], "privacy": "normal"},
+        ),
+        201,
+    )
+    ring = await ok(
+        await api.post(
+            f"/homes/{ids['home']}/entities", json={"kind": "item", "name": "Ring", "parent_id": safe["id"]}
+        ),
+        201,
+    )
+    await ok(await api.post(f"/entities/{ring['id']}:move", json={"parent_id": ids["kitchen"], "version": 1}))
+    maria = await member(api, new_client, ids["home"], "family", "maria")
+
+    history = await ok(await maria.get(f"/entities/{ring['id']}/history"))
+
+    assert [(e["type"], e["payload"].get("parent"), e["payload"].get("from")) for e in history] == [
+        ("entity.moved", None, None),
+        ("entity.created", None, None),
+    ]
+    assert history[0]["payload"]["to"]["name"] == "Kitchen"
+
+
+async def test_a_guest_sees_no_history_and_only_the_names_of_places_on_the_way(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    room = await ok(await api.get(f"/entities/{ids['guest_room']}"))
+    await ok(
+        await api.patch(f"/entities/{ids['guest_room']}", json={"version": room["version"], "aliases": ["spare room"]})
+    )
+    guest = new_client()
+    await ok(await guest.post("/guest-sessions", json={"token": await guest_link(api, ids["home"])}))
+
+    history = await guest.get(f"/entities/{ids['towels']}/history")
+    seen = await ok(await guest.get(f"/entities/{ids['guest_room']}"))
+
+    assert (history.status_code, history.json()["code"]) == (403, "permission_denied")
+    assert (seen["name"], seen["aliases"]) == ("Guest room", [])

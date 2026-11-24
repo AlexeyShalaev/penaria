@@ -14,8 +14,11 @@ from penaria.features.support.identity.domain.members import (
     InvitationRevokedError,
     InvitationState,
     InvitationUsedError,
+    changed_expiry,
     check_can_give,
+    check_link_name,
     grant_expiry,
+    link_expiry,
 )
 from penaria.features.support.identity.domain.models import PrincipalType, Role
 from penaria.features.support.identity.domain.permissions import Preset, with_implied
@@ -103,7 +106,7 @@ def test_an_end_in_the_past_is_refused() -> None:
 def invitation(given: Role, **fields: object) -> tuple[Invitation, str]:
     arguments: dict[str, object] = {
         "scope_entity_id": None,
-        "expires_at": None,
+        "valid_days": 7,
         "grant_expires_at": None,
         "leave_when_accepted": False,
         **fields,
@@ -135,14 +138,14 @@ def test_an_invitation_says_why_it_cannot_be_accepted() -> None:
     used.accepted_at, used.accepted_by = NOW, new_id()
     revoked, _ = invitation(role(Preset.FAMILY))
     revoked.revoked_at = NOW
-    expired, _ = invitation(role(Preset.FAMILY), expires_at=NOW + timedelta(hours=1))
+    expired, _ = invitation(role(Preset.FAMILY), valid_days=1)
 
     with pytest.raises(InvitationUsedError):
         used.check_open(NOW)
     with pytest.raises(InvitationRevokedError):
         revoked.check_open(NOW)
     with pytest.raises(InvitationExpiredError):
-        expired.check_open(NOW + timedelta(hours=1))
+        expired.check_open(NOW + timedelta(days=1))
 
 
 def test_the_grant_of_an_invitation_names_who_gave_it() -> None:
@@ -181,3 +184,28 @@ def test_a_guest_link_needs_a_role_with_guest_view() -> None:
             granted_by=new_id(),
             now=NOW,
         )
+
+
+def test_clearing_the_end_of_a_role_that_must_end_is_refused() -> None:
+    with pytest.raises(InvalidGrantError) as raised:
+        changed_expiry(GUEST, None, NOW)
+
+    assert raised.value.params == {"field": "expires_at"}
+
+
+def test_clearing_the_end_of_another_role_gives_access_without_end() -> None:
+    assert changed_expiry(role(Preset.FAMILY), None, NOW) is None
+
+
+def test_a_guest_link_ends_within_ninety_days() -> None:
+    with pytest.raises(InvalidGrantError) as raised:
+        link_expiry(GUEST, NOW + timedelta(days=91), NOW)
+
+    assert raised.value.params == {"field": "expires_at", "max_days": 90}
+
+
+def test_a_guest_link_without_a_name_is_refused() -> None:
+    with pytest.raises(InvalidGrantError) as raised:
+        check_link_name("   ")
+
+    assert raised.value.params == {"field": "name", "max_length": 100}

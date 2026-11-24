@@ -106,11 +106,9 @@ class CurrentSession:
 class GuestSession:
     """A session opened with a guest link: it acts as the link, within the link's grant."""
 
-    id: UUID
     grant_id: UUID
     link_id: UUID
     home_id: UUID
-    expires_at: datetime
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,6 +1,6 @@
 import {fireEvent, screen, within} from '@testing-library/react'
 import {Route} from 'react-router'
-import {describe, expect, it} from 'vitest'
+import {describe, expect, it, vi} from 'vitest'
 
 import {mockApi, problem} from '@/test/api'
 import {HOME_ID, role, ROLES} from '@/test/fixtures'
@@ -61,25 +61,47 @@ describe('InviteDialog', () => {
     expect(await screen.findByRole('img', {name: 'QR code of the link'})).toBeVisible()
     expect(screen.getByRole('textbox', {name: 'Link'})).toHaveValue(URL)
     expect(screen.getByRole('button', {name: 'Copy link'})).toBeVisible()
-    const body = calls.find((call) => call.method === 'POST')?.body as Record<string, unknown>
-    expect(body).toMatchObject({
+    expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
       role_id: 'role-family',
       scope_entity_id: null,
+      valid_days: 7,
       grant_expires_at: null,
       leave_when_accepted: false,
     })
-    expect(typeof body.expires_at).toBe('string')
   })
 
-  it('asks a guest invitation for the end of access, three days ahead', async () => {
-    mockApi({[`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES})
+  it('asks a guest invitation for the end of access, three days ahead, and a link for thirty days', async () => {
+    vi.setSystemTime(new Date('2026-11-24T10:00:00Z'))
+    const calls = mockApi({
+      [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES,
+      [`POST /api/v1/homes/${HOME_ID}/invitations`]: created('family'),
+    })
     renderDialog(false)
 
     fireEvent.click(await screen.findByRole('radio', {name: /Guest/}))
-
     const ends = screen.getByLabelText('Last day of access')
+    fireEvent.click(screen.getByRole('radio', {name: '30 days'}))
+    fireEvent.click(screen.getByRole('button', {name: 'Make the link'}))
+
     expect(ends).toBeRequired()
-    expect((ends as HTMLInputElement).value).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(ends).toHaveValue('2026-11-27')
+    await screen.findByRole('textbox', {name: 'Link'})
+    // The end of that day in the browser's time zone (Europe/Berlin in the tests).
+    expect(calls.find((call) => call.method === 'POST')?.body).toMatchObject({
+      role_id: 'role-guest',
+      valid_days: 30,
+      grant_expires_at: '2026-11-27T22:59:59.000Z',
+    })
+  })
+
+  it('asks for a place when the invitation covers one place', async () => {
+    mockApi({[`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES, [`GET /api/v1/homes/${HOME_ID}/entities`]: []})
+    renderDialog(false)
+
+    fireEvent.click(await screen.findByRole('radio', {name: 'One place'}))
+    fireEvent.click(screen.getByRole('button', {name: 'Make the link'}))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Pick a place, or choose the whole home.')
   })
 
   it('transfers ownership after the owner confirms it is them', async () => {

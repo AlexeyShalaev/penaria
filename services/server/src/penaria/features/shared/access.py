@@ -7,6 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from penaria.features.shared.actor import Actor
+from penaria.features.shared.errors import ForbiddenError
 
 
 class Permission(StrEnum):
@@ -23,6 +24,13 @@ class Permission(StrEnum):
     ROLES_MANAGE = "roles.manage"
     MODULES_MANAGE = "modules.manage"
     HOME_MANAGE = "home.manage"
+
+
+class PermissionDeniedError(ForbiddenError):
+    code = "permission_denied"
+
+    def __init__(self, permission: Permission, *, where: str = "") -> None:
+        super().__init__(f"needs {permission.value}{where}", params={"permission": permission})
 
 
 @dataclass(frozen=True, slots=True)

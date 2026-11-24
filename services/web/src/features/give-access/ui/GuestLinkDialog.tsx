@@ -60,8 +60,8 @@ function GuestLinkForm(props: {homeId: string; roles: Role[]; onClose: () => voi
     return (
       <FormLayout>
         <p className={styles.text}>
-          {t('guestLink.ready', {
-            where: link.scope ? placeLabel(link.scope.names) : t('people.wholeHome'),
+          {t(link.scope ? 'guestLink.readyPlace' : 'guestLink.readyWhole', {
+            place: link.scope && placeLabel(link.scope.names),
             until: formatDateTime(new Date(link.expires_at), i18n.language),
           })}
         </p>

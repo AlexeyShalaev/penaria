@@ -1052,7 +1052,6 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            created_by: components["schemas"]["PersonOut"] | null;
             /**
              * Expires At
              * Format: date-time
@@ -1064,6 +1063,7 @@ export interface components {
              * @description Revoke it to end the link and every guest's visit
              */
             grant_id: string;
+            granted_by: components["schemas"]["PersonOut"] | null;
             /**
              * Id
              * Format: uuid
@@ -1142,11 +1142,6 @@ export interface components {
         /** InvitationIn */
         InvitationIn: {
             /**
-             * Expires At
-             * @description When the link stops working; 7 days by default
-             */
-            expires_at?: string | null;
-            /**
              * Grant Expires At
              * @description When the access ends; the role's default when it requires an end
              */
@@ -1167,6 +1162,12 @@ export interface components {
              * @description Omit for the whole home
              */
             scope_entity_id?: string | null;
+            /**
+             * Valid Days
+             * @description For how many days the link works
+             * @default 7
+             */
+            valid_days: number;
         };
         /** InvitationOut */
         InvitationOut: {

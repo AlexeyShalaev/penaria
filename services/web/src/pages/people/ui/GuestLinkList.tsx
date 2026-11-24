@@ -1,7 +1,7 @@
 import {Clock} from 'lucide-react'
 import {useTranslation} from 'react-i18next'
 
-import {placeLabel, useGuestLinks, useRevokeGrant} from '@/entities/member'
+import {scopeLabel, useGuestLinks, useRevokeGrant} from '@/entities/member'
 import {describeError} from '@/shared/api'
 import {formatRelative} from '@/shared/lib/time'
 import {Badge, Button, FormError, QueryState} from '@/shared/ui'
@@ -30,9 +30,7 @@ export function GuestLinkList(props: {homeId: string}) {
                       <Badge tone="warn" icon={Clock}>
                         {t('people.endsIn', {when: formatRelative(new Date(link.expires_at), i18n.language)})}
                       </Badge>
-                      <span className={styles.details}>
-                        {link.scope ? placeLabel(link.scope.names) : t('people.wholeHome')}
-                      </span>
+                      <span className={styles.details}>{scopeLabel(link.scope, t)}</span>
                     </span>
                     <span className={styles.details}>
                       {link.last_used_at

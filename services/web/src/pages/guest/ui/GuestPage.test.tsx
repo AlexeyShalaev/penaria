@@ -1,4 +1,4 @@
-import {screen} from '@testing-library/react'
+import {fireEvent, screen} from '@testing-library/react'
 import {Route} from 'react-router'
 import {describe, expect, it} from 'vitest'
 
@@ -47,6 +47,28 @@ describe('GuestOpenPage', () => {
     expect(await screen.findByRole('heading', {name: 'Open as a guest?'})).toBeVisible()
     expect(screen.getByRole('button', {name: 'Sign out and continue as a guest'})).toBeVisible()
     expect(calls.filter((call) => call.method === 'POST')).toEqual([])
+  })
+
+  it('signs a signed-in person out, then opens the link', async () => {
+    let signedIn = true
+    const calls = mockApi({
+      'GET /api/v1/me': () => (signedIn ? account({display_name: 'Alex'}) : problem(401, 'unauthenticated')),
+      'POST /api/v1/sign-out': () => {
+        signedIn = false
+        return new Response(null, {status: 204})
+      },
+      'POST /api/v1/guest-sessions': VISIT,
+      'GET /api/v1/guest': VISIT,
+      [`GET /api/v1/homes/${HOME_ID}/entities`]: [],
+    })
+    renderGuest('/guest/secret')
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Sign out and continue as a guest'}))
+
+    expect(await screen.findByRole('heading', {name: 'Country house'})).toBeVisible()
+    expect(calls.filter((call) => call.path === '/api/v1/guest-sessions').map((call) => call.body)).toEqual([
+      {token: 'secret'},
+    ])
   })
 
   it('says why a link does not open', async () => {

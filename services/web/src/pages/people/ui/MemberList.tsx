@@ -7,9 +7,9 @@ import {useRecentSignIn} from '@/entities/account'
 import {
   type Member,
   type MemberGrant,
-  placeLabel,
   RoleBadge,
   roleName,
+  scopeLabel,
   useMembers,
   useRevokeGrant,
 } from '@/entities/member'
@@ -83,7 +83,7 @@ function GrantLine(props: {
   const {t, i18n} = useTranslation()
   const {grant} = props
   const details = [
-    grant.scope ? placeLabel(grant.scope.names) : t('people.wholeHome'),
+    scopeLabel(grant.scope, t),
     grant.granted_by && t('people.invitedBy', {name: grant.granted_by.display_name}),
   ].filter(Boolean)
   return (

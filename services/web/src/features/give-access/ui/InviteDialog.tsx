@@ -62,7 +62,7 @@ function InviteForm(props: {homeId: string; roles: Role[]; onClose: () => void})
     const body = {
       role_id: role.id,
       scope_entity_id: owner || whole ? null : placeId,
-      expires_at: daysFrom(new Date(), linkDays).toISOString(),
+      valid_days: linkDays,
       grant_expires_at: owner || !ends ? null : endOfDay(ends),
       leave_when_accepted: owner && transfer,
     }
@@ -72,13 +72,12 @@ function InviteForm(props: {homeId: string; roles: Role[]; onClose: () => void})
 
   if (create.data) {
     const {invitation, url} = create.data
-    const where = invitation.scope ? placeLabel(invitation.scope.names) : t('people.wholeHome')
     return (
       <FormLayout>
         <p className={styles.text}>
-          {t('invite.ready', {
+          {t(invitation.scope ? 'invite.readyPlace' : 'invite.readyWhole', {
             role: roleName(invitation.role, t),
-            where,
+            place: invitation.scope && placeLabel(invitation.scope.names),
             until: formatDateTime(new Date(invitation.expires_at), i18n.language),
           })}
         </p>

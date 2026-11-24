@@ -1,6 +1,6 @@
 import {useTranslation} from 'react-i18next'
 
-import {placeLabel, RoleBadge, useInvitations, useRevokeInvitation} from '@/entities/member'
+import {RoleBadge, scopeLabel, useInvitations, useRevokeInvitation} from '@/entities/member'
 import {describeError} from '@/shared/api'
 import {formatRelative} from '@/shared/lib/time'
 import {Badge, Button, FormError, QueryState} from '@/shared/ui'
@@ -26,9 +26,7 @@ export function InvitationList(props: {homeId: string}) {
                   <div className={styles.body}>
                     <span className={styles.grant}>
                       <RoleBadge role={invitation.role} />
-                      <span className={styles.details}>
-                        {invitation.scope ? placeLabel(invitation.scope.names) : t('people.wholeHome')}
-                      </span>
+                      <span className={styles.details}>{scopeLabel(invitation.scope, t)}</span>
                       {invitation.leave_when_accepted && <Badge tone="warn">{t('people.transfer')}</Badge>}
                     </span>
                     <span className={styles.details}>

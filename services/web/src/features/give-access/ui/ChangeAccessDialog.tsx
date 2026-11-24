@@ -2,7 +2,7 @@ import {type FormEvent, useState} from 'react'
 import {useTranslation} from 'react-i18next'
 
 import {useRecentSignIn} from '@/entities/account'
-import {type MemberGrant, type Role, RolePicker, useChangeGrant, useRoles} from '@/entities/member'
+import {type GrantChanges, type MemberGrant, type Role, RolePicker, useChangeGrant, useRoles} from '@/entities/member'
 import {describeError} from '@/shared/api'
 import {Button, Dialog, FormActions, FormError, FormLayout, QueryState} from '@/shared/ui'
 
@@ -34,7 +34,8 @@ function ChangeForm(props: {homeId: string; grant: MemberGrant; roles: Role[]; o
   const [role, setRole] = useState(() => props.roles.find((r) => r.id === props.grant.role.id) ?? props.roles[0])
   const [whole, setWhole] = useState(props.grant.scope === null)
   const [placeId, setPlaceId] = useState(props.grant.scope?.id ?? null)
-  const [ends, setEnds] = useState(props.grant.expires_at ? toDateInput(new Date(props.grant.expires_at)) : '')
+  const initialEnds = props.grant.expires_at ? toDateInput(new Date(props.grant.expires_at)) : ''
+  const [ends, setEnds] = useState(initialEnds)
   const [problem, setProblem] = useState<string | null>(null)
 
   const pickRole = (picked: Role) => {
@@ -49,11 +50,13 @@ function ChangeForm(props: {homeId: string; grant: MemberGrant; roles: Role[]; o
     const missingPlace = !whole && !placeId
     setProblem(missingPlace ? t('people.pickPlace') : null)
     if (missingPlace) return
-    const changes = {
-      role_id: role.id,
-      scope_entity_id: whole ? null : placeId,
-      expires_at: ends ? endOfDay(ends) : null,
-    }
+    // Only what the person changed: an end left as it was keeps its exact time, a place left as it
+    // was is not checked again.
+    const scope = whole ? null : placeId
+    const changes: GrantChanges = {}
+    if (role.id !== props.grant.role.id) changes.role_id = role.id
+    if (scope !== (props.grant.scope?.id ?? null)) changes.scope_entity_id = scope
+    if (ends !== initialEnds) changes.expires_at = ends ? endOfDay(ends) : null
     const send = () =>
       change.mutate({grantId: props.grant.id, changes}, {onSuccess: props.onClose, onError: recent.retryOnError(send)})
     send()

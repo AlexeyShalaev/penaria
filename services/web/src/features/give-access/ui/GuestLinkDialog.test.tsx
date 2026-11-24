@@ -24,7 +24,7 @@ describe('GuestLinkDialog', () => {
           expires_at: '2026-11-27T10:00:00Z',
           created_at: '2026-11-24T10:00:00Z',
           last_used_at: null,
-          created_by: null,
+          granted_by: null,
         },
         url: URL,
       },

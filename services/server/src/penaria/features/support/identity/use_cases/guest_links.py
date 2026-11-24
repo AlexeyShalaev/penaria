@@ -6,7 +6,6 @@ from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
-from penaria.features.shared.access import AccessPolicy
 from penaria.features.shared.actor import Actor
 from penaria.features.shared.journal import Event
 from penaria.features.shared.places import Place, PlaceDirectory
@@ -14,22 +13,27 @@ from penaria.features.support.identity.domain.members import (
     GuestLink,
     GuestLinkEndedError,
     GuestLinkNotFoundError,
+    Token,
     check_can_give,
+    grant_payload,
 )
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, GuestSession, Session, hash_token
-from penaria.features.support.identity.domain.throttle import secret_link_key
-from penaria.features.support.identity.use_cases.attempts import count_attempt
+from penaria.features.support.identity.use_cases.attempts import find_by_secret
 from penaria.features.support.identity.use_cases.members import (
-    access_at,
+    access_in,
     check_place,
-    grant_payload,
+    place_for,
     place_of,
     require_manager,
     require_member,
     role_in,
 )
+
+# Guest sessions one link keeps open at once; opening it again beyond that ends the oldest. A visit is
+# a handful of phones, so this only stops a loop from piling up sessions.
+GUEST_SESSIONS_MAX = 50
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,9 +55,8 @@ class GuestView:
 
 
 class CreateGuestLink:
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, places: PlaceDirectory) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
 
     async def execute(
@@ -72,10 +75,9 @@ class CreateGuestLink:
         async with self._uow.query() as tx:
             await require_member(tx, actor, home_id, now)
             role = role_in(await tx.roles.get_many({role_id}), role_id, home_id)
-            creator = (await tx.users.get_many({current.user_id}))[current.user_id]
-        scope_ids = set() if scope_entity_id is None else {scope_entity_id}
-        scope = check_place(await self._places.find(scope_ids), scope_entity_id, home_id)
-        check_can_give(await access_at(self._access, actor, home_id, scope), role)
+            creator = await tx.users.get(current.user_id)
+        found = await self._places.find(set() if scope_entity_id is None else {scope_entity_id})
+        scope = check_place(found, scope_entity_id, home_id)
         link, token = GuestLink.create(
             home_id=home_id,
             role=role,
@@ -86,6 +88,9 @@ class CreateGuestLink:
             now=now,
         )
         async with self._uow.transaction() as tx:
+            # Under the lock that taking the creator's access back takes, so their links end with it.
+            await tx.homes.lock(home_id)
+            check_can_give(await access_in(tx, actor, home_id, scope, now), role)
             await tx.grants.add(link.grant)
             await tx.tokens.add(link.token)
             await tx.journal.append(
@@ -104,15 +109,14 @@ class CreateGuestLink:
 class ListGuestLinks:
     """The home's guest links that still open; for those who manage its people."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, places: PlaceDirectory) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
 
-    async def execute(self, actor: Actor, home_id: UUID) -> list[GuestLinkView]:
+    async def execute(self, current: CurrentSession, home_id: UUID) -> list[GuestLinkView]:
         now = datetime.now(UTC)
-        await require_manager(self._uow, self._access, actor, home_id, now)
         async with self._uow.query() as tx:
+            await require_manager(tx, Actor.user(current.user_id), home_id, now)
             links = await tx.tokens.links_in(home_id, now)
             roles = await tx.roles.get_many({link.grant.role_id for link in links})
             users = await tx.users.get_many({link.grant.granted_by for link in links if link.grant.granted_by})
@@ -135,24 +139,27 @@ class OpenGuestLink:
         self._uow = uow
         self._places = places
 
-    async def execute(self, token: str, client: Client) -> tuple[GuestView, str]:
-        """What the guest sees of the visit, and the token of their session's cookie."""
-        key = secret_link_key(client.ip)
-        keys = [] if key is None else [key]
+    async def execute(self, token: str, client: Client, session_token: str | None) -> tuple[GuestView, str]:
+        """What the guest sees of the visit, and the token of their session's cookie.
+
+        ``session_token`` is the browser's cookie: a browser already on this visit keeps its session.
+        """
+        found = await find_by_secret(
+            self._uow,
+            client,
+            lambda tx: _link_token(tx, token),
+            GuestLinkNotFoundError("this guest link does not work: check it, or ask your hosts for a new one"),
+        )
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
-            await count_attempt(tx, keys, now)
-        # Committed before anything is checked, so an unknown token stays counted.
-        async with self._uow.transaction() as tx:
-            found = await tx.tokens.by_token_hash(hash_token(token))
-            if found is None or found.principal_type is not PrincipalType.LINK:
-                raise GuestLinkNotFoundError("this guest link does not work: check it, or ask your hosts for a new one")
-            await tx.failures.uncount(keys)
             grant = _the_grant(await tx.grants.for_principal(PrincipalType.LINK, found.principal_id))
             if found.revoked_at is not None or not grant.is_active(now):
                 raise GuestLinkEndedError("this guest link has ended: ask your hosts for a new one")
-            session, session_token = Session.start_guest(grant.id, client, now)
+            if session_token is not None and await _visiting(tx, session_token, grant, now):
+                return await guest_view(self._uow, self._places, grant, found.name), session_token
+            session, new_token = Session.start_guest(grant.id, client, now)
             await tx.sessions.add(session)
+            await tx.sessions.trim_for_grant(grant.id, GUEST_SESSIONS_MAX, now)
             await tx.tokens.used(found.id, now)
             await tx.journal.append(
                 [
@@ -164,7 +171,7 @@ class OpenGuestLink:
                     )
                 ]
             )
-        return await guest_view(self._uow, self._places, grant, found.name), session_token
+        return await guest_view(self._uow, self._places, grant, found.name), new_token
 
 
 class GetGuestView:
@@ -174,10 +181,10 @@ class GetGuestView:
 
     async def execute(self, guest: GuestSession) -> GuestView:
         async with self._uow.query() as tx:
-            grant = _the_grant(await tx.grants.for_principal(PrincipalType.LINK, guest.link_id))
+            grant = await tx.grants.get(guest.home_id, guest.grant_id)
             token = await tx.tokens.for_principal(PrincipalType.LINK, guest.link_id)
-        if token is None:
-            raise RuntimeError(f"the guest link ({guest.link_id}) has no token")
+        if grant is None or token is None:
+            raise RuntimeError(f"the guest link ({guest.link_id}) of an open guest session is gone")
         return await guest_view(self._uow, self._places, grant, token.name)
 
 
@@ -190,8 +197,19 @@ async def guest_view(
         home = await tx.homes.get(grant.home_id)
     if home is None:
         raise RuntimeError(f"the home ({grant.home_id}) of a guest link does not exist")
-    found = await places.find(set() if grant.scope_entity_id is None else {grant.scope_entity_id})
-    return GuestView(home=home, name=name, expires_at=grant.expires_at, scope=place_of(found, grant.scope_entity_id))
+    scope = await place_for(places, grant.scope_entity_id)
+    return GuestView(home=home, name=name, expires_at=grant.expires_at, scope=scope)
+
+
+async def _link_token(tx: IdentityTransaction, token: str) -> Token | None:
+    found = await tx.tokens.by_token_hash(hash_token(token))
+    return found if found is not None and found.principal_type is PrincipalType.LINK else None
+
+
+async def _visiting(tx: IdentityTransaction, session_token: str, grant: Grant, now: datetime) -> bool:
+    """Whether the browser's session is an open one of this very link."""
+    found = await tx.sessions.by_token_hash(hash_token(session_token))
+    return found is not None and found[0].grant_id == grant.id and found[0].is_active(now)
 
 
 def _the_grant(grants: list[Grant]) -> Grant:

@@ -22,6 +22,7 @@ describe('describeEvent', () => {
     ['entity.created', {kind: 'property', name: 'Flat', parent: null}, ['Added']],
     ['entity.moved', {name: 'Drill', from: STORAGE, to: KITCHEN}, ['Moved from Storage room to Kitchen']],
     ['entity.moved', {name: 'Drill', from: null, to: KITCHEN}, ['Moved to Kitchen']],
+    ['entity.moved', {name: 'Drill', from: KITCHEN, to: null}, ['Moved']],
     ['entity.archived', {name: 'Drill', reason: 'sold'}, ['Archived: Sold']],
     ['entity.restored', {name: 'Drill'}, ['Restored from the archive']],
     ['entity.verified', {name: 'Drill'}, ['Confirmed it is in place']],

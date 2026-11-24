@@ -1,16 +1,20 @@
-"""A home's people: its roles, who holds which grant, and changing or taking back grants (core-model.md, 3 and 11)."""
+"""A home's people: its roles, who holds which grant, and changing or taking back grants (core-model.md, 3 and 11).
+
+Every change to a home's people locks the home's row and decides who may make it under that lock,
+from the grants as the transaction sees them, so two changes at once never both pass on a right
+that one of them takes away.
+"""
 
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
-from penaria.features.shared.access import Access, AccessPolicy, Permission
+from penaria.features.shared.access import Access, Permission, PermissionDeniedError
 from penaria.features.shared.actor import Actor
-from penaria.features.shared.errors import ForbiddenError
+from penaria.features.shared.errors import StaleVersionError
 from penaria.features.shared.journal import Event
 from penaria.features.shared.places import Place, PlaceDirectory
 from penaria.features.support.identity.domain.members import (
@@ -18,12 +22,16 @@ from penaria.features.support.identity.domain.members import (
     InvalidGrantError,
     LastOwnerError,
     OwnerGrantError,
+    OwnGrantError,
+    RevokeReason,
     RoleNotFoundError,
+    can_give,
     changed_expiry,
     check_can_give,
     grant_expiry,
+    grant_payload,
 )
-from penaria.features.support.identity.domain.models import Grant, PrincipalType, Role, User
+from penaria.features.support.identity.domain.models import Grant, PrincipalType, Role, User, access_of
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import CurrentSession
 from penaria.features.support.identity.use_cases.homes import HomeNotFoundError, principal_of
@@ -58,27 +66,28 @@ class GrantChanges:
 
 
 class ListRoles:
+    """The home's roles, for those who give access."""
+
     def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction]) -> None:
         self._uow = uow
 
-    async def execute(self, actor: Actor, home_id: UUID) -> list[Role]:
+    async def execute(self, current: CurrentSession, home_id: UUID) -> list[Role]:
         async with self._uow.query() as tx:
-            await require_member(tx, actor, home_id, datetime.now(UTC))
+            await require_member(tx, Actor.user(current.user_id), home_id, datetime.now(UTC))
             return await tx.roles.for_home(home_id)
 
 
 class ListMembers:
     """The accounts with access to the home and their grants; for those who manage its people."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, places: PlaceDirectory) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
 
-    async def execute(self, actor: Actor, home_id: UUID) -> list[Member]:
+    async def execute(self, current: CurrentSession, home_id: UUID) -> list[Member]:
         now = datetime.now(UTC)
-        await require_manager(self._uow, self._access, actor, home_id, now)
         async with self._uow.query() as tx:
+            await require_manager(tx, Actor.user(current.user_id), home_id, now)
             grants = await tx.grants.active_in(home_id, PrincipalType.USER, now)
             roles = await tx.roles.get_many({grant.role_id for grant in grants})
             users = await tx.users.get_many(
@@ -95,11 +104,11 @@ class ListMembers:
 
 
 class ChangeGrant:
-    """A member's new role, place or end of access. Owners are made by invitation and never changed."""
+    """A member's new role, place or end of access. Owners are made by invitation and never changed,
+    and nobody changes their own access."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, places: PlaceDirectory) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
 
     async def execute(self, current: CurrentSession, home_id: UUID, grant_id: UUID, changes: GrantChanges) -> Grant:
@@ -108,19 +117,20 @@ class ChangeGrant:
         actor = Actor.user(current.user_id)
         async with self._uow.query() as tx:
             await require_member(tx, actor, home_id, now)
-            grant = await _active_grant(tx, home_id, grant_id, now)
+            grant = await active_grant(tx, home_id, grant_id, now)
             roles = await tx.roles.get_many({grant.role_id} | ({changes.role_id} if changes.role_id else set()))
         if grant.principal_type is not PrincipalType.USER:
             raise InvalidGrantError("a guest link's access is not changed: make a new link", params={"field": "grant"})
+        if grant.principal_id == current.user_id:
+            raise OwnGrantError("you cannot change your own access: ask someone else who manages the home's people")
         role = roles[grant.role_id]
         new_role = role_in(roles, changes.role_id, home_id) if changes.role_id else role
         if role.is_owner or new_role.is_owner:
             raise OwnerGrantError("owners are made by invitation and leave by revocation; their access is not changed")
         scope_id = changes.scope_entity_id if changes.change_scope else grant.scope_entity_id
         places = await self._places.find({p for p in (grant.scope_entity_id, scope_id) if p is not None})
-        new_scope = check_place(places, scope_id, home_id) if changes.change_scope else place_of(places, scope_id)
-        check_can_give(await access_at(self._access, actor, home_id, place_of(places, grant.scope_entity_id)), role)
-        check_can_give(await access_at(self._access, actor, home_id, new_scope), new_role)
+        scope = place_of(places, grant.scope_entity_id)
+        new_scope = check_place(places, scope_id, home_id) if changes.change_scope else scope
         if changes.change_expiry:
             expires_at = changed_expiry(new_role, changes.expires_at, now)
         elif grant.expires_at is None:
@@ -129,10 +139,9 @@ class ChangeGrant:
             expires_at = grant.expires_at
         before = grant_payload(grant, role)
         async with self._uow.transaction() as tx:
-            await tx.homes.lock(home_id)
-            # Taken back or changed by someone else meanwhile: they decided first.
-            if await tx.grants.get(home_id, grant_id) != grant:
-                raise GrantNotFoundError("this access was changed or taken back meanwhile; look again")
+            await lock_unchanged(tx, grant)
+            check_can_give(await access_in(tx, actor, home_id, scope, now), role)
+            check_can_give(await access_in(tx, actor, home_id, new_scope, now), new_role)
             grant.role_id = new_role.id
             grant.scope_entity_id = scope_id
             grant.expires_at = expires_at
@@ -140,15 +149,15 @@ class ChangeGrant:
             await tx.journal.append(
                 [Event("grant.changed", home_id, actor, {**grant_payload(grant, new_role), "before": before})]
             )
+            await disarm_links_of(tx, self._places, grant.principal_id, home_id, actor, now)
         return grant
 
 
 class RevokeGrant:
     """Take back a grant: a member's, or a guest link's, which ends its guests' sessions at once."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, places: PlaceDirectory) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
 
     async def execute(self, current: CurrentSession, home_id: UUID, grant_id: UUID) -> None:
@@ -156,28 +165,29 @@ class RevokeGrant:
         actor = Actor.user(current.user_id)
         async with self._uow.query() as tx:
             await require_member(tx, actor, home_id, now)
-            grant = await _active_grant(tx, home_id, grant_id, now)
+            grant = await active_grant(tx, home_id, grant_id, now)
             role = (await tx.roles.get_many({grant.role_id}))[grant.role_id]
         own = grant.principal_type is PrincipalType.USER and grant.principal_id == current.user_id
-        if not own:
-            places = await self._places.find({grant.scope_entity_id} if grant.scope_entity_id else set())
-            check_can_give(await access_at(self._access, actor, home_id, place_of(places, grant.scope_entity_id)), role)
         if role.is_owner:
             current.require_recent_sign_in(now)
+        scope = await place_for(self._places, grant.scope_entity_id)
         async with self._uow.transaction() as tx:
-            await tx.homes.lock(home_id)
-            if await tx.grants.get(home_id, grant_id) != grant:
-                raise GrantNotFoundError("this access was changed or taken back meanwhile; look again")
+            await lock_unchanged(tx, grant)
+            if not own:
+                check_can_give(await access_in(tx, actor, home_id, scope, now), role)
             if role.is_owner:
                 await check_owner_remains(tx, home_id, [grant.id])
-            await revoke(tx, actor, grant, role, now, reason="left" if own else "revoked")
+            await revoke(tx, actor, grant, role, now, reason=RevokeReason.LEFT if own else RevokeReason.REVOKED)
+            if grant.principal_type is PrincipalType.USER:
+                await disarm_links_of(tx, self._places, grant.principal_id, home_id, actor, now)
 
 
 class LeaveHome:
     """The signed-in person gives up all their access to a home; the last owner cannot."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction]) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
+        self._places = places
 
     async def execute(self, current: CurrentSession, home_id: UUID) -> None:
         now = datetime.now(UTC)
@@ -194,7 +204,8 @@ class LeaveHome:
             if any(roles[grant.role_id].is_owner for grant in mine):
                 await check_owner_remains(tx, home_id, [grant.id for grant in mine])
             for grant in mine:
-                await revoke(tx, actor, grant, roles[grant.role_id], now, reason="left")
+                await revoke(tx, actor, grant, roles[grant.role_id], now, reason=RevokeReason.LEFT)
+            await disarm_links_of(tx, self._places, current.user_id, home_id, actor, now)
 
 
 async def require_member(tx: IdentityTransaction, actor: Actor, home_id: UUID, now: datetime) -> list[Grant]:
@@ -206,22 +217,25 @@ async def require_member(tx: IdentityTransaction, actor: Actor, home_id: UUID, n
     return grants
 
 
-async def require_manager(
-    uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, actor: Actor, home_id: UUID, now: datetime
-) -> None:
+async def require_manager(tx: IdentityTransaction, actor: Actor, home_id: UUID, now: datetime) -> None:
     """Refuse anyone who does not manage the people of the whole home."""
-    async with uow.query() as tx:
-        await require_member(tx, actor, home_id, now)
-    if not (await access.access(actor, home_id, ())).can(Permission.MEMBERS_MANAGE):
-        raise ForbiddenError(
-            f"needs {Permission.MEMBERS_MANAGE.value} over the whole home",
-            code="permission_denied",
-            params={"permission": Permission.MEMBERS_MANAGE},
-        )
+    await require_member(tx, actor, home_id, now)
+    if not (await access_in(tx, actor, home_id, None, now)).can(Permission.MEMBERS_MANAGE):
+        raise PermissionDeniedError(Permission.MEMBERS_MANAGE, where=" over the whole home")
 
 
-async def access_at(policy: AccessPolicy, actor: Actor, home_id: UUID, place: Place | None) -> Access:
-    return await policy.access(actor, home_id, () if place is None else place.path)
+async def access_in(tx: IdentityTransaction, actor: Actor, home_id: UUID, place: Place | None, now: datetime) -> Access:
+    """What the actor may do at the place (None: the top of the home), as this transaction sees the grants."""
+    principal_type, principal_id = principal_of(actor)
+    path = () if place is None else place.path
+    return access_of(await tx.grants.applicable(principal_type, principal_id, home_id, path, now))
+
+
+async def lock_unchanged(tx: IdentityTransaction, grant: Grant) -> None:
+    """Lock the grant's home for a change to its people, refusing if the grant changed since it was read."""
+    await tx.homes.lock(grant.home_id)
+    if await tx.grants.get(grant.home_id, grant.id) != grant:
+        raise StaleVersionError("this access was changed or taken back meanwhile; look again")
 
 
 def check_place(places: dict[UUID, Place], scope_entity_id: UUID | None, home_id: UUID) -> Place | None:
@@ -241,19 +255,43 @@ async def check_owner_remains(tx: IdentityTransaction, home_id: UUID, leaving: C
 
 
 async def revoke(
-    tx: IdentityTransaction, actor: Actor, grant: Grant, role: Role, now: datetime, *, reason: str
+    tx: IdentityTransaction, actor: Actor, grant: Grant, role: Role, now: datetime, *, reason: RevokeReason
 ) -> None:
     """Take the grant back and journal it; a guest link's token and sessions end with it."""
     await tx.grants.revoke([grant.id], now)
     if grant.principal_type is PrincipalType.LINK:
         await tx.tokens.revoke_for(PrincipalType.LINK, grant.principal_id, now)
         ended = await tx.sessions.revoke_for_grant(grant.id, now)
-        payload = {"link_id": str(grant.principal_id), "grant_id": str(grant.id), "sessions_ended": len(ended)}
+        payload = {
+            "link_id": str(grant.principal_id),
+            "grant_id": str(grant.id),
+            "sessions_ended": len(ended),
+            "reason": reason.value,
+        }
         await tx.journal.append([Event("guest_link.revoked", grant.home_id, actor, payload)])
         return
     await tx.journal.append(
-        [Event("grant.revoked", grant.home_id, actor, {**grant_payload(grant, role), "reason": reason})]
+        [Event("grant.revoked", grant.home_id, actor, {**grant_payload(grant, role), "reason": reason.value})]
     )
+
+
+async def disarm_links_of(
+    tx: IdentityTransaction, places: PlaceDirectory, user_id: UUID, home_id: UUID, actor: Actor, now: datetime
+) -> None:
+    """End the guest links the user made that they could no longer make, once their access shrank.
+
+    Pending invitations need no such sweep: accepting one checks its inviter again.
+    """
+    links = [link for link in await tx.grants.active_in(home_id, PrincipalType.LINK, now) if link.granted_by == user_id]
+    if not links:
+        return
+    roles = await tx.roles.get_many({link.role_id for link in links})
+    found = await places.find({link.scope_entity_id for link in links if link.scope_entity_id})
+    giver = Actor.user(user_id)
+    for link in links:
+        role = roles[link.role_id]
+        if not can_give(await access_in(tx, giver, home_id, place_of(found, link.scope_entity_id), now), role):
+            await revoke(tx, actor, link, role, now, reason=RevokeReason.GIVER_LOST_ACCESS)
 
 
 async def grant_views(
@@ -271,7 +309,7 @@ async def grant_views(
     ]
 
 
-async def _active_grant(tx: IdentityTransaction, home_id: UUID, grant_id: UUID, now: datetime) -> Grant:
+async def active_grant(tx: IdentityTransaction, home_id: UUID, grant_id: UUID, now: datetime) -> Grant:
     grant = await tx.grants.get(home_id, grant_id)
     if grant is None or not grant.is_active(now):
         raise GrantNotFoundError(params={"grant_id": str(grant_id)})
@@ -285,6 +323,13 @@ def role_in(roles: dict[UUID, Role], role_id: UUID, home_id: UUID) -> Role:
     return role
 
 
+async def place_for(places: PlaceDirectory, scope_entity_id: UUID | None) -> Place | None:
+    """The place an existing grant or invitation covers; None for the whole home."""
+    if scope_entity_id is None:
+        return None
+    return place_of(await places.find({scope_entity_id}), scope_entity_id)
+
+
 def place_of(places: dict[UUID, Place], scope_entity_id: UUID | None) -> Place | None:
     if scope_entity_id is None:
         return None
@@ -292,15 +337,3 @@ def place_of(places: dict[UUID, Place], scope_entity_id: UUID | None) -> Place |
     if place is None:
         raise RuntimeError(f"the place ({scope_entity_id}) a grant covers does not exist")
     return place
-
-
-def grant_payload(grant: Grant, role: Role) -> dict[str, Any]:
-    return {
-        "grant_id": str(grant.id),
-        "principal_type": grant.principal_type.value,
-        "principal_id": str(grant.principal_id),
-        "role_id": str(role.id),
-        "role": role.preset.value if role.preset else role.name,
-        "scope_entity_id": None if grant.scope_entity_id is None else str(grant.scope_entity_id),
-        "expires_at": None if grant.expires_at is None else grant.expires_at.isoformat(),
-    }

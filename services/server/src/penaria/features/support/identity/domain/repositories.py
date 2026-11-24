@@ -78,6 +78,10 @@ class SessionRepository(Protocol):
         """End every open guest session made from the grant; the ids of those ended."""
         ...
 
+    async def trim_for_grant(self, grant_id: UUID, keep: int, now: datetime) -> None:
+        """End the grant's open guest sessions but the ``keep`` most recently started."""
+        ...
+
 
 class PasskeyRepository(Protocol):
     async def add(self, passkey: Passkey) -> None: ...

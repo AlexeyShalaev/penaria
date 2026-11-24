@@ -27,7 +27,8 @@ export function describeEvent(event: EntityEvent, t: TFunction): string[] {
       const from = place(payload.from)
       const to = place(payload.to)
       if (from && to) return [t('history.moved', {from: from.name, to: to.name})]
-      return [t('history.movedTo', {to: to?.name ?? ''})]
+      // A place the reader may not see is left out of the event (null).
+      return [to ? t('history.movedTo', {to: to.name}) : t('history.movedAway')]
     }
     case 'entity.archived':
       return [t('history.archived', {reason: t(`archiveReason.${text(payload.reason)}`)})]

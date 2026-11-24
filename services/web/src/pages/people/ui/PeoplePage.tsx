@@ -5,8 +5,7 @@ import {useNavigate, useParams} from 'react-router'
 
 import {GuestLinkDialog, InviteDialog} from '@/features/give-access'
 import {LeaveHomeButton} from '@/features/leave-home'
-import {useHome} from '@/entities/home'
-import {managesPeople} from '@/entities/member'
+import {canManagePeople, useHome, useHomesChanged} from '@/entities/home'
 import {Button, Card, CardTitle, PageTitle, QueryState} from '@/shared/ui'
 
 import {GuestLinkList} from './GuestLinkList'
@@ -21,11 +20,16 @@ export function PeoplePage() {
   const {homeId = ''} = useParams<{homeId: string}>()
   const home = useHome(homeId)
   const [dialog, setDialog] = useState<'invite' | 'guest' | null>(null)
+  const homesChanged = useHomesChanged()
+  const left = async () => {
+    await homesChanged(homeId)
+    navigate('/', {replace: true})
+  }
 
   return (
     <QueryState query={home}>
       {(data) => {
-        const manager = managesPeople(data.access)
+        const manager = canManagePeople(data)
         const owner = !!data.access?.owner
         return (
           <div className={styles.page}>
@@ -71,7 +75,7 @@ export function PeoplePage() {
             <Card as="section" aria-labelledby="people-leave">
               <CardTitle id="people-leave">{t('people.leaveSection')}</CardTitle>
               <p className={styles.text}>{t('people.leaveSectionText')}</p>
-              <LeaveHomeButton homeId={homeId} homeName={data.name} onLeft={() => navigate('/', {replace: true})} />
+              <LeaveHomeButton homeId={homeId} homeName={data.name} onLeft={() => void left()} />
             </Card>
 
             {dialog === 'invite' && <InviteDialog homeId={homeId} owner={owner} onClose={() => setDialog(null)} />}

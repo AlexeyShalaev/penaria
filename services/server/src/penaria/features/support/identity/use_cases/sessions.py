@@ -226,15 +226,9 @@ def _open(session: Session, user: User | None, grant: Grant | None, now: datetim
             raise UnauthenticatedError("the session has ended; sign in again")
         return CurrentSession(id=session.id, user_id=user.id, authenticated_at=session.authenticated_at)
     # A guest's session lasts as long as its link's grant: revoking or expiring it ends the visit at once.
-    if grant is None or grant.expires_at is None or not grant.is_active(now):
+    if grant is None or not grant.is_active(now):
         raise UnauthenticatedError("the guest link has ended")
-    return GuestSession(
-        id=session.id,
-        grant_id=grant.id,
-        link_id=grant.principal_id,
-        home_id=grant.home_id,
-        expires_at=grant.expires_at,
-    )
+    return GuestSession(grant_id=grant.id, link_id=grant.principal_id, home_id=grant.home_id)
 
 
 async def start_session(

@@ -153,6 +153,19 @@ class PostgresSessionRepository:
     async def reauthenticate(self, session_id: UUID, now: datetime) -> None:
         await self._session.execute(update(SessionDB).where(SessionDB.id == session_id).values(authenticated_at=now))
 
+    async def trim_for_grant(self, grant_id: UUID, keep: int, now: datetime) -> None:
+        newest = (
+            select(SessionDB.id)
+            .where(SessionDB.grant_id == grant_id, *_active_session(now))
+            .order_by(SessionDB.created_at.desc(), SessionDB.id.desc())
+            .limit(keep)
+        )
+        await self._session.execute(
+            update(SessionDB)
+            .where(SessionDB.grant_id == grant_id, *_active_session(now), SessionDB.id.not_in(newest))
+            .values(revoked_at=now)
+        )
+
     async def revoke_for_grant(self, grant_id: UUID, now: datetime) -> list[UUID]:
         revoked = await self._session.scalars(
             update(SessionDB)

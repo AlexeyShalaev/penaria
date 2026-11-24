@@ -7,9 +7,7 @@ from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
-from penaria.features.shared.access import AccessPolicy
 from penaria.features.shared.actor import Actor
-from penaria.features.shared.errors import ForbiddenError
 from penaria.features.shared.journal import Event
 from penaria.features.shared.places import Place, PlaceDirectory
 from penaria.features.support.identity.domain.accounts import (
@@ -25,18 +23,22 @@ from penaria.features.support.identity.domain.members import (
     InvitationNotFoundError,
     InviterLostAccessError,
     OwnInvitationError,
+    RevokeReason,
+    can_give,
     check_can_give,
+    grant_payload,
 )
 from penaria.features.support.identity.domain.models import Home, PrincipalType, Role, User
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, hash_token
-from penaria.features.support.identity.domain.throttle import account_key, secret_link_key
-from penaria.features.support.identity.use_cases.attempts import count_attempt
+from penaria.features.support.identity.domain.throttle import account_key
+from penaria.features.support.identity.use_cases.attempts import find_by_secret
 from penaria.features.support.identity.use_cases.members import (
-    access_at,
+    access_in,
     check_place,
-    grant_payload,
+    disarm_links_of,
+    place_for,
     place_of,
     require_manager,
     require_member,
@@ -66,9 +68,8 @@ class InvitationPreview:
 
 
 class CreateInvitation:
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, places: PlaceDirectory) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
 
     async def execute(
@@ -78,7 +79,7 @@ class CreateInvitation:
         *,
         role_id: UUID,
         scope_entity_id: UUID | None,
-        expires_at: datetime | None,
+        valid_days: int,
         grant_expires_at: datetime | None,
         leave_when_accepted: bool,
     ) -> tuple[InvitationView, str]:
@@ -88,23 +89,26 @@ class CreateInvitation:
         async with self._uow.query() as tx:
             await require_member(tx, actor, home_id, now)
             role = role_in(await tx.roles.get_many({role_id}), role_id, home_id)
-            inviter = (await tx.users.get_many({current.user_id}))[current.user_id]
+            inviter = await tx.users.get(current.user_id)
+        if inviter is None:
+            raise RuntimeError(f"the user ({current.user_id}) of an open session does not exist")
         # Making an owner, or handing over the home, is as sensitive as it gets (sign-in.md, 5).
         if role.is_owner:
             current.require_recent_sign_in(now)
-        scope = check_place(await self._places.find(_ids(scope_entity_id)), scope_entity_id, home_id)
-        check_can_give(await access_at(self._access, actor, home_id, scope), role)
+        found = await self._places.find(set() if scope_entity_id is None else {scope_entity_id})
+        scope = check_place(found, scope_entity_id, home_id)
         invitation, token = Invitation.create(
             home_id=home_id,
             role=role,
             created_by=current.user_id,
             scope_entity_id=scope_entity_id,
-            expires_at=expires_at,
+            valid_days=valid_days,
             grant_expires_at=grant_expires_at,
             leave_when_accepted=leave_when_accepted,
             now=now,
         )
         async with self._uow.transaction() as tx:
+            check_can_give(await access_in(tx, actor, home_id, scope, now), role)
             await tx.invitations.add(invitation)
             await tx.journal.append([Event("invitation.created", home_id, actor, _payload(invitation, role))])
         return InvitationView(invitation=invitation, role=role, scope=scope, created_by=inviter), token
@@ -113,15 +117,14 @@ class CreateInvitation:
 class ListInvitations:
     """The home's invitations that can still be accepted; for those who manage its people."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, places: PlaceDirectory) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
 
-    async def execute(self, actor: Actor, home_id: UUID) -> list[InvitationView]:
+    async def execute(self, current: CurrentSession, home_id: UUID) -> list[InvitationView]:
         now = datetime.now(UTC)
-        await require_manager(self._uow, self._access, actor, home_id, now)
         async with self._uow.query() as tx:
+            await require_manager(tx, Actor.user(current.user_id), home_id, now)
             invitations = await tx.invitations.pending_in(home_id, now)
             roles = await tx.roles.get_many({invitation.role_id for invitation in invitations})
             users = await tx.users.get_many({invitation.created_by for invitation in invitations})
@@ -140,9 +143,8 @@ class ListInvitations:
 class RevokeInvitation:
     """Take back an invitation before it is accepted: its creator, or whoever could have made it."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, places: PlaceDirectory) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
 
     async def execute(self, current: CurrentSession, home_id: UUID, invitation_id: UUID) -> None:
@@ -155,15 +157,13 @@ class RevokeInvitation:
                 raise InvitationNotFoundError(params={"invitation_id": str(invitation_id)})
             role = (await tx.roles.get_many({invitation.role_id}))[invitation.role_id]
         invitation.check_open(now)
-        if invitation.created_by != current.user_id:
-            places = await self._places.find(_ids(invitation.scope_entity_id))
-            check_can_give(
-                await access_at(self._access, actor, home_id, place_of(places, invitation.scope_entity_id)), role
-            )
+        scope = await place_for(self._places, invitation.scope_entity_id)
         async with self._uow.transaction() as tx:
             invitation = await tx.invitations.get(home_id, invitation_id, for_update=True)
             if invitation is None:
                 raise RuntimeError(f"the invitation ({invitation_id}) disappeared")
+            if invitation.created_by != current.user_id:
+                check_can_give(await access_in(tx, actor, home_id, scope, now), role)
             invitation.check_open(now)
             invitation.revoked_at = now
             await tx.invitations.save(invitation)
@@ -183,15 +183,14 @@ class PreviewInvitation:
         async with self._uow.query() as tx:
             home = await tx.homes.get(invitation.home_id)
             role = (await tx.roles.get_many({invitation.role_id}))[invitation.role_id]
-            inviter = (await tx.users.get_many({invitation.created_by}))[invitation.created_by]
-        if home is None:
-            raise RuntimeError(f"the home ({invitation.home_id}) of an invitation does not exist")
-        places = await self._places.find(_ids(invitation.scope_entity_id))
+            inviter = await tx.users.get(invitation.created_by)
+        if home is None or inviter is None:
+            raise RuntimeError(f"the home or the inviter of the invitation ({invitation.id}) does not exist")
         return InvitationPreview(
             invitation=invitation,
             home=home,
             role=role,
-            scope=place_of(places, invitation.scope_entity_id),
+            scope=await place_for(self._places, invitation.scope_entity_id),
             inviter=inviter,
         )
 
@@ -199,21 +198,20 @@ class PreviewInvitation:
 class AcceptInvitation:
     """The signed-in person accepts an invitation: the grant is theirs, and the invitation is used up."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], access: AccessPolicy, places: PlaceDirectory) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
 
     async def execute(self, current: CurrentSession, token: str, client: Client) -> Home:
         """The home the person now belongs to."""
         invitation = await _open_invitation(self._uow, token, client)
-        await _check_inviter(self._uow, self._access, self._places, invitation)
+        scope = await place_for(self._places, invitation.scope_entity_id)
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
-            invitation, home = await _lock(tx, token, now)
+            invitation, home = await _lock(tx, token, scope, now)
             if invitation.created_by == current.user_id:
                 raise OwnInvitationError("this is your own invitation: pass the link on to the person it is for")
-            await _accept(tx, invitation, current.user_id, now)
+            await _accept(tx, self._places, invitation, current.user_id, now)
         return home
 
 
@@ -223,12 +221,10 @@ class AcceptInvitationWithNewAccount:
     def __init__(
         self,
         uow: AsyncUnitOfWork[IdentityTransaction],
-        access: AccessPolicy,
         places: PlaceDirectory,
         hasher: PasswordHasher,
     ) -> None:
         self._uow = uow
-        self._access = access
         self._places = places
         self._hasher = hasher
 
@@ -241,7 +237,7 @@ class AcceptInvitationWithNewAccount:
         locale = check_locale(locale)
         check_password(password)
         invitation = await _open_invitation(self._uow, token, client)
-        await _check_inviter(self._uow, self._access, self._places, invitation)
+        scope = await place_for(self._places, invitation.scope_entity_id)
         password_hash = await self._hasher.hash(password)
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
@@ -249,7 +245,7 @@ class AcceptInvitationWithNewAccount:
             await tx.failures.lock([account_key(username)])
             if await tx.users.by_username(username) is not None:
                 raise UsernameTakenError("this username is taken: choose another", params={"field": "username"})
-            invitation, home = await _lock(tx, token, now)
+            invitation, home = await _lock(tx, token, scope, now)
             user = User(display_name=display_name, locale=locale, username=username)
             await tx.users.add(user)
             await tx.passwords.set(user.id, password_hash, now)
@@ -263,45 +259,26 @@ class AcceptInvitationWithNewAccount:
                     )
                 ]
             )
-            await _accept(tx, invitation, user.id, now)
+            await _accept(tx, self._places, invitation, user.id, now)
             session_token = await start_session(tx, user, client, now)
         return user, home, session_token
 
 
 async def _open_invitation(uow: AsyncUnitOfWork[IdentityTransaction], token: str, client: Client) -> Invitation:
-    """The invitation of the token, if it can still be accepted. Unknown tokens count against the address,
-    as guessed passwords do (sign-in.md, 7)."""
-    key = secret_link_key(client.ip)
-    keys = [] if key is None else [key]
-    async with uow.transaction() as tx:
-        await count_attempt(tx, keys, datetime.now(UTC))
-    async with uow.query() as tx:
-        invitation = await tx.invitations.by_token_hash(hash_token(token))
-    if invitation is None:
-        raise InvitationNotFoundError("this invitation link does not work: check it, or ask for a new one")
-    async with uow.transaction() as tx:
-        await tx.failures.uncount(keys)
+    """The invitation of the token, if it can still be accepted."""
+    invitation = await find_by_secret(
+        uow,
+        client,
+        lambda tx: tx.invitations.by_token_hash(hash_token(token)),
+        InvitationNotFoundError("this invitation link does not work: check it, or ask for a new one"),
+    )
     invitation.check_open(datetime.now(UTC))
     return invitation
 
 
-async def _check_inviter(
-    uow: AsyncUnitOfWork[IdentityTransaction], policy: AccessPolicy, places: PlaceDirectory, invitation: Invitation
-) -> None:
-    """An invitation gives only what its inviter may still give when it is accepted."""
-    async with uow.query() as tx:
-        role = (await tx.roles.get_many({invitation.role_id}))[invitation.role_id]
-    scope = place_of(await places.find(_ids(invitation.scope_entity_id)), invitation.scope_entity_id)
-    try:
-        check_can_give(await access_at(policy, Actor.user(invitation.created_by), invitation.home_id, scope), role)
-    except ForbiddenError as exc:
-        raise InviterLostAccessError(
-            "the person who invited you can no longer give this access: ask them for a new invitation"
-        ) from exc
-
-
-async def _lock(tx: IdentityTransaction, token: str, now: datetime) -> tuple[Invitation, Home]:
-    """The invitation, locked so it is accepted once, and its home, locked as every change to its people."""
+async def _lock(tx: IdentityTransaction, token: str, scope: Place | None, now: datetime) -> tuple[Invitation, Home]:
+    """The invitation, locked so it is accepted once, and its home, locked as every change to its people;
+    under the lock, the invitation gives only what its inviter may still give."""
     invitation = await tx.invitations.by_token_hash(hash_token(token), for_update=True)
     if invitation is None:
         raise RuntimeError("an invitation disappeared while it was accepted")
@@ -309,10 +286,18 @@ async def _lock(tx: IdentityTransaction, token: str, now: datetime) -> tuple[Inv
     home = await tx.homes.lock(invitation.home_id)
     if home is None:
         raise RuntimeError(f"the home ({invitation.home_id}) of an invitation does not exist")
+    role = (await tx.roles.get_many({invitation.role_id}))[invitation.role_id]
+    inviter = await access_in(tx, Actor.user(invitation.created_by), invitation.home_id, scope, now)
+    if not can_give(inviter, role):
+        raise InviterLostAccessError(
+            "the person who invited you can no longer give this access: ask them for a new invitation"
+        )
     return invitation, home
 
 
-async def _accept(tx: IdentityTransaction, invitation: Invitation, user_id: UUID, now: datetime) -> None:
+async def _accept(
+    tx: IdentityTransaction, places: PlaceDirectory, invitation: Invitation, user_id: UUID, now: datetime
+) -> None:
     """Give the user the invitation's grant and use it up; for a transfer, the inviter's ownership ends."""
     held = await tx.grants.active_of(invitation.home_id, PrincipalType.USER, user_id, now)
     if any(g.role_id == invitation.role_id and g.scope_entity_id == invitation.scope_entity_id for g in held):
@@ -344,7 +329,8 @@ async def _accept(tx: IdentityTransaction, invitation: Invitation, user_id: UUID
         inviter = Actor.user(invitation.created_by)
         for owner in await tx.grants.owners(invitation.home_id):
             if owner.principal_id == invitation.created_by:
-                await revoke(tx, inviter, owner, role, now, reason="transferred")
+                await revoke(tx, inviter, owner, role, now, reason=RevokeReason.TRANSFERRED)
+        await disarm_links_of(tx, places, invitation.created_by, invitation.home_id, inviter, now)
 
 
 def _payload(invitation: Invitation, role: Role) -> dict[str, object]:
@@ -357,7 +343,3 @@ def _payload(invitation: Invitation, role: Role) -> dict[str, object]:
         "grant_expires_at": None if invitation.grant_expires_at is None else invitation.grant_expires_at.isoformat(),
         "leave_when_accepted": invitation.leave_when_accepted,
     }
-
-
-def _ids(entity_id: UUID | None) -> set[UUID]:
-    return set() if entity_id is None else {entity_id}

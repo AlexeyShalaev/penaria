@@ -1,14 +1,15 @@
 """How the registry applies access: what an actor may see and change in the tree."""
 
+import dataclasses
 from collections.abc import Sequence
 from uuid import UUID
 
 from penaria.features.core.registry.domain.entity import Entity
 from penaria.features.core.registry.domain.kinds import Privacy
 from penaria.features.core.registry.domain.repositories import ChildrenFilter, RegistryTransaction
-from penaria.features.shared.access import Access, AccessPolicy, Permission
+from penaria.features.shared.access import Access, AccessPolicy, Permission, PermissionDeniedError
 from penaria.features.shared.actor import Actor
-from penaria.features.shared.errors import ForbiddenError, NotFoundError
+from penaria.features.shared.errors import NotFoundError
 
 
 class EntityNotFoundError(NotFoundError):
@@ -59,6 +60,14 @@ def can_see(entity: Entity, ancestors: Sequence[Entity], access: Access) -> bool
     return access.can(Permission.ENTITIES_VIEW_PRIVATE) or all(e.privacy is not Privacy.PRIVATE for e in line)
 
 
+def as_seen(entity: Entity, access: Access) -> Entity:
+    """The entity as the actor may read it: a guest learns only the name and kind of a place on the way
+    to what is meant for guests (core-model.md, 11.3)."""
+    if not access.guest_view or entity.privacy is Privacy.GUEST_VISIBLE:
+        return entity
+    return dataclasses.replace(entity, aliases=(), quantity=None, unit=None, verified_at=None, verified_by=None)
+
+
 def children_filter(access: Access, *, include_archived: bool) -> ChildrenFilter:
     return ChildrenFilter(
         include_archived=include_archived,
@@ -69,4 +78,4 @@ def children_filter(access: Access, *, include_archived: bool) -> ChildrenFilter
 
 def require(access: Access, permission: Permission) -> None:
     if not access.can(permission):
-        raise ForbiddenError(f"needs {permission.value}", code="permission_denied", params={"permission": permission})
+        raise PermissionDeniedError(permission)

@@ -30,27 +30,24 @@ export function useRoles(homeId: string) {
   })
 }
 
-export function useMembers(homeId: string, options: {enabled?: boolean} = {}) {
+export function useMembers(homeId: string) {
   return useQuery({
     queryKey: peopleKeys.members(homeId),
     queryFn: () => unwrap(api.GET('/api/v1/homes/{home_id}/members', path(homeId))),
-    enabled: options.enabled,
   })
 }
 
-export function useInvitations(homeId: string, options: {enabled?: boolean} = {}) {
+export function useInvitations(homeId: string) {
   return useQuery({
     queryKey: peopleKeys.invitations(homeId),
     queryFn: () => unwrap(api.GET('/api/v1/homes/{home_id}/invitations', path(homeId))),
-    enabled: options.enabled,
   })
 }
 
-export function useGuestLinks(homeId: string, options: {enabled?: boolean} = {}) {
+export function useGuestLinks(homeId: string) {
   return useQuery({
     queryKey: peopleKeys.guestLinks(homeId),
     queryFn: () => unwrap(api.GET('/api/v1/homes/{home_id}/guest-links', path(homeId))),
-    enabled: options.enabled,
   })
 }
 
@@ -105,15 +102,11 @@ export function useRevokeGrant(homeId: string) {
   )
 }
 
-/** The signed-in person gives up their access to the home; it leaves their list of homes. */
+/** The signed-in person gives up their access to the home. */
 export function useLeaveHome(homeId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => unwrap(api.POST('/api/v1/homes/{home_id}:leave', path(homeId))),
-    onSuccess: async () => {
-      queryClient.removeQueries({queryKey: ['homes', homeId]})
-      queryClient.removeQueries({queryKey: peopleKeys.home(homeId)})
-      await queryClient.invalidateQueries({queryKey: ['homes'], exact: true})
-    },
+    onSuccess: () => queryClient.removeQueries({queryKey: peopleKeys.home(homeId)}),
   })
 }

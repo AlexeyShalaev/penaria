@@ -25,7 +25,7 @@ export {
   useRevokeInvitation,
   useRoles,
 } from './api/people'
-export {managesPeople, placeLabel, PRESETS, type Preset, roleDescription, roleName} from './model/roles'
+export {placeLabel, type Preset, roleDescription, roleName, scopeLabel} from './model/roles'
 export {RoleBadge} from './ui/RoleBadge'
 export {RolePicker} from './ui/RolePicker'
 export {ShareLink} from './ui/ShareLink'

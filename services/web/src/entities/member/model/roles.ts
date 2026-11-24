@@ -2,9 +2,7 @@ import type {TFunction} from 'i18next'
 
 import type {Role} from '../api/people'
 
-/** The presets in the order people choose from, the widest access first. */
-export const PRESETS = ['owner', 'admin', 'family', 'guest', 'contractor'] as const
-export type Preset = (typeof PRESETS)[number]
+export type Preset = NonNullable<Role['preset']>
 
 /** A role's name: a preset's in the interface's language, unless someone renamed it. */
 export function roleName(role: Pick<Role, 'preset' | 'name'>, t: TFunction): string {
@@ -25,12 +23,12 @@ export const ROLE_TONE = {
   contractor: 'neutral',
 } as const satisfies Record<Preset, 'ok' | 'info' | 'neutral' | 'warn'>
 
-/** Whether the access lets its holder manage the home's people. */
-export function managesPeople(access: {all_permissions: boolean; permissions: string[]} | null | undefined): boolean {
-  return !!access && (access.all_permissions || access.permissions.includes('members.manage'))
-}
-
 /** A place's path as people read it: "House / Kitchen", the top of the home left out when there is more. */
 export function placeLabel(names: string[]): string {
   return (names.length > 1 ? names.slice(1) : names).join(' / ')
+}
+
+/** Where access applies: the place's path, or the whole home for none. */
+export function scopeLabel(scope: {names: string[]} | null, t: TFunction): string {
+  return scope ? placeLabel(scope.names) : t('people.wholeHome')
 }

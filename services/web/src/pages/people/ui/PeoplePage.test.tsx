@@ -48,11 +48,38 @@ const LINK = {
   expires_at: '2099-11-27T10:00:00Z',
   created_at: '2026-11-24T10:00:00Z',
   last_used_at: null,
-  created_by: ME,
+  granted_by: ME,
 }
 
 function renderPage() {
-  renderAt(`/homes/${HOME_ID}/people`, <Route path="/homes/:homeId/people" element={<PeoplePage />} />)
+  renderAt(
+    `/homes/${HOME_ID}/people`,
+    <>
+      <Route path="/homes/:homeId/people" element={<PeoplePage />} />
+      <Route path="/" element={<h1>Start</h1>} />
+    </>,
+  )
+}
+
+const INVITATION = {
+  id: 'inv',
+  role: role('family'),
+  scope: null,
+  expires_at: '2099-12-01T10:00:00Z',
+  grant_expires_at: null,
+  leave_when_accepted: false,
+  created_at: '2026-11-24T10:00:00Z',
+  created_by: ME,
+}
+
+function manager(overrides: Record<string, unknown> = {}) {
+  return {
+    [`GET /api/v1/homes/${HOME_ID}`]: home(),
+    [`GET /api/v1/homes/${HOME_ID}/members`]: MEMBERS,
+    [`GET /api/v1/homes/${HOME_ID}/invitations`]: [],
+    [`GET /api/v1/homes/${HOME_ID}/guest-links`]: [],
+    ...overrides,
+  }
 }
 
 describe('PeoplePage', () => {
@@ -125,5 +152,84 @@ describe('PeoplePage', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'A home needs at least one owner. Make someone else an owner first.',
     )
+  })
+
+  it("takes back a member's access after asking", async () => {
+    let members = MEMBERS
+    const calls = mockApi(
+      manager({
+        [`GET /api/v1/homes/${HOME_ID}/members`]: () => members,
+        [`DELETE /api/v1/homes/${HOME_ID}/grants/g-maria`]: () => {
+          members = MEMBERS.slice(0, 1)
+          return new Response(null, {status: 204})
+        },
+      }),
+    )
+    renderPage()
+
+    const members_ = await screen.findByRole('region', {name: 'Members'})
+    fireEvent.click(await within(members_).findByRole('button', {name: 'Remove'}))
+    const dialog = await screen.findByRole('dialog', {name: "Remove Maria's access?"})
+    fireEvent.click(within(dialog).getByRole('button', {name: 'Remove'}))
+
+    await expect.poll(() => screen.queryByText('Maria')).toBeNull()
+    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.path)).toEqual([
+      `/api/v1/homes/${HOME_ID}/grants/g-maria`,
+    ])
+  })
+
+  it('offers an admin no way to remove an owner', async () => {
+    const owner = {...MEMBERS[0], you: false}
+    const admin = {person: {id: 'anna', username: 'anna', display_name: 'Anna'}, you: true, grants: []}
+    mockApi(
+      manager({
+        [`GET /api/v1/homes/${HOME_ID}`]: home({access: {owner: false, all_permissions: true, permissions: []}}),
+        [`GET /api/v1/homes/${HOME_ID}/members`]: [owner, admin],
+      }),
+    )
+    renderPage()
+
+    const members = await screen.findByRole('region', {name: 'Members'})
+    await within(members).findByText('Alex')
+
+    expect(within(members).queryByRole('button', {name: 'Remove'})).toBeNull()
+    expect(within(members).queryByRole('button', {name: 'Change'})).toBeNull()
+  })
+
+  it('revokes a waiting invitation', async () => {
+    let invitations = [INVITATION]
+    mockApi(
+      manager({
+        [`GET /api/v1/homes/${HOME_ID}/invitations`]: () => invitations,
+        [`DELETE /api/v1/homes/${HOME_ID}/invitations/inv`]: () => {
+          invitations = []
+          return new Response(null, {status: 204})
+        },
+      }),
+    )
+    renderPage()
+
+    const waiting = await screen.findByRole('region', {name: 'Invitations waiting'})
+    fireEvent.click(await within(waiting).findByRole('button', {name: 'Revoke'}))
+
+    expect(await within(waiting).findByText('No invitations are waiting.')).toBeVisible()
+  })
+
+  it('leaves the home and goes to the start page with the list of homes read again', async () => {
+    const calls = mockApi(
+      manager({
+        [`POST /api/v1/homes/${HOME_ID}:leave`]: new Response(null, {status: 204}),
+      }),
+    )
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Leave the home'}))
+    const dialog = await screen.findByRole('dialog', {name: 'Leave Flat?'})
+    fireEvent.click(within(dialog).getByRole('button', {name: 'Leave the home'}))
+
+    expect(await screen.findByRole('heading', {name: 'Start'})).toBeVisible()
+    expect(calls.filter((call) => call.method === 'POST').map((call) => call.path)).toEqual([
+      `/api/v1/homes/${HOME_ID}:leave`,
+    ])
   })
 })

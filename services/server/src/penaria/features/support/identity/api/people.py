@@ -11,7 +11,6 @@ from fastapi import APIRouter, Body, Request, Response, status
 from pydantic import AwareDatetime, BaseModel, Field
 from servicewright.adapters.fastapi import UnitScopeDep
 
-from penaria.features.shared.actor import Actor
 from penaria.features.shared.http import SIGNED_IN
 from penaria.features.shared.places import Place
 from penaria.features.support.identity.api.account import (
@@ -20,9 +19,13 @@ from penaria.features.support.identity.api.account import (
     AccountOut,
     client_of,
 )
-from penaria.features.support.identity.api.cookies import SessionCookie
+from penaria.features.support.identity.api.cookies import SESSION_COOKIE, SessionCookie
 from penaria.features.support.identity.api.links import PublicLinks
-from penaria.features.support.identity.domain.members import LINK_NAME_MAX_LENGTH
+from penaria.features.support.identity.domain.members import (
+    INVITATION_DAYS,
+    INVITATION_MAX_DAYS,
+    LINK_NAME_MAX_LENGTH,
+)
 from penaria.features.support.identity.domain.models import Home, Role, User
 from penaria.features.support.identity.domain.permissions import Preset
 from penaria.features.support.identity.domain.sessions import CurrentSession, GuestSession
@@ -150,7 +153,9 @@ class GrantPatch(BaseModel):
 class InvitationIn(BaseModel):
     role_id: UUID
     scope_entity_id: UUID | None = Field(default=None, description="Omit for the whole home")
-    expires_at: AwareDatetime | None = Field(default=None, description="When the link stops working; 7 days by default")
+    valid_days: int = Field(
+        default=INVITATION_DAYS, ge=1, le=INVITATION_MAX_DAYS, description="For how many days the link works"
+    )
     grant_expires_at: AwareDatetime | None = Field(
         default=None, description="When the access ends; the role's default when it requires an end"
     )
@@ -229,7 +234,7 @@ class GuestLinkOut(BaseModel):
     expires_at: datetime
     created_at: datetime
     last_used_at: datetime | None
-    created_by: PersonOut | None
+    granted_by: PersonOut | None
 
     @classmethod
     def of(cls, view: GuestLinkView) -> GuestLinkOut:
@@ -245,7 +250,7 @@ class GuestLinkOut(BaseModel):
             expires_at=grant.expires_at,
             created_at=grant.created_at,
             last_used_at=view.link.token.last_used_at,
-            created_by=None if view.granted_by is None else PersonOut.of(view.granted_by),
+            granted_by=None if view.granted_by is None else PersonOut.of(view.granted_by),
         )
 
 
@@ -275,14 +280,14 @@ class GuestOut(BaseModel):
 
 @router.get("/homes/{home_id}/roles")
 async def list_roles(home_id: UUID, scope: UnitScopeDep) -> list[RoleOut]:
-    roles = await (await scope.get(ListRoles)).execute(await scope.get(Actor), home_id)
+    roles = await (await scope.get(ListRoles)).execute(await scope.get(CurrentSession), home_id)
     return [RoleOut.of(role) for role in roles]
 
 
 @router.get("/homes/{home_id}/members")
 async def list_members(home_id: UUID, scope: UnitScopeDep) -> list[MemberOut]:
     current = await scope.get(CurrentSession)
-    members = await (await scope.get(ListMembers)).execute(Actor.user(current.user_id), home_id)
+    members = await (await scope.get(ListMembers)).execute(current, home_id)
     return [
         MemberOut(
             person=PersonOut.of(member.user),
@@ -324,8 +329,7 @@ async def leave_home(home_id: UUID, scope: UnitScopeDep) -> None:
 
 @router.get("/homes/{home_id}/invitations")
 async def list_invitations(home_id: UUID, scope: UnitScopeDep) -> list[InvitationOut]:
-    current = await scope.get(CurrentSession)
-    views = await (await scope.get(ListInvitations)).execute(Actor.user(current.user_id), home_id)
+    views = await (await scope.get(ListInvitations)).execute(await scope.get(CurrentSession), home_id)
     return [InvitationOut.of(view) for view in views]
 
 
@@ -338,7 +342,7 @@ async def create_invitation(
         home_id,
         role_id=body.role_id,
         scope_entity_id=body.scope_entity_id,
-        expires_at=body.expires_at,
+        valid_days=body.valid_days,
         grant_expires_at=body.grant_expires_at,
         leave_when_accepted=body.leave_when_accepted,
     )
@@ -398,8 +402,7 @@ async def accept_invitation_with_new_account(
 
 @router.get("/homes/{home_id}/guest-links")
 async def list_guest_links(home_id: UUID, scope: UnitScopeDep) -> list[GuestLinkOut]:
-    current = await scope.get(CurrentSession)
-    views = await (await scope.get(ListGuestLinks)).execute(Actor.user(current.user_id), home_id)
+    views = await (await scope.get(ListGuestLinks)).execute(await scope.get(CurrentSession), home_id)
     return [GuestLinkOut.of(view) for view in views]
 
 
@@ -423,7 +426,9 @@ async def open_guest_link(
     body: Annotated[TokenIn, Body()], request: Request, response: Response, scope: UnitScopeDep
 ) -> GuestOut:
     """Exchange a guest link's token for a guest session's cookie."""
-    view, token = await (await scope.get(OpenGuestLink)).execute(body.token, client_of(request))
+    view, token = await (await scope.get(OpenGuestLink)).execute(
+        body.token, client_of(request), request.cookies.get(SESSION_COOKIE)
+    )
     (await scope.get(SessionCookie)).set(response, token)
     return GuestOut.of(view)
 

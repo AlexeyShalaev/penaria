@@ -1,2 +1,2 @@
-export {type Home, useCreateHome, useHome, useHomes} from './api/homes'
-export {canEditHome} from './model/access'
+export {type Home, useCreateHome, useHome, useHomes, useHomesChanged} from './api/homes'
+export {canEditHome, canManagePeople} from './model/access'

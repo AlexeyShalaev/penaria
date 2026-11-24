@@ -162,7 +162,8 @@
     "unitCleared": "Unit removed",
     "status": "Status changed from {{from}} to {{to}}",
     "privacy": "Visibility changed from {{from}} to {{to}}",
-    "other": "Changed"
+    "other": "Changed",
+    "movedAway": "Moved"
   },
   "notFound": {
     "title": "Page not found",
@@ -208,7 +209,7 @@
     "recent_sign_in_required": "Confirm it's you first.",
     "escalation": "You cannot give more access than you have yourself.",
     "invalid_grant": "Check the role, the place and the dates.",
-    "invalid_grant_expires_at": "Check the dates: the end must be in the future, and a link works for 30 days at most.",
+    "invalid_grant_expires_at": "Check the dates: the end must be in the future, and a guest link works for 90 days at most.",
     "invalid_grant_grant_expires_at": "The last day of access must be in the future, and an owner's access never ends.",
     "invalid_grant_scope_entity_id": "This place is not in this home.",
     "invalid_grant_role_id": "A guest link needs a role for guests.",
@@ -217,7 +218,7 @@
     "role_not_found": "This role does not exist in this home.",
     "grant_not_found": "This access has already been changed or taken back. Look at the list again.",
     "last_owner": "A home needs at least one owner. Make someone else an owner first.",
-    "owner_grant": "An owner's access is not changed. Invite a new owner, or remove one.",
+    "owner_grant": "An owner's access is not changed. Invite a new owner, or take an owner's access back.",
     "invitation_not_found": "This invitation link does not work. Check it, or ask for a new one.",
     "invitation_expired": "This invitation has expired. Ask for a new one.",
     "invitation_used": "This invitation has already been used. Each invitation works once: ask for a new one.",
@@ -228,7 +229,10 @@
     "guest_link_not_found": "This guest link does not work. Check it, or ask your hosts for a new one.",
     "guest_link_ended": "This guest link has expired or was revoked. Ask your hosts for a new one.",
     "username_taken": "This username is taken. Choose another.",
-    "account_required": "A guest cannot do this."
+    "account_required": "A guest cannot do this.",
+    "own_grant": "You cannot change your own access. Ask someone else who manages the home's people.",
+    "invalid_grant_valid_days": "An invitation works for 1 to 30 days.",
+    "invalid_grant_grant": "A guest link's access is not changed. Make a new link instead."
   },
   "languages": {
     "en": "English",
@@ -364,7 +368,7 @@
     "guestLinks": "Guest links",
     "guestLinksText": "A guest needs no account. The link opens a view of what is marked for guests and ends on its own.",
     "yourAccess": "Your access",
-    "notManager": "Only those who manage the home's people see who else has access and invite others.",
+    "notManager": "Only those who manage the home's people see who has access and invite others.",
     "leaveSection": "Leave this home",
     "leaveSectionText": "You lose access to the home. To come back, someone has to invite you again.",
     "leave": "Leave the home",
@@ -375,7 +379,7 @@
     "until": "until {{when}}",
     "change": "Change",
     "remove": "Remove",
-    "removeTitle": "Remove {{name}}?",
+    "removeTitle": "Remove {{name}}'s access?",
     "removeText": "{{name}} loses the access of the role “{{role}}” at once.",
     "noInvitations": "No invitations are waiting.",
     "transfer": "Hands over the home",
@@ -404,7 +408,8 @@
     "linkWorks": "The link works for",
     "transfer": "Hand the home over to them",
     "transferHint": "When they accept, you stop being an owner. Use it to transfer ownership.",
-    "ready": "Pass this link on to the person you invite. They join as “{{role}}” ({{where}}). It works once, until {{until}}."
+    "readyWhole": "Pass this link on to the person you invite. They join the whole home as “{{role}}”. The link works once, until {{until}}.",
+    "readyPlace": "Pass this link on to the person you invite. They join as “{{role}}”, in {{place}} only. The link works once, until {{until}}."
   },
   "guestLink": {
     "title": "Guest link",
@@ -412,12 +417,13 @@
     "defaultName": "Guests",
     "text": "Anyone with the link sees what is marked for guests and the places on the way to it. No account needed.",
     "name": "Name",
-    "nameHint": "Only you and other managers see it, such as “Weekend guests”.",
+    "nameHint": "Such as “Weekend guests”. Only you and those who manage the home's people see it.",
     "lasts": "The link works for",
     "untilDate": "Until a date",
     "lastDay": "Last day",
     "noRole": "This home has no role for guests.",
-    "ready": "Anyone with this link or QR code can look around ({{where}}) until {{until}}. Print it for the fridge or send it to your guests."
+    "readyWhole": "Anyone with this link or QR code can look around the home until {{until}}. Print it for the fridge or send it to your guests.",
+    "readyPlace": "Anyone with this link or QR code can look around {{place}} until {{until}}. Print it for the fridge or send it to your guests."
   },
   "changeAccess": {
     "title": "Access of {{name}}"
