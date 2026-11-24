@@ -1,6 +1,6 @@
 # Sign-in
 
-- **Status:** accepted on 2026-11-24, with outgoing email configurable from the interface (section 9). Steps 1 to 4 of the order in section 11, and outgoing email with recovery, are built; what they settled is in sections 12 to 16.
+- **Status:** accepted on 2026-11-24, with outgoing email configurable from the interface (section 9). Steps 1 to 5 of the order in section 11, and outgoing email with recovery, are built; what they settled is in sections 12 to 17.
 - **Date:** 2026-11-24.
 - **Scope:** how people, guests and devices prove who they are to a Penaria install:
   - the first start of an install;
@@ -149,6 +149,8 @@ A smart mirror or a script is a `device` principal, with grants like anyone else
 - The server stores only a hash of the token. The token is shown once, when created, and can be revoked.
 - Device tokens never expire on their own. Each shows when it was last used.
 
+Section 17 has what building them settled.
+
 ## 7. Abuse
 
 - **Rate limits.** Sign-in, setup, invitation acceptance and TOTP checks are limited per account and per IP address: 5 failures, then a doubling delay up to 15 minutes. The limit lives in PostgreSQL, or in Redis when the install runs several API replicas.
@@ -230,6 +232,8 @@ Outgoing email and recovery added `identity_install_settings`, `identity_mail`, 
 The second factor built `identity_totp` with the secret sealed as text (the envelope of section 15), `created_at`, `confirmed_at` (none while the set-up waits for its first code), `last_used_step` and the recovery codes' hashes, and added `identity_pending_sign_ins` for the second step of a sign-in (section 16).
 
 The TOTP secret is encrypted with a key derived from `PENARIA_SECRET_KEY`, a new required variable. The quickstart generates it.
+
+Device tokens (section 17) added `last_used_ip` and `last_moved_at` to `identity_tokens`: the address a token was last used from, and when a use from another address was last written.
 
 ## 11. Decisions
 
@@ -355,3 +359,18 @@ Step 4 (TOTP with recovery codes, sections 4.3 and 8) settled these:
 - **Notices** go by email, when mail is on and the account has a confirmed address, when the app is turned on or off, when a recovery code is used (with how many remain) and when the codes are renewed.
 - **The journal** gains `account.totp_enabled`, `account.totp_disabled`, `account.recovery_codes_regenerated` and `account.recovery_code_used` (with `recovery_codes_left`). `account.signed_in` and `account.reauthenticated` carry `second_factor` (`totp` or `recovery_code`) when one was asked; a wrong code at sign-in is `account.sign_in_failed` with `second_factor`.
 - **Left open.** Enabling the app does not end the account's other sessions; "sign out everywhere else" on the account page does.
+
+## 17. Notes from device tokens
+
+Step 5 (device and integration tokens, section 6.3) settled these:
+
+- **A device is a `device` principal of one home**, as a guest link is a `link` one: one grant and one row in `identity_tokens` share its id. Whoever holds `members.manage` makes it on the People page, with a name ("Hallway mirror", "Backup script"), a role and a place or the whole home, under the rule of section 14: a role they could give themselves, checked under the home's lock. **The access that lets them give it must not end** (`403 giver_access_ends`): a device's grant never ends, so a time-limited admin, such as a house-sitter until Sunday, cannot leave behind a token that outlives their own access; the gap section 14 leaves open for invitations does not apply to devices. A device cannot be an owner, and **its role cannot be one whose access must end** (`400 invalid_grant` with the reason `device_role`), since a device's grant has no end; such a role, like the guest preset, is for visits. A device's access is not changed afterwards (`400 invalid_grant`): a new device is made instead.
+- **Making a device needs a recent sign-in** (section 5). The token outlives the session that makes it, so a stolen session cookie must not become access that "sign out everywhere" does not end.
+- **The token** is `pnr_` and 43 letters and digits (`pnr_[0-9A-Za-z]{43}`, 256 bits): the prefix lets secret scanners recognise a leak (`SECURITY.md` registers the format), and letters and digits keep it one word to double-click. It is shown once, in the answer that makes the device; only its SHA-256 hash is kept. It never expires on its own.
+- **A request with `Authorization: Bearer pnr_…`** is judged by the token alone: a cookie it carries too is ignored, and its actor is the device (`Actor.device`), so the registry and every other feature check the device's grants as anyone's. The `Origin` check of section 5 does not apply to it: it uses no cookie, and browsers never add the header by themselves: a page of another site can send it only with a token it already holds, and only when the operator lets that site in through `PENARIA_SERVER__CORS__ALLOW_ORIGINS` (none by default). **Any other `Authorization` header** (the basic auth of a reverse proxy, or its own bearer token) is not Penaria's: the request is judged by its cookie and checked for its origin as before. A device cannot send both, so a proxy that signs people in through `Authorization` must let requests with `Bearer pnr_…` through without its own check (the server README shows how).
+- **What a device reaches.** Every endpoint that acts for the request's actor: the homes it has a grant in and the home tree, within its role. Account, session, people and install endpoints answer `401` as they do to a guest, and creating a home `403 account_required`, whatever its role.
+- **Revoking.** A device is revoked as a guest link is, through its grant (`DELETE /homes/{id}/grants/{grant_id}`), which revokes its token in the same transaction; every request checks the token and the grant, so the next request of a revoked device answers `401 invalid_token`. A device also ends when its maker can no longer give it from access without an end, by the sweep of section 14 that ends guest links (`giver_lost_access`): their access taken back, changed or given an end.
+- **Limits.** Tokens that do not exist, and tokens that are not of the form, count against the address under a key of their own (`tokens:<address>`), as section 7 counts failures; five are free, then the doubling wait, `429 too_many_attempts`. A request from an address that must wait is refused before its token is looked up, a valid one included: the trade-off of section 12. Unlike the other secrets, a miss is counted after the look-up rather than before it, since a device calls every few seconds and counting first would write on each of its requests; so a burst of parallel guesses passes the check until the first of them is counted, which 256-bit tokens make harmless. A known token that was revoked is not a guess and does not count, so a forgotten mirror that keeps calling does not make the household's other devices wait.
+- **Last use.** The list shows when and from which address each device was last used. Both are written at most every 5 minutes, as a session's last use, and at once for a move (below). A guest link's token keeps only the time: the visitor's address is in the journal's `guest_link.opened`.
+- **The journal** gains `device.created` (the grant as section 14 records it, the `device_id` and the `name`), `device.revoked` (with the `reason`, `revoked` or `giver_lost_access`) and `device.used` (with the `ip`), under the device as the actor. **A device's use is journalled only when it is the first, comes after a day without use, or comes from another address than the last one**: a mirror that polls every few seconds would otherwise fill the journal with a line per request, and these are the uses someone looking for a leaked token needs. A use from another address is journalled and written at once (with `last_moved_at` on the token), but at most every 5 minutes, so a device whose address alternates (IPv4 and IPv6, a pool of exits) adds a line every 5 minutes rather than one per request; a leaked token used elsewhere while its device keeps calling leaves a line unless the device itself moved within those minutes. Addresses are compared by their counter key, so a phone's changing IPv6 address within its /64 is the same place. Two first requests at the same moment may both be journalled.
+- **Personal tokens are left out.** A token for a person's own scripts would act as the person, account endpoints and all, unless every endpoint were sorted into what such a token may reach. A script gets a device of its own with the role it needs instead.

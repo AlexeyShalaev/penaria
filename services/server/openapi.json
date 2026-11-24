@@ -324,6 +324,24 @@
         "title": "ConfirmedEmailOut",
         "type": "object"
       },
+      "CreatedDeviceOut": {
+        "properties": {
+          "device": {
+            "$ref": "#/components/schemas/DeviceOut"
+          },
+          "token": {
+            "description": "Send it as `Authorization: Bearer <token>`; shown only now",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device",
+          "token"
+        ],
+        "title": "CreatedDeviceOut",
+        "type": "object"
+      },
       "CreatedGuestLinkOut": {
         "properties": {
           "link": {
@@ -371,6 +389,128 @@
           "emailed_to"
         ],
         "title": "CreatedInvitationOut",
+        "type": "object"
+      },
+      "DeviceIn": {
+        "properties": {
+          "name": {
+            "examples": [
+              "Hallway mirror"
+            ],
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "role_id": {
+            "description": "Any role but the owner's and those whose access must end",
+            "format": "uuid",
+            "title": "Role Id",
+            "type": "string"
+          },
+          "scope_entity_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omit for the whole home",
+            "title": "Scope Entity Id"
+          }
+        },
+        "required": [
+          "name",
+          "role_id"
+        ],
+        "title": "DeviceIn",
+        "type": "object"
+      },
+      "DeviceOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "grant_id": {
+            "description": "Revoke it to end the device's access at once",
+            "format": "uuid",
+            "title": "Grant Id",
+            "type": "string"
+          },
+          "granted_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "last_used_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The address it was last used from",
+            "title": "Last Used Ip"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleOut"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "grant_id",
+          "name",
+          "role",
+          "scope",
+          "created_at",
+          "last_used_at",
+          "last_used_ip",
+          "granted_by"
+        ],
+        "title": "DeviceOut",
         "type": "object"
       },
       "EmailIn": {
@@ -3521,6 +3661,105 @@
         "summary": "Get Home",
         "tags": [
           "homes"
+        ]
+      }
+    },
+    "/api/v1/homes/{home_id}/devices": {
+      "get": {
+        "operationId": "list_devices_api_v1_homes__home_id__devices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceOut"
+                  },
+                  "title": "Response List Devices Api V1 Homes  Home Id  Devices Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Devices",
+        "tags": [
+          "devices"
+        ]
+      },
+      "post": {
+        "description": "A device or an integration with its token, shown only now; needs a recent sign-in.\nRevoking its grant (``DELETE /homes/{id}/grants/{grant_id}``) ends its access at once.",
+        "operationId": "create_device_api_v1_homes__home_id__devices_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedDeviceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Device",
+        "tags": [
+          "devices"
         ]
       }
     },

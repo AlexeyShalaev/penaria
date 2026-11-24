@@ -8,6 +8,7 @@ that one of them takes away.
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import assert_never
 from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
@@ -122,7 +123,9 @@ class ChangeGrant:
             grant = await active_grant(tx, home_id, grant_id, now)
             roles = await tx.roles.get_many({grant.role_id} | ({changes.role_id} if changes.role_id else set()))
         if grant.principal_type is not PrincipalType.USER:
-            raise InvalidGrantError("a guest link's access is not changed: make a new link", params={"field": "grant"})
+            raise InvalidGrantError(
+                "a guest link's or a device's access is not changed: make a new one", params={"field": "grant"}
+            )
         if grant.principal_id == current.user_id:
             raise OwnGrantError("you cannot change your own access: ask someone else who manages the home's people")
         role = roles[grant.role_id]
@@ -151,7 +154,7 @@ class ChangeGrant:
             await tx.journal.append(
                 [Event("grant.changed", home_id, actor, {**grant_payload(grant, new_role), "before": before})]
             )
-            await disarm_links_of(tx, self._places, grant.principal_id, home_id, actor, now)
+            await disarm_given_by(tx, self._places, grant.principal_id, home_id, actor, now)
         return grant
 
 
@@ -183,7 +186,7 @@ class RevokeGrant:
                 await check_owner_remains(tx, home_id, [grant.id])
             await revoke(tx, actor, grant, role, now, reason=RevokeReason.LEFT if own else RevokeReason.REVOKED)
             if grant.principal_type is PrincipalType.USER:
-                await disarm_links_of(tx, self._places, grant.principal_id, home_id, actor, now)
+                await disarm_given_by(tx, self._places, grant.principal_id, home_id, actor, now)
 
 
 class LeaveHome:
@@ -209,7 +212,7 @@ class LeaveHome:
                 await check_owner_remains(tx, home_id, [grant.id for grant in mine])
             for grant in mine:
                 await revoke(tx, actor, grant, roles[grant.role_id], now, reason=RevokeReason.LEFT)
-            await disarm_links_of(tx, self._places, current.user_id, home_id, actor, now)
+            await disarm_given_by(tx, self._places, current.user_id, home_id, actor, now)
 
 
 async def require_member(tx: IdentityTransaction, actor: Actor, home_id: UUID, now: datetime) -> list[Grant]:
@@ -233,6 +236,16 @@ async def access_in(tx: IdentityTransaction, actor: Actor, home_id: UUID, place:
     principal_type, principal_id = principal_of(actor)
     path = () if place is None else place.path
     return access_of(await tx.grants.applicable(principal_type, principal_id, home_id, path, now))
+
+
+async def lasting_access_in(
+    tx: IdentityTransaction, actor: Actor, home_id: UUID, place: Place | None, now: datetime
+) -> Access:
+    """What the actor may do at the place through those of its grants that never end: what lets it give
+    access that never ends, a device's."""
+    principal_type, principal_id = principal_of(actor)
+    path = () if place is None else place.path
+    return access_of(await tx.grants.lasting(principal_type, principal_id, home_id, path, now))
 
 
 async def lock_unchanged(tx: IdentityTransaction, grant: Grant) -> None:
@@ -261,41 +274,59 @@ async def check_owner_remains(tx: IdentityTransaction, home_id: UUID, leaving: C
 async def revoke(
     tx: IdentityTransaction, actor: Actor, grant: Grant, role: Role, now: datetime, *, reason: RevokeReason
 ) -> None:
-    """Take the grant back and journal it; a guest link's token and sessions end with it."""
+    """Take the grant back and journal it; a guest link's token and sessions, or a device's token, end with it."""
     await tx.grants.revoke([grant.id], now)
-    if grant.principal_type is PrincipalType.LINK:
-        await tx.tokens.revoke_for(PrincipalType.LINK, grant.principal_id, now)
-        ended = await tx.sessions.revoke_for_grant(grant.id, now)
-        payload = {
-            "link_id": str(grant.principal_id),
-            "grant_id": str(grant.id),
-            "sessions_ended": len(ended),
-            "reason": reason.value,
-        }
-        await tx.journal.append([Event("guest_link.revoked", grant.home_id, actor, payload)])
-        return
-    await tx.journal.append(
-        [Event("grant.revoked", grant.home_id, actor, {**grant_payload(grant, role), "reason": reason.value})]
-    )
+    match grant.principal_type:
+        case PrincipalType.LINK:
+            await tx.tokens.revoke_for(PrincipalType.LINK, grant.principal_id, now)
+            ended = await tx.sessions.revoke_for_grant(grant.id, now)
+            payload = {
+                "link_id": str(grant.principal_id),
+                "grant_id": str(grant.id),
+                "sessions_ended": len(ended),
+                "reason": reason.value,
+            }
+            await tx.journal.append([Event("guest_link.revoked", grant.home_id, actor, payload)])
+        case PrincipalType.DEVICE:
+            await tx.tokens.revoke_for(PrincipalType.DEVICE, grant.principal_id, now)
+            payload = {"device_id": str(grant.principal_id), "grant_id": str(grant.id), "reason": reason.value}
+            await tx.journal.append([Event("device.revoked", grant.home_id, actor, payload)])
+        case PrincipalType.USER:
+            await tx.journal.append(
+                [Event("grant.revoked", grant.home_id, actor, {**grant_payload(grant, role), "reason": reason.value})]
+            )
+        case _:
+            assert_never(grant.principal_type)
 
 
-async def disarm_links_of(
+async def disarm_given_by(
     tx: IdentityTransaction, places: PlaceDirectory, user_id: UUID, home_id: UUID, actor: Actor, now: datetime
 ) -> None:
-    """End the guest links the user made that they could no longer make, once their access shrank.
+    """End the guest links and devices the user gave that they could no longer give, once their access shrank.
+    A device's grant never ends, so it needs access of the giver that never ends either.
 
     Pending invitations need no such sweep: accepting one checks its inviter again.
     """
-    links = [link for link in await tx.grants.active_in(home_id, PrincipalType.LINK, now) if link.granted_by == user_id]
-    if not links:
+    given = [
+        grant
+        for principal_type in (PrincipalType.LINK, PrincipalType.DEVICE)
+        for grant in await tx.grants.active_in(home_id, principal_type, now)
+        if grant.granted_by == user_id
+    ]
+    if not given:
         return
-    roles = await tx.roles.get_many({link.role_id for link in links})
-    found = await places.find({link.scope_entity_id for link in links if link.scope_entity_id})
+    roles = await tx.roles.get_many({grant.role_id for grant in given})
+    found = await places.find({grant.scope_entity_id for grant in given if grant.scope_entity_id})
     giver = Actor.user(user_id)
-    for link in links:
-        role = roles[link.role_id]
-        if not can_give(await access_in(tx, giver, home_id, place_of(found, link.scope_entity_id), now), role):
-            await revoke(tx, actor, link, role, now, reason=RevokeReason.GIVER_LOST_ACCESS)
+    for grant in given:
+        role = roles[grant.role_id]
+        place = place_of(found, grant.scope_entity_id)
+        if grant.principal_type is PrincipalType.DEVICE:
+            access = await lasting_access_in(tx, giver, home_id, place, now)
+        else:
+            access = await access_in(tx, giver, home_id, place, now)
+        if not can_give(access, role):
+            await revoke(tx, actor, grant, role, now, reason=RevokeReason.GIVER_LOST_ACCESS)
 
 
 async def grant_views(

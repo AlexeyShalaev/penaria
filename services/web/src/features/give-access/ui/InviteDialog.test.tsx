@@ -50,6 +50,7 @@ describe('InviteDialog', () => {
   })
 
   it('makes a family invitation and shows its link with a QR code', async () => {
+    vi.stubGlobal('navigator', {...navigator, clipboard: {writeText: vi.fn()}})
     const calls = mockApi({
       ...SECOND_FACTOR_FINE,
       ...MAIL_OFF,

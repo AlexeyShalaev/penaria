@@ -17,7 +17,8 @@ INVITATION_DAYS = 7
 INVITATION_MAX_DAYS = 30
 # A guest link is for a visit; one meant to outlast a season is a family member's access instead.
 LINK_MAX_LIFETIME = timedelta(days=90)
-LINK_NAME_MAX_LENGTH = 100
+# The name of a guest link or a device, which only those who manage the home's people see.
+TOKEN_NAME_MAX_LENGTH = 100
 
 
 class EscalationError(ForbiddenError):
@@ -194,12 +195,13 @@ def link_expiry(role: Role, requested: datetime | None, now: datetime) -> dateti
     return _future(requested, now, "expires_at")
 
 
-def check_link_name(name: str) -> str:
+def check_token_name(name: str) -> str:
+    """The name of a guest link or a device."""
     name = name.strip()
-    if not name or len(name) > LINK_NAME_MAX_LENGTH:
+    if not name or len(name) > TOKEN_NAME_MAX_LENGTH:
         raise InvalidGrantError(
-            f"a guest link's name has 1 to {LINK_NAME_MAX_LENGTH} characters",
-            params={"field": "name", "max_length": LINK_NAME_MAX_LENGTH},
+            f"a name has 1 to {TOKEN_NAME_MAX_LENGTH} characters",
+            params={"field": "name", "max_length": TOKEN_NAME_MAX_LENGTH},
         )
     return name
 
@@ -308,7 +310,7 @@ class Invitation:
 
 @dataclass(slots=True)
 class Token:
-    """A secret that stands for a principal, such as a guest link; only its hash is kept (sign-in.md, 10)."""
+    """A secret that stands for a principal, a guest link or a device; only its hash is kept (sign-in.md, 10)."""
 
     principal_type: PrincipalType
     principal_id: UUID
@@ -316,6 +318,9 @@ class Token:
     token_hash: bytes
     created_at: datetime
     last_used_at: datetime | None = None
+    last_used_ip: str | None = None
+    # When a use from another address than the last was last recorded.
+    last_moved_at: datetime | None = None
     revoked_at: datetime | None = None
     id: UUID = field(default_factory=new_id)
 
@@ -359,7 +364,7 @@ class GuestLink:
         token = Token(
             principal_type=PrincipalType.LINK,
             principal_id=link_id,
-            name=check_link_name(name),
+            name=check_token_name(name),
             token_hash=token_hash,
             created_at=now,
         )

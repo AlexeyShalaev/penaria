@@ -29,6 +29,11 @@ class Actor:
         return cls(ActorKind.USER, user_id)
 
     @classmethod
+    def device(cls, device_id: UUID) -> Actor:
+        """A device or an integration with a token: the device is the principal."""
+        return cls(ActorKind.DEVICE, device_id)
+
+    @classmethod
     def link(cls, link_id: UUID) -> Actor:
         """A guest who opened a guest link: the link is the principal."""
         return cls(ActorKind.LINK, link_id)

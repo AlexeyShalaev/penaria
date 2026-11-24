@@ -71,6 +71,12 @@ def secret_link_key(ip: str | None) -> str | None:
     return None if address is None else f"links:{address}"
 
 
+def bearer_token_key(ip: str | None) -> str | None:
+    """The counter of an address presenting device tokens that do not exist, apart from sign-ins and links."""
+    address = address_key(ip)
+    return None if address is None else f"tokens:{address}"
+
+
 def recovery_keys(ip: str | None, login: str) -> list[str]:
     """The counters of asking for reset emails: per address, and per account named, apart from sign-ins,
     so nobody floods a mailbox with them or tries many accounts from one place."""

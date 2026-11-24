@@ -1,25 +1,26 @@
-import {QrCode, UserPlus} from 'lucide-react'
+import {Plus, QrCode, UserPlus} from 'lucide-react'
 import {useState} from 'react'
 import {useTranslation} from 'react-i18next'
 import {useNavigate, useParams} from 'react-router'
 
-import {GuestLinkDialog, InviteDialog} from '@/features/give-access'
+import {DeviceDialog, GuestLinkDialog, InviteDialog} from '@/features/give-access'
 import {LeaveHomeButton} from '@/features/leave-home'
 import {canManagePeople, useHome, useHomesChanged} from '@/entities/home'
 import {Button, Card, CardTitle, PageTitle, QueryState} from '@/shared/ui'
 
+import {DeviceList} from './DeviceList'
 import {GuestLinkList} from './GuestLinkList'
 import {InvitationList} from './InvitationList'
 import {MemberList} from './MemberList'
 import styles from './PeoplePage.module.css'
 
-/** Who has access to the home: its members, the invitations not yet accepted and the guest links. */
+/** Who has access to the home: its members, the invitations not yet accepted, the guest links and the devices. */
 export function PeoplePage() {
   const {t} = useTranslation()
   const navigate = useNavigate()
   const {homeId = ''} = useParams<{homeId: string}>()
   const home = useHome(homeId)
-  const [dialog, setDialog] = useState<'invite' | 'guest' | null>(null)
+  const [dialog, setDialog] = useState<'invite' | 'guest' | 'device' | null>(null)
   const homesChanged = useHomesChanged()
   const left = async () => {
     await homesChanged(homeId)
@@ -59,11 +60,23 @@ export function PeoplePage() {
                     <InvitationList homeId={homeId} />
                   </Card>
                 </div>
-                <Card as="section" aria-labelledby="people-guests">
-                  <CardTitle id="people-guests">{t('people.guestLinks')}</CardTitle>
-                  <p className={styles.text}>{t('people.guestLinksText')}</p>
-                  <GuestLinkList homeId={homeId} />
-                </Card>
+                <div className={styles.column}>
+                  <Card as="section" aria-labelledby="people-guests">
+                    <CardTitle id="people-guests">{t('people.guestLinks')}</CardTitle>
+                    <p className={styles.text}>{t('people.guestLinksText')}</p>
+                    <GuestLinkList homeId={homeId} />
+                  </Card>
+                  <Card as="section" aria-labelledby="people-devices">
+                    <CardTitle id="people-devices">{t('people.devices')}</CardTitle>
+                    <p className={styles.text}>{t('people.devicesText')}</p>
+                    <DeviceList homeId={homeId} />
+                    <div className={styles.cardActions}>
+                      <Button variant="secondary" size="sm" icon={Plus} onClick={() => setDialog('device')}>
+                        {t('people.addDevice')}
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
               </div>
             ) : (
               <Card as="section" aria-labelledby="people-yours">
@@ -80,6 +93,7 @@ export function PeoplePage() {
 
             {dialog === 'invite' && <InviteDialog homeId={homeId} owner={owner} onClose={() => setDialog(null)} />}
             {dialog === 'guest' && <GuestLinkDialog homeId={homeId} onClose={() => setDialog(null)} />}
+            {dialog === 'device' && <DeviceDialog homeId={homeId} onClose={() => setDialog(null)} />}
           </div>
         )
       }}

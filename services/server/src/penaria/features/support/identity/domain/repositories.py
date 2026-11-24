@@ -6,6 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from penaria.features.shared.journal import Journal
+from penaria.features.support.identity.domain.devices import Device
 from penaria.features.support.identity.domain.mail import Attempt, LoggedMail, Mail
 from penaria.features.support.identity.domain.mailbox import StoredMailbox
 from penaria.features.support.identity.domain.members import GuestLink, Invitation, Token
@@ -274,6 +275,17 @@ class GrantRepository(Protocol):
         """The roles of the principal's active grants whose scope is the whole home or an id in ``path``."""
         ...
 
+    async def lasting(
+        self,
+        principal_type: PrincipalType,
+        principal_id: UUID,
+        home_id: UUID,
+        path: Sequence[UUID],
+        now: datetime,
+    ) -> list[Role]:
+        """The roles of those of the ``applicable`` grants that have no end."""
+        ...
+
 
 class InvitationRepository(Protocol):
     async def add(self, invitation: Invitation) -> None: ...
@@ -300,12 +312,26 @@ class TokenRepository(Protocol):
         """The principal's token; a guest link has exactly one."""
         ...
 
-    async def used(self, token_id: UUID, now: datetime) -> None: ...
+    async def used(self, token_id: UUID, now: datetime, *, ip: str | None) -> None:
+        """Keep when the token was last used, and from which address when ``ip`` is given."""
+        ...
+
+    async def moved(self, token_id: UUID, now: datetime, *, ip: str | None) -> None:
+        """Keep a use from another address than the last: as ``used``, and when it moved."""
+        ...
 
     async def revoke_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> None: ...
 
     async def links_in(self, home_id: UUID, now: datetime) -> list[GuestLink]:
         """The home's guest links that still open, the newest first."""
+        ...
+
+    async def devices_in(self, home_id: UUID, now: datetime) -> list[Device]:
+        """The home's devices whose tokens still work, the newest first."""
+        ...
+
+    async def device_by_token_hash(self, token_hash: bytes) -> Device | None:
+        """The device whose token this is, whatever the state of its token and grant."""
         ...
 
 

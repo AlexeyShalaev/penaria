@@ -216,7 +216,7 @@
     "invalid_grant_scope_entity_id": "This place is not in this home.",
     "invalid_grant_role_id": "A guest link needs a role for guests.",
     "invalid_grant_leave_when_accepted": "Only an owner invitation hands the home over.",
-    "invalid_grant_name": "A guest link's name needs 1 to {{max_length}} characters.",
+    "invalid_grant_name": "A name needs 1 to {{max_length}} characters.",
     "role_not_found": "This role does not exist in this home.",
     "grant_not_found": "This access has already been changed or taken back. Look at the list again.",
     "last_owner": "A home needs at least one owner. Make someone else an owner first.",
@@ -234,7 +234,7 @@
     "account_required": "A guest cannot do this.",
     "own_grant": "You cannot change your own access. Ask someone else who manages the home's people.",
     "invalid_grant_valid_days": "An invitation works for 1 to 30 days.",
-    "invalid_grant_grant": "A guest link's access is not changed. Make a new link instead.",
+    "invalid_grant_grant": "A guest link's or a device's access is not changed. Make a new one instead.",
     "install_admin_required": "Only an admin of this Penaria can do this.",
     "mailbox_locked": "The server's environment sets the mailbox, so it cannot be changed here.",
     "mail_off": "This Penaria sends no email. Connect a mailbox in Settings, or pass the link on by hand.",
@@ -263,7 +263,10 @@
     "totp_enrolment_not_found": "Setting up took too long. Cancel and start again.",
     "totp_unreadable": "The code from the app cannot be checked on this server. Use a recovery code instead.",
     "last_second_factor": "Owners and admins need a second step to sign in. Add a passkey before you turn the authenticator app off.",
-    "second_factor_required": "Add a passkey or an authenticator app first: owners and admins need a second step to sign in."
+    "second_factor_required": "Add a passkey or an authenticator app first: owners and admins need a second step to sign in.",
+    "invalid_grant_device_role": "A device cannot be an owner or have a role whose access must end.",
+    "invalid_token": "This token does not work. Check it, or make a new one.",
+    "giver_access_ends": "Your own access to this home ends, and a device's never does. Ask someone whose access does not end to add it."
   },
   "languages": {
     "en": "English",
@@ -470,7 +473,15 @@
     "endsRequired": "Required for this role.",
     "endsOptional": "Leave it empty for access without an end.",
     "days_one": "{{count}} day",
-    "days_other": "{{count}} days"
+    "days_other": "{{count}} days",
+    "devices": "Devices and integrations",
+    "devicesText": "A smart mirror, a script or another service signs in with a token of its own and does only what its role allows. The token works until you revoke it.",
+    "addDevice": "Add a device",
+    "noDevices": "No devices or integrations yet.",
+    "lastUsed": "Last used {{when}}",
+    "lastUsedFrom": "Last used {{when}} from {{address}}",
+    "notUsed": "Not used yet",
+    "revokeDevice": "Revoke the token of “{{name}}”"
   },
   "invite": {
     "title": "Invite to the home",
@@ -497,6 +508,20 @@
     "noRole": "This home has no role for guests.",
     "readyWhole": "Anyone with this link or QR code can look around the home until {{until}}. Print it for the fridge or send it to your guests.",
     "readyPlace": "Anyone with this link or QR code can look around {{place}} until {{until}}. Print it for the fridge or send it to your guests."
+  },
+  "device": {
+    "title": "Add a device or an integration",
+    "text": "It gets a token that works until you revoke it. Give it the smallest role that does its job.",
+    "name": "Name",
+    "nameHint": "Such as “Hallway mirror” or “Backup script”. Only those who manage the home's people see it.",
+    "submit": "Make the token",
+    "noRole": "This home has no role a device can have.",
+    "ready": "The token of “{{name}}” is ready. Copy it now: it is shown only once, and Penaria keeps no copy of it.",
+    "token": "Token",
+    "copy": "Copy the token",
+    "example": "Every request sends the token in the Authorization header. Try it:",
+    "exampleLabel": "An example request",
+    "copyExample": "Copy the command"
   },
   "changeAccess": {
     "title": "Access of {{name}}"

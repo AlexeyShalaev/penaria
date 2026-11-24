@@ -61,6 +61,18 @@ function renderPage() {
   )
 }
 
+const DEVICE = {
+  id: 'device',
+  grant_id: 'g-device',
+  name: 'Hallway mirror',
+  role: role('family'),
+  scope: {id: 'hall', names: ['Flat', 'Hall']},
+  created_at: '2026-11-24T10:00:00Z',
+  last_used_at: '2026-11-24T10:00:00Z',
+  last_used_ip: '192.0.2.44',
+  granted_by: ME,
+}
+
 const INVITATION = {
   id: 'inv',
   role: role('family'),
@@ -78,6 +90,7 @@ function manager(overrides: Record<string, unknown> = {}) {
     [`GET /api/v1/homes/${HOME_ID}/members`]: MEMBERS,
     [`GET /api/v1/homes/${HOME_ID}/invitations`]: [],
     [`GET /api/v1/homes/${HOME_ID}/guest-links`]: [],
+    [`GET /api/v1/homes/${HOME_ID}/devices`]: [],
     ...overrides,
   }
 }
@@ -89,6 +102,7 @@ describe('PeoplePage', () => {
       [`GET /api/v1/homes/${HOME_ID}/members`]: MEMBERS,
       [`GET /api/v1/homes/${HOME_ID}/invitations`]: [],
       [`GET /api/v1/homes/${HOME_ID}/guest-links`]: [LINK],
+      [`GET /api/v1/homes/${HOME_ID}/devices`]: [],
     })
     renderPage()
 
@@ -109,6 +123,7 @@ describe('PeoplePage', () => {
       [`GET /api/v1/homes/${HOME_ID}/members`]: MEMBERS,
       [`GET /api/v1/homes/${HOME_ID}/invitations`]: [],
       [`GET /api/v1/homes/${HOME_ID}/guest-links`]: () => links,
+      [`GET /api/v1/homes/${HOME_ID}/devices`]: [],
       [`DELETE /api/v1/homes/${HOME_ID}/grants/g-link`]: () => {
         links = []
         return new Response(null, {status: 204})
@@ -120,6 +135,63 @@ describe('PeoplePage', () => {
 
     expect(await screen.findByText('No guest links yet.')).toBeVisible()
     expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(1)
+  })
+
+  it('lists the devices with their roles, places and last use, and revokes one in one click', async () => {
+    let devices = [DEVICE]
+    const calls = mockApi(
+      manager({
+        [`GET /api/v1/homes/${HOME_ID}/devices`]: () => devices,
+        [`DELETE /api/v1/homes/${HOME_ID}/grants/g-device`]: () => {
+          devices = []
+          return new Response(null, {status: 204})
+        },
+      }),
+    )
+    renderPage()
+
+    const section = await screen.findByRole('region', {name: 'Devices and integrations'})
+    expect(await within(section).findByText('Hallway mirror')).toBeVisible()
+    expect(within(section).getByText('Family member')).toBeVisible()
+    expect(within(section).getByText('Hall')).toBeVisible()
+    expect(within(section).getByText(/^Last used .* from 192\.0\.2\.44$/)).toBeVisible()
+    fireEvent.click(within(section).getByRole('button', {name: 'Revoke the token of “Hallway mirror”'}))
+
+    expect(await within(section).findByText('No devices or integrations yet.')).toBeVisible()
+    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.path)).toEqual([
+      `/api/v1/homes/${HOME_ID}/grants/g-device`,
+    ])
+  })
+
+  it('says when a device was never used, or by no known address, and why a revoke failed', async () => {
+    mockApi(
+      manager({
+        [`GET /api/v1/homes/${HOME_ID}/devices`]: [
+          {...DEVICE, id: 'new', grant_id: 'g-new', name: 'New script', last_used_at: null, last_used_ip: null},
+          {...DEVICE, last_used_ip: null},
+        ],
+        [`DELETE /api/v1/homes/${HOME_ID}/grants/g-new`]: problem(404, 'grant_not_found'),
+      }),
+    )
+    renderPage()
+
+    const section = await screen.findByRole('region', {name: 'Devices and integrations'})
+    expect(await within(section).findByText('Not used yet')).toBeVisible()
+    expect(within(section).getByText(/^Last used [^·]*$/)).not.toHaveTextContent('from')
+    fireEvent.click(within(section).getByRole('button', {name: 'Revoke the token of “New script”'}))
+
+    expect(await within(section).findByRole('alert')).toHaveTextContent(
+      'This access has already been changed or taken back.',
+    )
+  })
+
+  it('opens the dialog that adds a device', async () => {
+    mockApi(manager({[`GET /api/v1/homes/${HOME_ID}/roles`]: [role('family')]}))
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Add a device'}))
+
+    expect(await screen.findByRole('dialog', {name: 'Add a device or an integration'})).toBeVisible()
   })
 
   it('shows someone who does not manage people only how to leave', async () => {
@@ -141,6 +213,7 @@ describe('PeoplePage', () => {
       [`GET /api/v1/homes/${HOME_ID}/members`]: MEMBERS,
       [`GET /api/v1/homes/${HOME_ID}/invitations`]: [],
       [`GET /api/v1/homes/${HOME_ID}/guest-links`]: [],
+      [`GET /api/v1/homes/${HOME_ID}/devices`]: [],
       [`POST /api/v1/homes/${HOME_ID}:leave`]: problem(409, 'last_owner'),
     })
     renderPage()

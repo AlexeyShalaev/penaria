@@ -41,7 +41,7 @@ from penaria.features.support.identity.use_cases.attempts import count_attempt, 
 from penaria.features.support.identity.use_cases.members import (
     access_in,
     check_place,
-    disarm_links_of,
+    disarm_given_by,
     place_for,
     place_of,
     require_manager,
@@ -387,7 +387,7 @@ async def _accept(
         for owner in await tx.grants.owners(invitation.home_id):
             if owner.principal_id == invitation.created_by:
                 await revoke(tx, inviter, owner, role, now, reason=RevokeReason.TRANSFERRED)
-        await disarm_links_of(tx, places, invitation.created_by, invitation.home_id, inviter, now)
+        await disarm_given_by(tx, places, invitation.created_by, invitation.home_id, inviter, now)
 
 
 def _payload(invitation: Invitation, role: Role) -> dict[str, object]:

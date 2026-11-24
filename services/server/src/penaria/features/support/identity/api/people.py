@@ -25,7 +25,7 @@ from penaria.features.support.identity.domain.mailbox import EMAIL_MAX_LENGTH
 from penaria.features.support.identity.domain.members import (
     INVITATION_DAYS,
     INVITATION_MAX_DAYS,
-    LINK_NAME_MAX_LENGTH,
+    TOKEN_NAME_MAX_LENGTH,
 )
 from penaria.features.support.identity.domain.models import Home, Role, User
 from penaria.features.support.identity.domain.permissions import Preset
@@ -230,7 +230,7 @@ class NewAccountOut(BaseModel):
 
 
 class GuestLinkIn(BaseModel):
-    name: str = Field(min_length=1, max_length=LINK_NAME_MAX_LENGTH, examples=["Weekend guests"])
+    name: str = Field(min_length=1, max_length=TOKEN_NAME_MAX_LENGTH, examples=["Weekend guests"])
     role_id: UUID = Field(description="A role with guest view, such as the guest preset")
     scope_entity_id: UUID | None = Field(default=None, description="Omit for the whole home")
     expires_at: AwareDatetime | None = Field(default=None, description="The role's default when omitted")

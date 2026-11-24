@@ -202,6 +202,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/homes/{home_id}/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Devices */
+        get: operations["list_devices_api_v1_homes__home_id__devices_get"];
+        put?: never;
+        /**
+         * Create Device
+         * @description A device or an integration with its token, shown only now; needs a recent sign-in.
+         *     Revoking its grant (``DELETE /homes/{id}/grants/{grant_id}``) ends its access at once.
+         */
+        post: operations["create_device_api_v1_homes__home_id__devices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/homes/{home_id}/entities": {
         parameters: {
             query?: never;
@@ -1201,6 +1223,15 @@ export interface components {
             /** Email */
             email: string;
         };
+        /** CreatedDeviceOut */
+        CreatedDeviceOut: {
+            device: components["schemas"]["DeviceOut"];
+            /**
+             * Token
+             * @description Send it as `Authorization: Bearer <token>`; shown only now
+             */
+            token: string;
+        };
         /** CreatedGuestLinkOut */
         CreatedGuestLinkOut: {
             link: components["schemas"]["GuestLinkOut"];
@@ -1223,6 +1254,56 @@ export interface components {
              * @description The link to pass on; shown only now
              */
             url: string;
+        };
+        /** DeviceIn */
+        DeviceIn: {
+            /**
+             * Name
+             * @example Hallway mirror
+             */
+            name: string;
+            /**
+             * Role Id
+             * Format: uuid
+             * @description Any role but the owner's and those whose access must end
+             */
+            role_id: string;
+            /**
+             * Scope Entity Id
+             * @description Omit for the whole home
+             */
+            scope_entity_id?: string | null;
+        };
+        /** DeviceOut */
+        DeviceOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Grant Id
+             * Format: uuid
+             * @description Revoke it to end the device's access at once
+             */
+            grant_id: string;
+            granted_by: components["schemas"]["PersonOut"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /**
+             * Last Used Ip
+             * @description The address it was last used from
+             */
+            last_used_ip: string | null;
+            /** Name */
+            name: string;
+            role: components["schemas"]["RoleOut"];
+            scope: components["schemas"]["PlaceRefOut"] | null;
         };
         /** EmailIn */
         EmailIn: {
@@ -2671,6 +2752,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_devices_api_v1_homes__home_id__devices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_device_api_v1_homes__home_id__devices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedDeviceOut"];
                 };
             };
             /** @description Validation Error */
