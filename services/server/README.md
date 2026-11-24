@@ -15,6 +15,12 @@ Only environment variables, all named `PENARIA_*`; `__` reaches into a section: 
 
 The database: `PENARIA_DATABASE__CONNECTION__HOST`, `..._PORT`, `..._USER`, `..._PASSWORD` (required) and `..._DATABASE` (required); the pool under `PENARIA_DATABASE__POOL__*`. PostgreSQL 15 or newer, with the `ltree` and `pg_trgm` extensions available (the first migration creates them).
 
+## HTTP API
+
+REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. So far: the actor's homes (`/homes`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`.
+
+Sign-in has not landed yet (it gets its own design first): until then every request acts as one local user, created on the first start. Run the API only where you alone can reach it.
+
 ## Layout
 
 ```

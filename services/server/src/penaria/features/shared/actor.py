@@ -1,0 +1,32 @@
+"""Who performs a command."""
+
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
+from uuid import UUID
+
+
+class ActorKind(StrEnum):
+    USER = "user"
+    DEVICE = "device"
+    LINK = "link"
+    MODULE = "module"
+    HUB = "hub"
+    SYSTEM = "system"
+
+
+@dataclass(frozen=True, slots=True)
+class Actor:
+    kind: ActorKind
+    id: UUID
+    on_behalf_of: UUID | None = None
+
+    @classmethod
+    def user(cls, user_id: UUID) -> Actor:
+        return cls(ActorKind.USER, user_id)
+
+    def to_json(self) -> dict[str, Any]:
+        data: dict[str, Any] = {"kind": self.kind.value, "id": str(self.id)}
+        if self.on_behalf_of is not None:
+            data["on_behalf_of"] = str(self.on_behalf_of)
+        return data

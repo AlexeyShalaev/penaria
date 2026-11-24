@@ -298,7 +298,7 @@ A row skipped this way is never lost: it is read on the next pass, once its tran
 
 ### 9.5 Where the journal lives
 
-**Decision: in a schema of its own, `journal`, owned by the platform context.** v0.3 put it in `registry`, but identity, changes and maintenance write events too. Every context appends through one port from the shared kernel. The table is partitioned by month on `at` with pg-partsmith, and kept for ever by default: history is a feature, and a home's export includes it.
+**Decision: in tables of its own, `journal_*`, owned by the platform context.** v0.3 put it in `registry`, but identity, changes and maintenance write events too. Every context appends through one port from the shared kernel. The table is partitioned by month on `at` with pg-partsmith, and kept for ever by default: history is a feature, and a home's export includes it.
 
 ## 10. Changesets
 
@@ -406,23 +406,23 @@ A module or the assistant acts on behalf of a person. What it may do is the inte
 
 ## 12. Storage layout
 
-Every bounded context keeps its tables in its own PostgreSQL schema. Foreign keys across schemas point only at `identity.homes` and `registry.entities`, so the contexts could be separated later. Every table has `home_id`, and its indexes start with it. All times are `timestamptz` in UTC. The sketch below shows the tables this document defines; the order of statements is for reading, not for running. `created_at` and `updated_at` exist everywhere and are left out.
+Every bounded context owns the tables named after it (`identity_*`, `registry_*`, `changes_*`, `journal_*`) in the one schema of the install. Foreign keys across contexts point only at `identity_homes` and `registry_entities`, so the contexts could be separated later. **Decision:** table prefixes, not a PostgreSQL schema per context as first drafted: the migration tests (alembic-gauntlet) run every migration in an isolated schema of their own, which only works when the whole database lives in one schema; an operator can still give Penaria a database of its own. Every table has `home_id`, and its indexes start with it. All times are `timestamptz` in UTC. The sketch below shows the tables this document defines; the order of statements is for reading, not for running. `created_at` and `updated_at` exist everywhere and are left out.
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- identity
-CREATE TABLE identity.users (
+CREATE TABLE identity_users (
   id uuid PRIMARY KEY, display_name text NOT NULL, locale text NOT NULL
 );
-CREATE TABLE identity.homes (
+CREATE TABLE identity_homes (
   id uuid PRIMARY KEY, name text NOT NULL, timezone text NOT NULL, locale text NOT NULL,
   settings jsonb NOT NULL DEFAULT '{}'
 );
-CREATE TABLE identity.roles (
+CREATE TABLE identity_roles (
   id uuid PRIMARY KEY,
-  home_id uuid NOT NULL REFERENCES identity.homes ON DELETE CASCADE,
+  home_id uuid NOT NULL REFERENCES identity_homes ON DELETE CASCADE,
   preset text CHECK (preset IN ('owner', 'admin', 'family', 'guest', 'contractor')),
   name text,                                    -- NULL: the preset's translated name
   all_permissions bool NOT NULL DEFAULT false,
@@ -433,27 +433,27 @@ CREATE TABLE identity.roles (
   CHECK (NOT expiry_required OR default_duration IS NOT NULL),
   UNIQUE (home_id, preset)
 );
-CREATE UNIQUE INDEX ON identity.roles (home_id, lower(name)) WHERE name IS NOT NULL;
-CREATE TABLE identity.grants (
+CREATE UNIQUE INDEX ON identity_roles (home_id, lower(name)) WHERE name IS NOT NULL;
+CREATE TABLE identity_grants (
   id uuid PRIMARY KEY,
-  home_id uuid NOT NULL REFERENCES identity.homes ON DELETE CASCADE,
+  home_id uuid NOT NULL REFERENCES identity_homes ON DELETE CASCADE,
   principal_type text NOT NULL CHECK (principal_type IN ('user', 'device', 'link')),
   principal_id uuid NOT NULL,
-  role_id uuid NOT NULL REFERENCES identity.roles,
-  scope_entity_id uuid REFERENCES registry.entities,  -- NULL: the whole home
+  role_id uuid NOT NULL REFERENCES identity_roles,
+  scope_entity_id uuid REFERENCES registry_entities,  -- NULL: the whole home
   expires_at timestamptz, revoked_at timestamptz,
   CHECK (principal_type <> 'link' OR expires_at IS NOT NULL)
   -- owner and "expiry required" rules depend on the role: checked in the domain
 );
-CREATE INDEX ON identity.grants (principal_id) WHERE revoked_at IS NULL;
+CREATE INDEX ON identity_grants (principal_id) WHERE revoked_at IS NULL;
 
 -- registry
-CREATE TABLE registry.entities (
+CREATE TABLE registry_entities (
   id uuid PRIMARY KEY,
-  home_id uuid NOT NULL REFERENCES identity.homes ON DELETE CASCADE,
+  home_id uuid NOT NULL REFERENCES identity_homes ON DELETE CASCADE,
   kind text NOT NULL CHECK (kind IN
     ('property', 'building', 'floor', 'space', 'container', 'item', 'system', 'device')),
-  parent_id uuid REFERENCES registry.entities,
+  parent_id uuid REFERENCES registry_entities,
   path ltree NOT NULL,
   name text NOT NULL, aliases text[] NOT NULL DEFAULT '{}',
   quantity numeric, unit text,
@@ -465,25 +465,25 @@ CREATE TABLE registry.entities (
   CHECK ((parent_id IS NULL) = (kind = 'property')),
   CHECK ((archived_at IS NULL) = (archive_reason IS NULL))
 );
-CREATE INDEX ON registry.entities USING gist (path);
-CREATE INDEX ON registry.entities (home_id, parent_id);
-CREATE INDEX ON registry.entities (home_id, verified_at) WHERE archived_at IS NULL;
-CREATE INDEX ON registry.entities USING gin (name gin_trgm_ops);
+CREATE INDEX ON registry_entities USING gist (path);
+CREATE INDEX ON registry_entities (home_id, parent_id);
+CREATE INDEX ON registry_entities (home_id, verified_at) WHERE archived_at IS NULL;
+CREATE INDEX ON registry_entities USING gin (name gin_trgm_ops);
 
-CREATE TABLE registry.aspect_types (
+CREATE TABLE registry_aspect_types (
   type text PRIMARY KEY, owner text NOT NULL, version int NOT NULL,
   schema jsonb NOT NULL, kinds text[] NOT NULL
 );
-CREATE TABLE registry.aspects (
-  entity_id uuid NOT NULL REFERENCES registry.entities ON DELETE CASCADE,
-  type text NOT NULL REFERENCES registry.aspect_types,
+CREATE TABLE registry_aspects (
+  entity_id uuid NOT NULL REFERENCES registry_entities ON DELETE CASCADE,
+  type text NOT NULL REFERENCES registry_aspect_types,
   home_id uuid NOT NULL, data jsonb NOT NULL, version int NOT NULL,
   PRIMARY KEY (entity_id, type)
 );
-CREATE INDEX ON registry.aspects USING gin (data jsonb_path_ops);
+CREATE INDEX ON registry_aspects USING gin (data jsonb_path_ops);
 
-CREATE TABLE registry.field_sources (
-  entity_id uuid NOT NULL REFERENCES registry.entities ON DELETE CASCADE,
+CREATE TABLE registry_field_sources (
+  entity_id uuid NOT NULL REFERENCES registry_entities ON DELETE CASCADE,
   field text NOT NULL,                          -- core.product#/model, name, parent
   home_id uuid NOT NULL,
   source text NOT NULL,
@@ -492,30 +492,30 @@ CREATE TABLE registry.field_sources (
   PRIMARY KEY (entity_id, field)
 );
 
-CREATE TABLE registry.relation_types (
+CREATE TABLE registry_relation_types (
   type text PRIMARY KEY, owner text NOT NULL, version int NOT NULL, declaration jsonb NOT NULL
 );
-CREATE TABLE registry.relations (
+CREATE TABLE registry_relations (
   id uuid PRIMARY KEY, home_id uuid NOT NULL,
-  from_id uuid NOT NULL REFERENCES registry.entities ON DELETE CASCADE,
-  to_id uuid NOT NULL REFERENCES registry.entities ON DELETE CASCADE,
-  type text NOT NULL REFERENCES registry.relation_types,
+  from_id uuid NOT NULL REFERENCES registry_entities ON DELETE CASCADE,
+  to_id uuid NOT NULL REFERENCES registry_entities ON DELETE CASCADE,
+  type text NOT NULL REFERENCES registry_relation_types,
   data jsonb NOT NULL DEFAULT '{}',
   UNIQUE (from_id, to_id, type)
 );
-CREATE INDEX ON registry.relations (to_id, type);
+CREATE INDEX ON registry_relations (to_id, type);
 
 -- changes
-CREATE TABLE changes.changesets (
+CREATE TABLE changes_changesets (
   id uuid PRIMARY KEY, home_id uuid NOT NULL,
   origin text NOT NULL,
   status text NOT NULL CHECK (status IN
     ('draft', 'open', 'applied', 'partially_applied', 'rejected', 'reverted')),
   summary text, created_by jsonb NOT NULL, decided_by uuid, decided_at timestamptz
 );
-CREATE TABLE changes.operations (
+CREATE TABLE changes_operations (
   id uuid PRIMARY KEY,
-  changeset_id uuid NOT NULL REFERENCES changes.changesets ON DELETE CASCADE,
+  changeset_id uuid NOT NULL REFERENCES changes_changesets ON DELETE CASCADE,
   seq int NOT NULL, op text NOT NULL, target_entity_id uuid, target_ref text,
   payload jsonb NOT NULL, base_version int,
   source text NOT NULL, status text NOT NULL, confidence real CHECK (confidence BETWEEN 0 AND 1),
@@ -524,10 +524,10 @@ CREATE TABLE changes.operations (
   inverse jsonb,                                -- recorded when applied, used by revert
   UNIQUE (changeset_id, seq)
 );
-CREATE INDEX ON changes.operations (target_entity_id) WHERE decision = 'pending';
+CREATE INDEX ON changes_operations (target_entity_id) WHERE decision = 'pending';
 
 -- journal: append-only, monthly partitions (pg-partsmith)
-CREATE TABLE journal.events (
+CREATE TABLE journal_events (
   seq bigserial, id uuid NOT NULL, home_id uuid NOT NULL,   -- identity columns need PostgreSQL 17 on partitioned tables
   type text NOT NULL, version int NOT NULL, entity_id uuid,
   actor jsonb NOT NULL, command_id uuid, changeset_id uuid,
@@ -535,9 +535,10 @@ CREATE TABLE journal.events (
   at timestamptz NOT NULL, payload jsonb NOT NULL,
   PRIMARY KEY (seq, at)
 ) PARTITION BY RANGE (at);
-CREATE INDEX ON journal.events (tx, seq);
-CREATE INDEX ON journal.events (home_id, tx, seq);
-CREATE INDEX ON journal.events (entity_id, at);
+CREATE TABLE journal_events_default PARTITION OF journal_events DEFAULT;  -- until monthly partitions
+CREATE INDEX ON journal_events (tx, seq);
+CREATE INDEX ON journal_events (home_id, tx, seq);
+CREATE INDEX ON journal_events (entity_id, at);
 ```
 
 How the schema maps onto aggregates:
@@ -596,8 +597,9 @@ The author accepted every decision below on 2026-11-24, two of them with changes
 | 8 | Freshness thresholds per kind, to be tuned on real use | 8 |
 | 9 | State-based core with a journal, not event sourcing | 9.2 |
 | 10 | Journal readers follow `(tx, seq)` below the oldest running transaction | 9.4 |
-| 11 | The journal has its own schema, owned by the platform context | 9.5 |
+| 11 | The journal has its own tables, owned by the platform context | 9.5 |
 | 12 | Roles are data: permissions as checkboxes, five presets per home, modules add permissions, no escalation | 11.1 |
 | 13 | No row-level security in v1; revisit before a hosted offering | 11.4 |
 | 14 | Internal handlers read the journal by cursor, like a log; the outbox serves only external brokers, so Kafka stays optional. A short design of its own follows | 9.4 |
 | 15 | Not in v1: a shared product catalogue (`core.product` sits on each item) and custom fields defined by a household (aspect types are declared in code) | 5 |
+| 16 | One database schema; each context owns tables named after it | 12 |

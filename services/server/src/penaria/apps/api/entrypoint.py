@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from penaria import __version__
 from penaria.apps.api.container import build_container
 from penaria.apps.api.settings import Settings
+from penaria.features.core.registry.api.routes import router as registry_router
+from penaria.features.shared.actor import Actor
+from penaria.features.support.identity.api.routes import router as identity_router
 
 SERVICE_NAME = "penaria-api"
 
@@ -24,10 +27,14 @@ def build_spec() -> AppSpec[Settings, DishkaContainer]:
             raise RuntimeError("the host runs pre-start hooks inside the application scope")
         session_maker = await app_scope.get(async_sessionmaker[AsyncSession])
         spec.health.add_check("postgres", PostgresHealthCheck(session_maker))
+        # The local user exists before the first request.
+        await app_scope.get(Actor)
 
     spec.lifecycle.add_pre_start_hook(check_database)
     return spec
 
 
 def build_http(settings: Settings) -> FastApiEntrypoint:
-    return FastApiEntrypoint(config=settings.server.to_config(version=__version__))
+    return FastApiEntrypoint(
+        config=settings.server.to_config(version=__version__), routers=(identity_router, registry_router)
+    )

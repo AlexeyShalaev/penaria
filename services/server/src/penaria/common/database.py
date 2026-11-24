@@ -8,6 +8,7 @@ from pydantic_settings import SettingsConfigDict
 from sqlalchemy import MetaData
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.types import UserDefinedType
 from sqlalchemy_foundation_kit import DB_NAMING_CONVENTION
 from sqlalchemy_foundation_kit.contrib.settings import BasePostgresConfig
 
@@ -36,3 +37,21 @@ class Base(DeclarativeBase):
         uuid.UUID: UUID(as_uuid=True),
         datetime.datetime: TIMESTAMP(timezone=True),
     }
+
+
+class Ltree(UserDefinedType[str]):
+    """PostgreSQL's ``ltree`` (the extension); asyncpg reads and writes it as text."""
+
+    cache_ok = True
+
+    def get_col_spec(self, **_: object) -> str:
+        return "LTREE"
+
+
+class Xid8(UserDefinedType[int]):
+    """PostgreSQL's 64-bit transaction id, ``xid8``."""
+
+    cache_ok = True
+
+    def get_col_spec(self, **_: object) -> str:
+        return "XID8"
