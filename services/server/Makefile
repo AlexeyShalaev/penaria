@@ -1,4 +1,4 @@
-.PHONY: install fmt check test test-unit test-integration run-api migrate migration
+.PHONY: install fmt check test test-unit test-integration run-api migrate migration openapi
 
 # The development stack from the repository root (`make dev-up`); override any of them.
 export PENARIA_DATABASE__CONNECTION__HOST ?= localhost
@@ -40,3 +40,6 @@ migrate:  ## Apply the migrations to the development database
 
 migration:  ## Write a migration from the models: make migration m="what changes"
 	uv run python -m penaria.apps.migrate revision -m "$(m)"
+
+openapi:  ## Export the OpenAPI document to openapi.json (the web app's API client is generated from it)
+	uv run python -m penaria.apps.api.openapi > openapi.json

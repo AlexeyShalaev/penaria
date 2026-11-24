@@ -1,0 +1,4 @@
+.hint {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}

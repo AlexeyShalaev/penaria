@@ -1,0 +1,22 @@
+.text {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.label {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+}
+
+.reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}

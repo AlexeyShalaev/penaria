@@ -1,0 +1,124 @@
+.app {
+  display: flex;
+  min-height: 100dvh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--sp-4);
+  width: var(--sidebar-w);
+  height: 100dvh;
+  padding: var(--sp-4) var(--sp-3);
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: 40px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+
+.navItem svg {
+  width: 19px;
+  height: 19px;
+}
+
+.navItem:hover {
+  background: var(--bg-sunken);
+}
+
+.navItem[aria-current='page'] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+}
+
+.page {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-8) var(--sp-10);
+}
+
+.topbar,
+.tabbar {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .sidebar {
+    display: none;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: block;
+    padding: calc(env(safe-area-inset-top) + var(--sp-2)) var(--sp-4) var(--sp-2);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(16px);
+  }
+
+  .page {
+    padding: var(--sp-2) var(--sp-4) calc(var(--tabbar-h) + env(safe-area-inset-bottom) + var(--sp-8));
+  }
+
+  .tabbar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(16px);
+  }
+
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 96px;
+    color: var(--text-subtle);
+    font-size: 11px;
+    font-weight: var(--fw-medium);
+    text-decoration: none;
+  }
+
+  .tab svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  .tab[aria-current='page'] {
+    color: var(--accent-text);
+  }
+}

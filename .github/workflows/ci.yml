@@ -82,6 +82,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
+      # The API client types match the server's OpenAPI document (services/server/openapi.json).
+      - run: pnpm api:check
       - run: pnpm test:coverage
       # Built here too, so a broken build shows up on the pull request, not on the release tag.
       - run: pnpm build

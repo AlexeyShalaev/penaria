@@ -22,6 +22,7 @@ From the root for every service, or from `services/<service>/` for one (its `Mak
 | Apply migrations / write one from the models | `make -C services/server migrate` / `make -C services/server migration m="..."` |
 | Run the API locally (:8000) | `make -C services/server run-api` |
 | Run the web app locally (:5173) | `make -C services/web dev` |
+| After an API change: export the OpenAPI document, regenerate the web app's API types | `make -C services/server openapi`, then `make -C services/web api` |
 | Stop the local run | Ctrl+C |
 
 ## Conventions

@@ -55,10 +55,10 @@ repos:
         files: ^(changes/|release-notes\.json$|CHANGELOG\.md$|scripts/release/)
         pass_filenames: false
       - id: web-check
-        name: prettier, eslint, tsc (web)
-        entry: bash -c 'cd services/web && pnpm format && pnpm lint && pnpm typecheck'
+        name: prettier, eslint, tsc, API types (web)
+        entry: bash -c 'cd services/web && pnpm format && pnpm lint && pnpm typecheck && pnpm api:check'
         language: system
-        files: ^services/web/
+        files: ^services/(web/|server/openapi\.json$)
         pass_filenames: false
 
   - repo: https://github.com/compilerla/conventional-pre-commit

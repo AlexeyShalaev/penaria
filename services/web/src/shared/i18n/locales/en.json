@@ -1,6 +1,182 @@
 {
-  "home": {
-    "title": "Penaria",
-    "subtitle": "Your home: things, rooms, documents and devices in one place."
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "save": "Save"
+  },
+  "shell": {
+    "navigation": "Sections",
+    "places": "Places and things",
+    "placesShort": "Places",
+    "switchHome": "Switch home",
+    "homes": "Your homes",
+    "addHome": "Add a home",
+    "owner": "Owner",
+    "member": "Member"
+  },
+  "homes": {
+    "welcomeTitle": "Welcome to Penaria",
+    "welcomeText": "Start with your home. Give it a name, then add its rooms, storage and things, so you always know where everything is.",
+    "newTitle": "Add a home",
+    "newText": "Another flat, a country house or your parents' place: each home keeps its own places, things and people.",
+    "name": "Name",
+    "namePlaceholder": "Flat",
+    "timezone": "Time zone",
+    "timezoneHint": "Reminders and dates follow it.",
+    "language": "Language",
+    "access": "Your access",
+    "create": "Create home"
+  },
+  "kinds": {
+    "property": "Property",
+    "building": "Building",
+    "floor": "Floor",
+    "space": "Room or area",
+    "container": "Storage",
+    "item": "Thing",
+    "device": "Device",
+    "system": "System"
+  },
+  "status": {
+    "present": "In place",
+    "missing": "Missing",
+    "lent": "Lent out",
+    "in_repair": "In repair"
+  },
+  "privacy": {
+    "normal": "Everyone in the home",
+    "guest_visible": "Visible to guests",
+    "private": "Private"
+  },
+  "archiveReason": {
+    "discarded": "Thrown away",
+    "sold": "Sold",
+    "given_away": "Given away",
+    "used_up": "Used up",
+    "merged": "Merged with another entry"
+  },
+  "tree": {
+    "expand": "Show what is inside {{name}}",
+    "collapse": "Hide what is inside {{name}}",
+    "inside_one": "{{count}} inside",
+    "inside_other": "{{count}} inside"
+  },
+  "picker": {
+    "top": "Top level of the home",
+    "empty": "There are no places yet."
+  },
+  "places": {
+    "title": "Places and things",
+    "add": "Add",
+    "addProperty": "Add a property",
+    "showArchived": "Show archived",
+    "emptyTitle": "Nothing here yet",
+    "emptyText": "Start with the property itself: a flat, a house or a plot. Rooms, storage and things go inside it."
+  },
+  "entity": {
+    "breadcrumbs": "Where it is",
+    "checked": "Checked {{when}}",
+    "neverChecked": "Never checked",
+    "lastChecked": "Last checked",
+    "archived": "Archived",
+    "archivedNotice": "Archived {{when}}.",
+    "readOnly": "You can see this, but not change it.",
+    "aliases": "Also called: {{aliases}}",
+    "pieces_one": "{{formatted}} pc",
+    "pieces_other": "{{formatted}} pcs",
+    "sections": "Sections",
+    "contents_one": "Inside · {{count}}",
+    "contents_other": "Inside · {{count}}",
+    "history": "History",
+    "nothingInside": "Nothing inside yet.",
+    "where": "Where it is",
+    "notFoundTitle": "Not found",
+    "notFoundText": "This place or thing does not exist, or you cannot see it."
+  },
+  "actions": {
+    "verify": "It's here",
+    "move": "Move",
+    "edit": "Edit",
+    "archive": "Archive",
+    "restore": "Restore",
+    "addInside": "Add inside"
+  },
+  "fields": {
+    "kind": "Kind",
+    "name": "Name",
+    "aliases": "Other names",
+    "aliasesHint": "What else you call it, separated by commas. Search finds these too.",
+    "quantity": "Quantity",
+    "unit": "Unit",
+    "unitPlaceholder": "pcs, kg, l",
+    "status": "Status",
+    "privacy": "Who can see it"
+  },
+  "create": {
+    "title": "Add a place or thing",
+    "titleInside": "Add inside {{name}}",
+    "place": "Where",
+    "placeChange": "Change",
+    "placeDone": "Done",
+    "kind": "What it is",
+    "nothingInside": "Nothing can be added inside this place.",
+    "submit": "Add"
+  },
+  "edit": {
+    "title": "Edit {{name}}"
+  },
+  "move": {
+    "title": "Move {{name}}",
+    "hint": "Pick the new place. Only places where it fits can be picked.",
+    "submit": "Move here"
+  },
+  "archive": {
+    "title": "Archive {{name}}",
+    "text": "It leaves the tree but keeps its history, and you can restore it later.",
+    "reason": "Why",
+    "submit": "Archive"
+  },
+  "history": {
+    "empty": "No history yet.",
+    "created": "Added",
+    "createdIn": "Added to {{place}}",
+    "moved": "Moved from {{from}} to {{to}}",
+    "movedTo": "Moved to {{to}}",
+    "archived": "Archived: {{reason}}",
+    "restored": "Restored from the archive",
+    "verified": "Confirmed it is in place",
+    "renamed": "Renamed from “{{from}}” to “{{to}}”",
+    "aliases": "Other names set to {{to}}",
+    "aliasesCleared": "Other names removed",
+    "quantity": "Quantity set to {{to}}",
+    "quantityCleared": "Quantity removed",
+    "unit": "Unit set to {{to}}",
+    "unitCleared": "Unit removed",
+    "status": "Status changed from {{from}} to {{to}}",
+    "privacy": "Visibility changed from {{from}} to {{to}}",
+    "other": "Changed"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "The link may be broken, or the page has moved.",
+    "home": "Go to your home"
+  },
+  "errors": {
+    "generic": "Something went wrong. Try again.",
+    "network": "The server cannot be reached. Check the connection and try again.",
+    "internal_error": "The server ran into a problem. Try again later.",
+    "validation_error": "Some of the values are not valid. Check them and try again.",
+    "stale_version": "Someone changed this in the meantime. You now see the latest version: check it and try again.",
+    "entity_not_found": "This place or thing does not exist, or you cannot see it.",
+    "home_not_found": "This home does not exist, or you have no access to it.",
+    "misplaced_entity": "It cannot go there. Pick another place.",
+    "invalid_entity": "Check the name, the other names and the quantity.",
+    "invalid_home": "Check the name and the time zone.",
+    "entity_archived": "It is archived. Restore it first.",
+    "entity_not_archived": "It is not archived.",
+    "permission_denied": "You are not allowed to do this."
   }
 }
