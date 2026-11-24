@@ -70,7 +70,6 @@ async def prove_second_factor(
         case AppCode(code=code):
             totp.use_code(open_secret(box, totp), code, now)
             await tx.totp.save(totp)
-            return SecondFactorMethod.TOTP
         case RecoveryCode(code=code):
             totp.use_recovery_code(code)
             await tx.totp.save(totp)
@@ -86,9 +85,9 @@ async def prove_second_factor(
                 ]
             )
             await postman.notify(tx, user, MailKind.RECOVERY_CODE_USED, {"left": str(left)})
-            return SecondFactorMethod.RECOVERY_CODE
         case _:
             assert_never(proof)
+    return method_of(proof)
 
 
 def method_of(proof: SecondFactorProof) -> SecondFactorMethod:
@@ -126,11 +125,21 @@ async def must_have_second_factor(tx: IdentityTransaction, user: User) -> bool:
     )
 
 
-async def lacks_second_factor(tx: IdentityTransaction, user: User) -> bool:
-    """Whether the account must have a second factor and has none: neither an authenticator app nor a passkey."""
-    if await totp_enabled(tx, user.id) is not None or await tx.passkeys.for_user(user.id):
-        return False
-    return await must_have_second_factor(tx, user)
+@dataclass(frozen=True, slots=True)
+class SecondFactorState:
+    # The authenticator app, if it is on.
+    totp: Totp | None
+    # The account must keep a second factor (``must_have_second_factor``).
+    required: bool
+    # Required, and it has neither an app nor a passkey: owner-level commands refuse it.
+    missing: bool
+
+
+async def second_factor_state(tx: IdentityTransaction, user: User) -> SecondFactorState:
+    totp = await totp_enabled(tx, user.id)
+    required = await must_have_second_factor(tx, user)
+    missing = required and totp is None and not await tx.passkeys.for_user(user.id)
+    return SecondFactorState(totp=totp, required=required, missing=missing)
 
 
 async def require_second_factor(tx: IdentityTransaction, user_id: UUID) -> None:
@@ -138,7 +147,7 @@ async def require_second_factor(tx: IdentityTransaction, user_id: UUID) -> None:
     user = await tx.users.get(user_id)
     if user is None:
         raise RuntimeError(f"the user ({user_id}) of an open session does not exist")
-    if await lacks_second_factor(tx, user):
+    if (await second_factor_state(tx, user)).missing:
         raise SecondFactorRequiredError(
             "add a passkey or an authenticator app first: owners and install admins who sign in with a "
             "password need a second factor"

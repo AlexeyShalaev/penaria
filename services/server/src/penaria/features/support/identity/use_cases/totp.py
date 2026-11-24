@@ -40,6 +40,7 @@ from penaria.features.support.identity.use_cases.recovery import AccountNotFound
 from penaria.features.support.identity.use_cases.second_factor import (
     must_have_second_factor,
     open_secret,
+    second_factor_state,
     totp_enabled,
 )
 
@@ -70,15 +71,13 @@ class GetSecondFactor:
 
     async def execute(self, current: CurrentSession) -> SecondFactorStatus:
         async with self._uow.query() as tx:
-            user = await load_user(tx, current)
-            totp = await totp_enabled(tx, user.id)
-            required = await must_have_second_factor(tx, user)
-            missing = required and totp is None and not await tx.passkeys.for_user(user.id)
+            state = await second_factor_state(tx, await load_user(tx, current))
+            totp = state.totp
             return SecondFactorStatus(
                 totp_enabled_at=None if totp is None else totp.confirmed_at,
                 recovery_codes_left=None if totp is None else len(totp.recovery_codes),
-                required=required,
-                missing=missing,
+                required=state.required,
+                missing=state.missing,
             )
 
 

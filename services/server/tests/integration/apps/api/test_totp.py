@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -647,23 +648,33 @@ async def test_a_pending_sign_in_whose_app_was_turned_off_meanwhile_opens_nothin
     assert (response.status_code, response.json()["code"]) == (401, "second_factor_expired")
 
 
-@pytest.mark.parametrize("change", ["reset", "change", "sign_out_elsewhere"])
+async def reset_the_password(api: httpx.AsyncClient, settings: Settings) -> None:
+    printed = await reset(
+        CliSettings.model_validate({"database": settings.database, "public_url": PUBLIC_URL}),
+        parse(["users", "reset", "owner"]),
+    )
+    [token] = RESET_LINK.findall(printed)
+    await ok(await api.post("/password-reset", json={"token": token, "new_password": FRESH}), 204)
+
+
+async def change_the_password(api: httpx.AsyncClient, settings: Settings) -> None:
+    await ok(await api.post("/me/password", json={"current_password": OWNER["password"], "new_password": FRESH}), 204)
+
+
+async def sign_out_elsewhere(api: httpx.AsyncClient, settings: Settings) -> None:
+    await ok(await api.post("/me/sessions:revoke-others"))
+
+
+@pytest.mark.parametrize("action", [reset_the_password, change_the_password, sign_out_elsewhere])
 async def test_a_pending_sign_in_ends_with_the_password_or_the_other_sessions(
-    api: httpx.AsyncClient, secret: str, anonymous: httpx.AsyncClient, settings: Settings, change: str
+    api: httpx.AsyncClient,
+    secret: str,
+    anonymous: httpx.AsyncClient,
+    settings: Settings,
+    action: Callable[[httpx.AsyncClient, Settings], Awaitable[None]],
 ) -> None:
     pending = await password_step(anonymous)
-    if change == "reset":
-        printed = await reset(
-            CliSettings.model_validate({"database": settings.database, "public_url": PUBLIC_URL}),
-            parse(["users", "reset", "owner"]),
-        )
-        [token] = RESET_LINK.findall(printed)
-        await ok(await api.post("/password-reset", json={"token": token, "new_password": FRESH}), 204)
-    elif change == "change":
-        body = {"current_password": OWNER["password"], "new_password": FRESH}
-        await ok(await api.post("/me/password", json=body), 204)
-    else:
-        await ok(await api.post("/me/sessions:revoke-others"))
+    await action(api, settings)
 
     response = await anonymous.post(
         "/sign-in/second-factor", json={"token": pending["token"], "code": now_code(secret)}
