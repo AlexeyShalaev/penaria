@@ -53,3 +53,14 @@ export function expectEveryCallAnswered() {
 
 /** The answer of an install that sends no email, for the pages that ask. */
 export const MAIL_OFF = {'GET /api/v1/mail': {enabled: false}}
+
+/** The answer of an account that needs no second factor, or has one, for the pages and dialogs that ask. */
+export const SECOND_FACTOR_FINE = {
+  'GET /api/v1/me/second-factor': {
+    totp_enabled: false,
+    totp_enabled_at: null,
+    recovery_codes_left: null,
+    required: false,
+    missing: false,
+  },
+}

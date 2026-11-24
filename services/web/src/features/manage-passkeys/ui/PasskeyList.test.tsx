@@ -3,7 +3,7 @@ import {Route} from 'react-router'
 import {describe, expect, it, vi} from 'vitest'
 
 import {type Passkey} from '@/entities/account'
-import {mockApi, problem} from '@/test/api'
+import {mockApi, problem, SECOND_FACTOR_FINE} from '@/test/api'
 import {renderAt} from '@/test/render'
 import {ASSERTION_JSON, mockPasskeys} from '@/test/webauthn'
 
@@ -24,7 +24,7 @@ function renderList() {
 describe('PasskeyList', () => {
   it('shows when each passkey was added and last used', async () => {
     vi.useFakeTimers({now: new Date('2026-01-05T10:00:00Z'), toFake: ['Date']})
-    mockApi({'GET /api/v1/me/passkeys': [PHONE, KEY]})
+    mockApi({...SECOND_FACTOR_FINE, 'GET /api/v1/me/passkeys': [PHONE, KEY]})
     renderList()
 
     const rows = await screen.findAllByRole('listitem')
@@ -36,7 +36,7 @@ describe('PasskeyList', () => {
   })
 
   it('says when there are none', async () => {
-    mockApi({'GET /api/v1/me/passkeys': []})
+    mockApi({...SECOND_FACTOR_FINE, 'GET /api/v1/me/passkeys': []})
     renderList()
 
     expect(await screen.findByText('No passkeys yet.')).toBeVisible()
@@ -45,6 +45,7 @@ describe('PasskeyList', () => {
   it('renames a passkey', async () => {
     let passkeys = [PHONE]
     const calls = mockApi({
+      ...SECOND_FACTOR_FINE,
       'GET /api/v1/me/passkeys': () => passkeys,
       'PATCH /api/v1/me/passkeys/phone': () => {
         passkeys = [{...PHONE, name: 'My phone'}]
@@ -66,6 +67,7 @@ describe('PasskeyList', () => {
     let passkeys = [PHONE, KEY]
     const browser = mockPasskeys()
     const calls = mockApi({
+      ...SECOND_FACTOR_FINE,
       'GET /api/v1/me/passkeys': () => passkeys,
       'DELETE /api/v1/me/passkeys/key': () => {
         if (!recent) return problem(403, 'recent_sign_in_required')
@@ -106,6 +108,7 @@ describe('PasskeyList', () => {
 
   it('keeps a passkey that is the only way to sign in', async () => {
     mockApi({
+      ...SECOND_FACTOR_FINE,
       'GET /api/v1/me/passkeys': [PHONE],
       'DELETE /api/v1/me/passkeys/phone': problem(409, 'last_sign_in_method'),
     })

@@ -109,10 +109,18 @@ from penaria.features.support.identity.use_cases.sessions import (
     Authenticate,
     SignIn,
     SignInWithPasskey,
+    SignInWithSecondFactor,
     SignOut,
     StartPasskeySignIn,
 )
 from penaria.features.support.identity.use_cases.setup import CompleteSetup, IssueSetupToken, NeedsSetup
+from penaria.features.support.identity.use_cases.totp import (
+    ConfirmTotp,
+    GetSecondFactor,
+    RegenerateRecoveryCodes,
+    StartTotpEnrolment,
+    TurnOffTotp,
+)
 from penaria.integrations.postgres.transaction import PenariaTransaction
 
 
@@ -211,7 +219,13 @@ class UseCaseProvider(Provider):
         SignIn,
         StartPasskeySignIn,
         SignInWithPasskey,
+        SignInWithSecondFactor,
         SignOut,
+        GetSecondFactor,
+        StartTotpEnrolment,
+        ConfirmTotp,
+        RegenerateRecoveryCodes,
+        TurnOffTotp,
         ReauthenticateWithPassword,
         StartPasskeyReauthentication,
         ReauthenticateWithPasskey,

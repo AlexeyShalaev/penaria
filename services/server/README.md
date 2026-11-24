@@ -6,7 +6,7 @@ The backend of Penaria: one Python package, `penaria`, run as several processes.
 |---|---|---|
 | api | `python -m penaria.apps.api` | REST and WebSocket |
 | migrate | `python -m penaria.apps.migrate upgrade` | Applies the database migrations and exits; runs before a new version starts |
-| cli | `python -m penaria.apps.cli users reset <username>` | The operator's tools: prints a one-time password reset link for an account, for an owner who is locked out |
+| cli | `python -m penaria.apps.cli users reset <username> [--disable-second-factor]` | The operator's tools: prints a one-time password reset link for an account, for an owner who is locked out; can also turn its authenticator app off |
 
 More processes join `src/penaria/apps/` as their first code lands: the worker (Temporal, the outbox publisher, event handlers), standalone (api and worker in one process for home installs), the Telegram bot and the on-site hub.
 
@@ -29,7 +29,7 @@ Behind a reverse proxy, let the server trust its `X-Forwarded-For`, so that the 
 
 ## HTTP API
 
-REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. The same document is committed as `openapi.json` (`make openapi` exports it without a database), and the web app generates its API types from it; a unit test fails when the committed file no longer matches the code. So far: setup and signing in (`/setup`, `/sign-in`, `/sign-in/passkey`, `/sign-out`), recovery (`/mail`, `/password-reset:request`, `:preview`, `/password-reset`, `/email-verifications:confirm`), the signed-in account, its email, sessions and passkeys (`/me`, `/me/email`, `/me/password`, `/me/sessions`, `/me/passkeys`, `/me/reauthenticate`), the install's settings for its admins (`/install/mail`, `:test`, `/status`, `/messages`), the account's homes (`/homes`), a home's people (`/homes/{id}/roles`, `/members`, `/members/{id}:reset-link`, `/grants/{id}`, `:leave`, `/invitations`, `/guest-links`), accepting invitations (`/invitations:preview`, `:accept`, `:accept-new-account`), guest visits (`/guest-sessions`, `/guest`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`; a request without a session answers 401 with the code `unauthenticated`.
+REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. The same document is committed as `openapi.json` (`make openapi` exports it without a database), and the web app generates its API types from it; a unit test fails when the committed file no longer matches the code. So far: setup and signing in (`/setup`, `/sign-in`, `/sign-in/second-factor`, `/sign-in/passkey`, `/sign-out`), recovery (`/mail`, `/password-reset:request`, `:preview`, `/password-reset`, `/email-verifications:confirm`), the signed-in account, its email, sessions, passkeys and second factor (`/me`, `/me/email`, `/me/password`, `/me/sessions`, `/me/passkeys`, `/me/second-factor`, `/me/totp`, `:confirm`, `/me/totp/recovery-codes`, `/me/reauthenticate`), the install's settings for its admins (`/install/mail`, `:test`, `/status`, `/messages`), the account's homes (`/homes`), a home's people (`/homes/{id}/roles`, `/members`, `/members/{id}:reset-link`, `/grants/{id}`, `:leave`, `/invitations`, `/guest-links`), accepting invitations (`/invitations:preview`, `:accept`, `:accept-new-account`), guest visits (`/guest-sessions`, `/guest`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`; a request without a session answers 401 with the code `unauthenticated`.
 
 ## Sign-in and the first start
 
@@ -46,9 +46,11 @@ People join a home through invitations: whoever manages the home's people makes 
 
 Passkeys belong to the host name of `PENARIA_PUBLIC_URL`: browsers offer them only on `https` with a domain name, or on `localhost`, so an install opened at a plain IP address signs in with passwords only. Changing the host name later makes every passkey unusable (people sign in with their password and add a new one). Adding or removing a passkey needs a sign-in within the last 10 minutes; the web app asks for the password or a passkey again when it is older.
 
+Two-step sign-in: an account may add an authenticator app (TOTP: six digits, 30 seconds, as Google Authenticator, 1Password and the like make them) on its account page, and then signing in with the password asks for a code from it too; ten single-use recovery codes stand in for the phone when it is lost. Signing in with a passkey asks for no code. The app's secret is stored encrypted with `PENARIA_SECRET_KEY`, so changing that key without keeping the old one in `PENARIA_RETIRED_SECRET_KEYS` leaves only the recovery codes working. Owners of a home and the install's admins who sign in with a password must have an authenticator app or a passkey: until they add one, they are asked for it right after signing in, and handing a home over, changing people's access, making reset links and the install's settings answer `403 second_factor_required` (`docs/design/sign-in.md`, section 16).
+
 ## Outgoing email
 
-An install sends email through one mailbox: password reset links, email confirmations, invitations and notices about an account (a changed password, a new passkey), in the recipient's language, as text and HTML. Until a mailbox is connected, nothing is sent: reset and invitation links are shown on screen to pass on by hand, and accounts cannot add an email.
+An install sends email through one mailbox: password reset links, email confirmations, invitations and notices about an account (a changed password, a new passkey, two-step sign-in turned on or off, a recovery code used), in the recipient's language, as text and HTML. Until a mailbox is connected, nothing is sent: reset and invitation links are shown on screen to pass on by hand, and accounts cannot add an email.
 
 Every email is queued in PostgreSQL (`identity_mail`, its text encrypted with `PENARIA_SECRET_KEY`, since links in it open accounts) in the same transaction as the change it is about, and a loop inside every api process sends what is due within a few seconds. A temporary failure (a `4xx` reply, a connection that did not open or broke off) is tried again after 1, 5, 15 and 30 minutes; a permanent one is not. With several api replicas, each email is taken by one of them under a five-minute lease (`SELECT … FOR UPDATE SKIP LOCKED`), so none goes twice and one left by a stopped replica is taken again. Every attempt is a row of the mail log, which Settings shows with a button to send an email again while its link works; the log keeps 30 days, the text of an email only while it can be sent.
 
@@ -64,7 +66,11 @@ docker compose exec penaria-server python -m penaria.apps.cli users reset <usern
 
 It needs the install's environment (the database and `PENARIA_PUBLIC_URL`) and prints the link with when it stops working.
 
-A reset sets a new password and ends every session of the account; its passkeys keep working.
+A reset sets a new password and ends every session of the account; its passkeys and its authenticator app keep working, so signing in with the new password still asks for a code. Someone who lost the phone signs in with a recovery code and sets the app up again. Someone who lost the phone and the recovery codes asks the operator, who turns the app off with the reset:
+
+```sh
+docker compose exec penaria-server python -m penaria.apps.cli users reset <username> --disable-second-factor
+```
 
 ## Layout
 

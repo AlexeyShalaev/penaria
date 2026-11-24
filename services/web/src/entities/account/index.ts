@@ -2,6 +2,9 @@ export {
   type Account,
   type AccountSession,
   forgetAccount,
+  type SecondFactorChallenge,
+  type SecondFactorCode,
+  type SignInResult,
   useAccount,
   useChangePassword,
   useCompleteSetup,
@@ -10,6 +13,7 @@ export {
   useSessions,
   useSetupStatus,
   useSignIn,
+  useSignInWithCode,
   useSignOut,
   useStartSession,
   useUpdateAccount,
@@ -31,8 +35,19 @@ export {
   useRequestPasswordReset,
   useResetPassword,
 } from './api/recovery'
+export {
+  type SecondFactor,
+  type TotpEnrolment,
+  useConfirmTotp,
+  useRegenerateRecoveryCodes,
+  useSecondFactor,
+  useStartTotp,
+  useTurnOffTotp,
+} from './api/secondFactor'
 export {describeDevice, deviceName} from './model/device'
 export {checkNewPassword, PASSWORD_MIN_LENGTH, type PasswordProblem} from './model/password'
 export {describePasskeyError} from './model/passkeys'
 export {type NewAccount, useNewAccountFields} from './ui/NewAccountFields'
+export {secondFactorCode} from './model/secondFactor'
+export {SecondFactorField} from './ui/SecondFactorField'
 export {useRecentSignIn} from './ui/useRecentSignIn'

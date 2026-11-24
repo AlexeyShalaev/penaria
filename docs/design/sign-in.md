@@ -1,6 +1,6 @@
 # Sign-in
 
-- **Status:** accepted on 2026-11-24, with outgoing email configurable from the interface (section 9). Steps 1 to 3, then outgoing email with recovery, are built; what they settled is in sections 12 to 15.
+- **Status:** accepted on 2026-11-24, with outgoing email configurable from the interface (section 9). Steps 1 to 4 of the order in section 11, and outgoing email with recovery, are built; what they settled is in sections 12 to 16.
 - **Date:** 2026-11-24.
 - **Scope:** how people, guests and devices prove who they are to a Penaria install:
   - the first start of an install;
@@ -91,7 +91,7 @@ TOTP, an authenticator app, with ten single-use recovery codes. Passkeys need no
 
 **Decision: required for owners and install admins who sign in with a password, and optional for everyone else.**
 - An owner who has only a password is asked to add TOTP or a passkey right after sign-in.
-- An owner cannot act on owner-level commands until they do.
+- An owner cannot act on owner-level commands until they do. Section 16 lists them.
 
 ### 4.4 External identity (OIDC)
 
@@ -160,7 +160,7 @@ A smart mirror or a script is a `device` principal, with grants like anyone else
 - **With SMTP:** "forgot password" sends a one-time link that is valid for 30 minutes.
 - **Without SMTP:** a home admin can create a reset link for a member, valid for 24 hours. It is shown on screen to pass on by hand.
 - **When the last owner is locked out:** the operator runs `python -m penaria.apps.cli users reset <username>`, which prints a one-time reset link. Access to the server is access to the house.
-- **Recovery codes** from section 4.3 replace a lost second factor.
+- **Recovery codes** from section 4.3 replace a lost second factor. A password reset keeps the second factor; whoever lost both the authenticator app and its recovery codes asks the operator, whose reset command can turn the app off (section 16).
 
 ## 9. Configuration
 
@@ -226,6 +226,8 @@ Step 3 built `identity_invitations`, `identity_tokens` and the guest side of `id
 A guest link's secret is stored as a token for its `link` principal.
 
 Outgoing email and recovery added `identity_install_settings`, `identity_mail`, `identity_mail_attempts` and `identity_account_links` (section 15).
+
+The second factor built `identity_totp` with the secret sealed as text (the envelope of section 15), `created_at`, `confirmed_at` (none while the set-up waits for its first code), `last_used_step` and the recovery codes' hashes, and added `identity_pending_sign_ins` for the second step of a sign-in (section 16).
 
 The TOTP secret is encrypted with a key derived from `PENARIA_SECRET_KEY`, a new required variable. The quickstart generates it.
 
@@ -327,3 +329,29 @@ The step after invitations (outgoing email from the interface and recovery, sect
 - **Invitations by email** go in the home's language: the person invited has no account to say theirs. Without mail, asking for one answers `409 mail_off` and makes no invitation.
 - **Notices.** A changed password (by the person or a reset), a new passkey and a changed or removed email (to the old address) are told by email to the account's confirmed address, when mail is on.
 - **The interface.** Install admins see Settings: the mailbox form, as HSE Doc Studio's, with the port following the security, the password write-only, lock marks when the environment sets the mailbox, a status line from a connection check (connect, STARTTLS, sign in, no mail sent), a test email that checks the saved settings, and the mail log. The account page has the email; the people page a "Reset password" action per member; the invitation dialog an optional address when mail is on.
+
+## 16. Notes from the second factor
+
+Step 4 (TOTP with recovery codes, sections 4.3 and 8) settled these:
+
+- **Codes.** RFC 6238 as every authenticator app reads it: SHA-1, six digits, 30-second steps, a 160-bit secret. **Decision: a small implementation of our own** (`domain/totp.py`, an HMAC and a few lines of arithmetic, checked against the RFC's test vectors) rather than `pyotp`: it is less code than the dependency would bring, and nothing else of `pyotp` is needed. A code of the step before or after the current one is accepted too, for a phone's clock that is off and the seconds it takes to type. The step of the last code accepted is kept, so a code works once and no earlier code works after it: a code seen over someone's shoulder cannot be used again.
+- **Setting the app up** needs a recent sign-in (section 5), as adding a passkey does. The server makes the secret and keeps it sealed with `PENARIA_SECRET_KEY`, bound to the account (`totp/<user id>`); the answer carries it once, in base32 to type by hand and as an `otpauth://` address for the QR code, which the browser draws (section 14). The issuer is "Penaria" and the account is named `username@host`, the host of `PENARIA_PUBLIC_URL`, so one phone tells two installs apart. The app is on only once a code from it confirms the set-up, within 10 minutes; a set-up started again replaces one that was not confirmed, and an app that is on is turned off before another is set up.
+- **Recovery codes.** Ten, made when the app is turned on and shown only in that answer: 16 characters of Crockford's base32 (80 bits) in four groups, so a stolen table cannot be reversed by trying them all, which is why a plain SHA-256 is kept rather than a slow hash. Case, spaces, dashes and the letters o, i and l for 0 and 1 do not matter when one is typed. Each works once; renewing them (a recent sign-in) voids the old ones.
+- **Signing in in two steps.** A right password for an account with the app opens no session: `POST /sign-in` answers `202` with a pending sign-in's token and its end. Only a hash of the token is kept, in `identity_pending_sign_ins`, with the account and the address the password came from (its counter key, an IPv4 address or an IPv6 /64); it works for 5 minutes, from that address only, and opens one session. `POST /sign-in/second-factor` takes it with a `code` or a `recovery_code` and opens the session; a token that is unknown, expired, used, from another address, or whose account was disabled or turned the app off meanwhile answers `401 second_factor_expired`, and the person signs in again. A passkey sign-in asks for no code (section 4.3). A password reset does not sign in (section 15), so the next sign-in asks for the code.
+- **Limits.** Wrong codes count as section 7 says: per account under a key of their own (`second-factor:<user id>`), so a right password does not forgive them, and per address under the address's sign-in key. Each code is counted before it is checked and a right one takes its count back. Five are free; then the doubling wait up to 15 minutes. Codes of an app have a million values and three are valid at a time, so this leaves a guesser who has the password a chance of about one in ten thousand a day.
+- **Confirming it is you** with the password (section 5) asks for a code or a recovery code too while the app is on (`400 second_factor_code_required` without one): a password alone never makes recent a sign-in that needed both to start. The password is checked and forgiven first, and a wrong code then counts under the account's code key only. Confirming with a passkey asks for no code.
+- **Turning the app off** needs a recent sign-in and forgets its recovery codes. An owner or an install admin keeps it unless they have a passkey (`409 last_second_factor`). Removing their last passkey is still refused only when it is the last way to sign in (section 13): a passkey lost with its device must be removable, and the account is then asked for a second factor again at once, as below.
+- **Who must have a second factor** (decision 5): an account that holds an owner grant in any home or is an install admin, and has a password. Every account has one so far (section 13), so this is every owner and admin. A passkey or the app satisfies it. **Decision: the rule follows the account as it is, not a mark on the session**: it is computed when an owner-level command runs and when the web app asks (`GET /me/second-factor`, with `required` and `missing`), so adding a factor lifts it in every session at once, and accepting an owner invitation brings it at once.
+- **Owner-level commands.** Until such an account adds a factor, these answer `403 second_factor_required`:
+  - inviting an owner, which is also how a home is handed over;
+  - changing anyone's grant (role, place or end);
+  - taking back another owner's grant;
+  - making a reset link for a member, which hands over their account;
+  - every install admin command: reading and changing the mailbox, its status, the test email, the mail log and resending.
+
+  Everything else stays open to them, the commands that add a factor among them, and so do leaving a home, inviting other roles, making guest links, revoking invitations and links, and taking back grants that are not an owner's: they only reduce access or give what any admin of the home may give. An admin of a home who is neither an owner nor an install admin is not asked for a second factor.
+- **The prompt.** The web app covers every signed-in page with a prompt for such an account, right after sign-in or setup, with the two ways: add a passkey (where the browser can make one), or set up an authenticator app in place; and a way to sign out. It stays until the recovery codes of a new app are put away.
+- **Losing everything.** The recovery codes replace a lost phone. **Decision: whoever lost the phone and the codes asks the operator**, whose `python -m penaria.apps.cli users reset <username> --disable-second-factor` prints a reset link and turns the app off, journalled as `account.totp_disabled` with `by: operator` under the `system` actor. Access to the server is access to the house (section 8), so no install admin command can do it: an install admin of a household's install could otherwise take over any account with a reset link and this. The command sends no notice, as it sends none for its reset link; an owner or an admin is asked to add a second factor again at their next sign-in.
+- **Notices** go by email, when mail is on and the account has a confirmed address, when the app is turned on or off, when a recovery code is used (with how many remain) and when the codes are renewed.
+- **The journal** gains `account.totp_enabled`, `account.totp_disabled`, `account.recovery_codes_regenerated` and `account.recovery_code_used` (with `recovery_codes_left`). `account.signed_in` and `account.reauthenticated` carry `second_factor` (`totp` or `recovery_code`) when one was asked; a wrong code at sign-in is `account.sign_in_failed` with `second_factor`.
+- **Left open.** Enabling the app does not end the account's other sessions; "sign out everywhere else" on the account page does.

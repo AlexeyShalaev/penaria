@@ -2,7 +2,7 @@ import {fireEvent, screen} from '@testing-library/react'
 import {Route} from 'react-router'
 import {describe, expect, it} from 'vitest'
 
-import {MAIL_OFF, mockApi, problem} from '@/test/api'
+import {MAIL_OFF, mockApi, problem, SECOND_FACTOR_FINE} from '@/test/api'
 import {account, detail, home, HOME_ID, session} from '@/test/fixtures'
 import {renderAt} from '@/test/render'
 
@@ -18,6 +18,7 @@ describe('App', () => {
   it('welcomes a new install and lands in the tree of the home it creates', async () => {
     let homes: unknown[] = []
     const calls = mockApi({
+      ...SECOND_FACTOR_FINE,
       ...MAIL_OFF,
       'GET /api/v1/me': account(),
       'GET /api/v1/homes': () => homes,
@@ -46,6 +47,7 @@ describe('App', () => {
   it('opens the home used last', async () => {
     localStorage.setItem('penaria.lastHome', OTHER_ID)
     mockApi({
+      ...SECOND_FACTOR_FINE,
       ...MAIL_OFF,
       'GET /api/v1/me': account(),
       'GET /api/v1/homes': [home(), home({id: OTHER_ID, name: 'Country house'})],
@@ -60,6 +62,7 @@ describe('App', () => {
 
   it('remembers the home of an entity page', async () => {
     mockApi({
+      ...SECOND_FACTOR_FINE,
       ...MAIL_OFF,
       'GET /api/v1/me': account(),
       'GET /api/v1/entities/drill': {...detail({id: 'drill', name: 'Drill', kind: 'item'}), home_id: OTHER_ID},
@@ -77,6 +80,7 @@ describe('App', () => {
   it('sends a visitor without a session to sign in, and back to the page afterwards', async () => {
     let signedIn = false
     const calls = mockApi({
+      ...SECOND_FACTOR_FINE,
       ...MAIL_OFF,
       'GET /api/v1/me': () => (signedIn ? account() : problem(401, 'unauthenticated')),
       'GET /api/v1/setup': {needed: false},
@@ -104,7 +108,12 @@ describe('App', () => {
   })
 
   it('sends the first visitor of a fresh install to the setup', async () => {
-    mockApi({...MAIL_OFF, 'GET /api/v1/me': problem(401, 'unauthenticated'), 'GET /api/v1/setup': {needed: true}})
+    mockApi({
+      ...SECOND_FACTOR_FINE,
+      ...MAIL_OFF,
+      'GET /api/v1/me': problem(401, 'unauthenticated'),
+      'GET /api/v1/setup': {needed: true},
+    })
 
     renderApp()
 
@@ -114,6 +123,7 @@ describe('App', () => {
 
   it('goes back to sign in when the session ends while the app is open', async () => {
     mockApi({
+      ...SECOND_FACTOR_FINE,
       ...MAIL_OFF,
       'GET /api/v1/me': account(),
       'GET /api/v1/homes': problem(401, 'unauthenticated'),
@@ -126,7 +136,7 @@ describe('App', () => {
   })
 
   it('speaks the language of the account', async () => {
-    mockApi({...MAIL_OFF, 'GET /api/v1/me': account({locale: 'ru'}), 'GET /api/v1/homes': []})
+    mockApi({...SECOND_FACTOR_FINE, ...MAIL_OFF, 'GET /api/v1/me': account({locale: 'ru'}), 'GET /api/v1/homes': []})
 
     renderApp()
 
@@ -136,6 +146,7 @@ describe('App', () => {
   it('shows nothing of the previous person after signing out and in as someone else', async () => {
     let signedIn: string | null = 'Alex'
     mockApi({
+      ...SECOND_FACTOR_FINE,
       ...MAIL_OFF,
       'GET /api/v1/me': () =>
         signedIn
@@ -172,6 +183,7 @@ describe('App', () => {
 
   it('opens a reset link without a session', async () => {
     mockApi({
+      ...SECOND_FACTOR_FINE,
       'GET /api/v1/me': problem(401, 'unauthenticated'),
       'POST /api/v1/password-reset:preview': {username: 'anna', display_name: 'Anna', passkeys: []},
     })
@@ -182,6 +194,7 @@ describe('App', () => {
 
   it('shows the settings only to an admin of the install', async () => {
     mockApi({
+      ...SECOND_FACTOR_FINE,
       ...MAIL_OFF,
       'GET /api/v1/me': account({install_admin: false}),
       'GET /api/v1/homes': [home()],
@@ -196,6 +209,7 @@ describe('App', () => {
 
   it('leads an admin of the install to the settings', async () => {
     mockApi({
+      ...SECOND_FACTOR_FINE,
       ...MAIL_OFF,
       'GET /api/v1/me': account(),
       'GET /api/v1/homes': [],

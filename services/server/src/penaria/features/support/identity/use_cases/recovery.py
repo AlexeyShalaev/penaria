@@ -38,6 +38,7 @@ from penaria.features.support.identity.domain.throttle import account_key, recov
 from penaria.features.support.identity.use_cases.attempts import count_attempt, find_by_secret
 from penaria.features.support.identity.use_cases.members import access_in, place_of, require_manager
 from penaria.features.support.identity.use_cases.postman import Postman
+from penaria.features.support.identity.use_cases.second_factor import require_second_factor
 
 
 class AccountNotFoundError(NotFoundError):
@@ -185,6 +186,7 @@ class CreateResetLink:
             raise ResetNotAllowedError("change your own password on your account page")
         async with self._uow.query() as tx:
             await require_manager(tx, actor, home_id, now)
+            await require_second_factor(tx, current.user_id)
             member = await tx.grants.active_of(home_id, PrincipalType.USER, user_id, now)
         if not member:
             raise AccountNotFoundError("this person is not a member of the home", params={"user_id": str(user_id)})

@@ -4,6 +4,10 @@ import {api, isApiError, type Schemas, unwrap} from '@/shared/api'
 
 export type Account = Schemas['AccountOut']
 export type AccountSession = Schemas['SessionOut']
+/** A sign-in whose password was right and whose code from the authenticator app is still to come. */
+export type SecondFactorChallenge = Schemas['SecondFactorAskedOut']
+export type SignInResult = {account: Account} | {secondFactor: SecondFactorChallenge}
+export type SecondFactorCode = {code: string} | {recovery_code: string}
 
 export const ACCOUNT_KEY = ['account'] as const
 const setupKey = ['setup'] as const
@@ -56,10 +60,28 @@ export function useCompleteSetup() {
   })
 }
 
+/** Signs in with the password; an account with an authenticator app gets a second step instead of a session. */
 export function useSignIn() {
   const start = useStartSession()
   return useMutation({
-    mutationFn: (body: Schemas['SignInIn']) => unwrap(api.POST('/api/v1/sign-in', {body})),
+    mutationFn: async (body: Schemas['SignInIn']): Promise<SignInResult> => {
+      const call = api.POST('/api/v1/sign-in', {body})
+      const data = await unwrap(call)
+      // The status says which: 202 opens no session and asks for a code.
+      if ((await call).response.status === 202) return {secondFactor: data as SecondFactorChallenge}
+      return {account: data as Account}
+    },
+    onSuccess: (result) => {
+      if ('account' in result) start(result.account)
+    },
+  })
+}
+
+/** The second step of signing in with the password: a code from the authenticator app, or a recovery code. */
+export function useSignInWithCode() {
+  const start = useStartSession()
+  return useMutation({
+    mutationFn: (body: {token: string} & SecondFactorCode) => unwrap(api.POST('/api/v1/sign-in/second-factor', {body})),
     onSuccess: start,
   })
 }

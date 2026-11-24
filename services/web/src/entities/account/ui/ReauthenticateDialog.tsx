@@ -6,18 +6,28 @@ import {passkeysSupported} from '@/shared/lib/webauthn'
 import {Button, Dialog, Field, FormActions, FormError, FormLayout, TextInput} from '@/shared/ui'
 
 import {usePasskeys, useReauthenticate, useReauthenticateWithPasskey} from '../api/passkeys'
+import {useSecondFactor} from '../api/secondFactor'
 import {describePasskeyError} from '../model/passkeys'
+import {secondFactorCode} from '../model/secondFactor'
 import styles from './ReauthenticateDialog.module.css'
+import {SecondFactorField} from './SecondFactorField'
 
 type Props = {onConfirmed: () => void; onClose: () => void}
 
-/** Asks the person to prove it is them again, with a passkey or the password, before a sensitive change. */
+/**
+ * Asks the person to prove it is them again, with a passkey or the password, before a sensitive change; with the
+ * password, a code from the authenticator app too while the account has one.
+ */
 export function ReauthenticateDialog({onConfirmed, onClose}: Props) {
   const {t} = useTranslation()
   const passkeys = usePasskeys({enabled: passkeysSupported()})
   const withPassword = useReauthenticate()
   const withPasskey = useReauthenticateWithPasskey()
+  const secondFactor = useSecondFactor()
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  const [recovery, setRecovery] = useState(false)
+  const asksCode = !!secondFactor.data?.totp_enabled
   const offerPasskey = passkeysSupported() && (passkeys.data?.length ?? 0) > 0
   const busy = withPassword.isPending || withPasskey.isPending
   const failed = withPasskey.error ?? withPassword.error
@@ -25,7 +35,7 @@ export function ReauthenticateDialog({onConfirmed, onClose}: Props) {
   const submit = (event: FormEvent) => {
     event.preventDefault()
     withPasskey.reset()
-    withPassword.mutate(password, {onSuccess: onConfirmed})
+    withPassword.mutate({password, ...(asksCode ? secondFactorCode(code, recovery) : {})}, {onSuccess: onConfirmed})
   }
 
   const confirmWithPasskey = () => {
@@ -55,6 +65,17 @@ export function ReauthenticateDialog({onConfirmed, onClose}: Props) {
               required
             />
           </Field>
+          {asksCode && (
+            <SecondFactorField
+              value={code}
+              onChange={setCode}
+              recovery={recovery}
+              onToggle={() => {
+                setRecovery(!recovery)
+                setCode('')
+              }}
+            />
+          )}
           {failed && <FormError>{describePasskeyError(failed, t)}</FormError>}
           <FormActions>
             <Button variant="secondary" onClick={onClose}>

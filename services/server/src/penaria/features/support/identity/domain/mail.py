@@ -32,6 +32,10 @@ class MailKind(StrEnum):
     PASSKEY_ADDED = "passkey_added"
     EMAIL_CHANGED = "email_changed"
     EMAIL_REMOVED = "email_removed"
+    TOTP_ENABLED = "totp_enabled"
+    TOTP_DISABLED = "totp_disabled"
+    RECOVERY_CODE_USED = "recovery_code_used"
+    RECOVERY_CODES_REGENERATED = "recovery_codes_regenerated"
 
 
 class MailState(StrEnum):

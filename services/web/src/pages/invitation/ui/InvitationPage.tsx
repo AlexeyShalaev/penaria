@@ -4,8 +4,8 @@ import {useTranslation} from 'react-i18next'
 import {Link, useNavigate, useParams} from 'react-router'
 
 import {NewAccountForm} from '@/features/accept-invitation'
-import {SignInForm} from '@/features/sign-in'
-import {useAccount, useSignOut} from '@/entities/account'
+import {SecondFactorForm, SignInForm} from '@/features/sign-in'
+import {type SecondFactorChallenge, useAccount, useSignOut} from '@/entities/account'
 import {useHomesChanged} from '@/entities/home'
 import {
   type InvitationPreview,
@@ -111,6 +111,7 @@ function SignInOrCreate(props: {token: string}) {
   const {t} = useTranslation()
   const navigate = useNavigate()
   const [mode, setMode] = useState<'new' | 'existing'>('new')
+  const [challenge, setChallenge] = useState<SecondFactorChallenge | null>(null)
   return (
     <div className={styles.accept}>
       <Tabs
@@ -131,7 +132,11 @@ function SignInOrCreate(props: {token: string}) {
         <>
           <p className={styles.text}>{t('invitation.haveAccountText')}</p>
           {/* Signed in, the page offers to accept with that account. */}
-          <SignInForm onSignedIn={() => undefined} />
+          {challenge ? (
+            <SecondFactorForm challenge={challenge} onSignedIn={() => undefined} onBack={() => setChallenge(null)} />
+          ) : (
+            <SignInForm onSignedIn={() => undefined} onSecondFactor={setChallenge} />
+          )}
         </>
       )}
     </div>

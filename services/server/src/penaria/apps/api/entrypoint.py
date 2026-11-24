@@ -26,6 +26,7 @@ from penaria.features.support.identity.api.people import guest_router, public_ro
 from penaria.features.support.identity.api.people import router as people_router
 from penaria.features.support.identity.api.recovery import router as recovery_router
 from penaria.features.support.identity.api.routes import router as identity_router
+from penaria.features.support.identity.api.totp import router as totp_router
 from penaria.features.support.identity.use_cases.setup import IssueSetupToken
 
 SERVICE_NAME = "penaria-api"
@@ -35,6 +36,7 @@ ROUTERS = (
     recovery_router,
     account_router,
     passkeys_router,
+    totp_router,
     identity_router,
     people_router,
     public_router,

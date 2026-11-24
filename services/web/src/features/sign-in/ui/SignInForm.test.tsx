@@ -8,9 +8,9 @@ import {renderAt} from '@/test/render'
 
 import {SignInForm} from './SignInForm'
 
-function renderForm() {
+function renderForm(onSecondFactor = vi.fn()) {
   const onSignedIn = vi.fn()
-  renderAt('/', <Route path="/" element={<SignInForm onSignedIn={onSignedIn} />} />)
+  renderAt('/', <Route path="/" element={<SignInForm onSignedIn={onSignedIn} onSecondFactor={onSecondFactor} />} />)
   return onSignedIn
 }
 
@@ -29,6 +29,23 @@ describe('SignInForm', () => {
 
     await vi.waitFor(() => expect(onSignedIn).toHaveBeenCalled())
     expect(onSignedIn.mock.calls[0]?.[0]).toEqual(account())
+  })
+
+  it('goes on to the second step for an account with an authenticator app', async () => {
+    const challenge = {token: 'pending', expires_at: '2026-01-01T10:05:00Z'}
+    mockApi({
+      'POST /api/v1/sign-in': new Response(JSON.stringify(challenge), {
+        status: 202,
+        headers: {'Content-Type': 'application/json'},
+      }),
+    })
+    const onSecondFactor = vi.fn()
+    const onSignedIn = renderForm(onSecondFactor)
+
+    signIn()
+
+    await vi.waitFor(() => expect(onSecondFactor).toHaveBeenCalledWith(challenge))
+    expect(onSignedIn).not.toHaveBeenCalled()
   })
 
   it('says the username or the password is wrong, without telling which', async () => {

@@ -14,6 +14,7 @@ from penaria.features.support.identity.domain.passkeys import Ceremony, Challeng
 from penaria.features.support.identity.domain.recovery import AccountLink, LinkPurpose
 from penaria.features.support.identity.domain.sessions import Session
 from penaria.features.support.identity.domain.throttle import Failures
+from penaria.features.support.identity.domain.totp import PendingSignIn, Totp
 
 
 class UserRepository(Protocol):
@@ -135,6 +136,34 @@ class ChallengeRepository(Protocol):
     async def forget_expired(self, now: datetime) -> None: ...
 
 
+class TotpRepository(Protocol):
+    async def get(self, user_id: UUID) -> Totp | None:
+        """The account's authenticator app, turned on or waiting for its first code."""
+        ...
+
+    async def save(self, totp: Totp) -> None:
+        """Keep the account's authenticator app, replacing what the account had."""
+        ...
+
+    async def remove(self, user_id: UUID) -> bool:
+        """Forget the account's authenticator app and its recovery codes; whether there was one."""
+        ...
+
+
+class PendingSignInRepository(Protocol):
+    async def add(self, pending: PendingSignIn) -> None: ...
+
+    async def get(self, token_hash: bytes, now: datetime) -> PendingSignIn | None:
+        """The pending sign-in of this token, if it has not expired."""
+        ...
+
+    async def take(self, pending_id: UUID, now: datetime) -> bool:
+        """Remove the pending sign-in, so it opens one session at most; whether it was still there and unexpired."""
+        ...
+
+    async def forget_expired(self, now: datetime) -> None: ...
+
+
 class SetupTokenRepository(Protocol):
     async def lock(self) -> None:
         """Hold the setup until the transaction ends, so issuing and completing it never interleave."""
@@ -220,6 +249,10 @@ class GrantRepository(Protocol):
 
     async def for_principal(self, principal_type: PrincipalType, principal_id: UUID) -> list[Grant]:
         """Every grant of the principal, active or not, in any home."""
+        ...
+
+    async def owns_a_home(self, user_id: UUID) -> bool:
+        """Whether the user holds an active owner grant in any home (owner grants never expire)."""
         ...
 
     async def owners(self, home_id: UUID) -> list[Grant]:
@@ -342,6 +375,12 @@ class IdentityTransaction(Protocol):
 
     @property
     def challenges(self) -> ChallengeRepository: ...
+
+    @property
+    def totp(self) -> TotpRepository: ...
+
+    @property
+    def pending_sign_ins(self) -> PendingSignInRepository: ...
 
     @property
     def setup_tokens(self) -> SetupTokenRepository: ...

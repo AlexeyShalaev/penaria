@@ -7,6 +7,7 @@ import {ChangePasswordForm} from '@/features/change-password'
 import {AccountForm} from '@/features/edit-account'
 import {PasskeyList} from '@/features/manage-passkeys'
 import {SessionList} from '@/features/manage-sessions'
+import {TwoStepSignIn} from '@/features/two-step-sign-in'
 import {useAccount, useSignOut} from '@/entities/account'
 import {describeError} from '@/shared/api'
 import {passkeysSupported} from '@/shared/lib/webauthn'
@@ -14,7 +15,7 @@ import {Button, Card, CardTitle, FormError, PageTitle, QueryState} from '@/share
 
 import styles from './AccountPage.module.css'
 
-/** The signed-in person's own account: their name, language, password, passkeys and devices. */
+/** The signed-in person's own account: their name, language, password, passkeys, two-step sign-in and devices. */
 export function AccountPage() {
   const {t} = useTranslation()
   const account = useAccount()
@@ -57,6 +58,11 @@ export function AccountPage() {
                     <p className={styles.text}>{t('passkeys.unsupported')}</p>
                   )}
                 </div>
+              </Card>
+              <Card as="section" id="two-step" className={styles.wide} aria-labelledby="account-two-step">
+                <CardTitle id="account-two-step">{t('twoStep.title')}</CardTitle>
+                <p className={styles.text}>{t('twoStep.text')}</p>
+                <TwoStepSignIn />
               </Card>
               <Card as="section" className={styles.wide} aria-labelledby="account-sessions">
                 <CardTitle id="account-sessions">{t('account.sessions')}</CardTitle>

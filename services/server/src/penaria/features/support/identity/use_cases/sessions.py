@@ -1,6 +1,7 @@
 """Signing in and out, and finding the account behind a request's session."""
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -26,6 +27,7 @@ from penaria.features.support.identity.domain.passkeys import (
 )
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
+from penaria.features.support.identity.domain.secrets import SecretBox
 from penaria.features.support.identity.domain.sessions import (
     Client,
     CurrentSession,
@@ -34,9 +36,18 @@ from penaria.features.support.identity.domain.sessions import (
     Session,
     hash_token,
 )
-from penaria.features.support.identity.domain.throttle import account_key, address_key
+from penaria.features.support.identity.domain.throttle import account_key, address_key, second_factor_key
+from penaria.features.support.identity.domain.totp import PendingSignIn, SecondFactorExpiredError, WrongCodeError
 from penaria.features.support.identity.use_cases.attempts import attempt_succeeded, count_attempt
 from penaria.features.support.identity.use_cases.challenges import issue_challenge
+from penaria.features.support.identity.use_cases.postman import Postman
+from penaria.features.support.identity.use_cases.second_factor import (
+    AppCode,
+    SecondFactorMethod,
+    SecondFactorProof,
+    prove_second_factor,
+    totp_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +56,22 @@ class InvalidCredentialsError(UnauthenticatedError):
     """The same answer for an unknown username, a wrong password and a disabled account."""
 
     code = "invalid_credentials"
+
+
+@dataclass(frozen=True, slots=True)
+class SignedIn:
+    user: User
+    # The new session's token, for the cookie.
+    token: str
+
+
+@dataclass(frozen=True, slots=True)
+class SecondFactorAsked:
+    """The password was right, and the account's authenticator app must confirm it before a session opens."""
+
+    # The pending sign-in's token, which the second step brings back.
+    token: str
+    expires_at: datetime
 
 
 class Authenticate:
@@ -73,8 +100,9 @@ class SignIn:
         self._uow = uow
         self._hasher = hasher
 
-    async def execute(self, *, username: str, password: str, client: Client) -> tuple[User, str]:
-        """The account and a new session's token; every kind of failure answers the same."""
+    async def execute(self, *, username: str, password: str, client: Client) -> SignedIn | SecondFactorAsked:
+        """A new session; or, for an account with an authenticator app, the second step it needs first.
+        Every kind of failure answers the same."""
         username = normalize_username(username)
         account = account_key(username)
         address = address_key(client.ip)
@@ -97,13 +125,79 @@ class SignIn:
                 raise InvalidCredentialsError("wrong username or password")
             if new_hash is not None:
                 await tx.passwords.set(user.id, new_hash, now)
+            if await totp_enabled(tx, user.id) is not None:
+                await tx.pending_sign_ins.forget_expired(now)
+                pending, pending_token = PendingSignIn.start(user.id, address, now)
+                await tx.pending_sign_ins.add(pending)
+                return SecondFactorAsked(pending_token, pending.expires_at)
             token = await start_session(tx, user, client, now)
-        return user, token
+        return SignedIn(user, token)
 
     async def _journal_failure(self, user: User, client: Client) -> None:
         async with self._uow.transaction() as tx:
             await tx.journal.append(
                 [Event("account.sign_in_failed", None, Actor.system(), {"user_id": str(user.id), "ip": client.ip})]
+            )
+
+
+class SignInWithSecondFactor:
+    """The second step of signing in with a password: a code of the authenticator app, or a recovery code.
+
+    The pending sign-in works only from the address its password came from, and opens one session.
+    Wrong codes count per account and per address, apart from wrong passwords (sign-in.md, 7).
+    """
+
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], box: SecretBox, postman: Postman) -> None:
+        self._uow = uow
+        self._box = box
+        self._postman = postman
+
+    async def execute(self, *, token: str, proof: SecondFactorProof, client: Client) -> tuple[User, str]:
+        """The account and a new session's token."""
+        address = address_key(client.ip)
+        now = datetime.now(UTC)
+        async with self._uow.query() as tx:
+            pending = await tx.pending_sign_ins.get(hash_token(token), now)
+        if pending is None or pending.address != address:
+            raise SecondFactorExpiredError("signing in took too long or was already done: sign in again")
+        account = second_factor_key(pending.user_id)
+        others = [] if address is None else [address]
+        async with self._uow.transaction() as tx:
+            await count_attempt(tx, [account, *others], now)
+        # Committed before the code is checked, so a wrong one stays counted.
+        try:
+            return await self._complete(pending, proof, client, account, others)
+        except WrongCodeError:
+            await self._journal_failure(pending, proof, client)
+            raise
+
+    async def _complete(
+        self, pending: PendingSignIn, proof: SecondFactorProof, client: Client, account: str, others: list[str]
+    ) -> tuple[User, str]:
+        now = datetime.now(UTC)
+        async with self._uow.transaction() as tx:
+            # The account first: two codes checked at once must not both pass as the same code.
+            user = await tx.users.get_for_update(pending.user_id)
+            totp = None if user is None or user.disabled_at is not None else await totp_enabled(tx, user.id)
+            if user is None or totp is None or not await tx.pending_sign_ins.take(pending.id, now):
+                raise SecondFactorExpiredError("signing in took too long or was already done: sign in again")
+            method = await prove_second_factor(tx, self._box, self._postman, user, totp, proof, now)
+            await attempt_succeeded(tx, account, others)
+            token = await start_session(tx, user, client, now, second_factor=method)
+        return user, token
+
+    async def _journal_failure(self, pending: PendingSignIn, proof: SecondFactorProof, client: Client) -> None:
+        method = SecondFactorMethod.TOTP if isinstance(proof, AppCode) else SecondFactorMethod.RECOVERY_CODE
+        async with self._uow.transaction() as tx:
+            await tx.journal.append(
+                [
+                    Event(
+                        "account.sign_in_failed",
+                        None,
+                        Actor.system(),
+                        {"user_id": str(pending.user_id), "ip": client.ip, "second_factor": method.value},
+                    )
+                ]
             )
 
 
@@ -232,16 +326,25 @@ def _open(session: Session, user: User | None, grant: Grant | None, now: datetim
 
 
 async def start_session(
-    tx: IdentityTransaction, user: User, client: Client, now: datetime, *, passkey_id: UUID | None = None
+    tx: IdentityTransaction,
+    user: User,
+    client: Client,
+    now: datetime,
+    *,
+    passkey_id: UUID | None = None,
+    second_factor: SecondFactorMethod | None = None,
 ) -> str:
     """Open a session for the user in the transaction and journal the sign-in; the token for the cookie.
 
-    ``passkey_id`` names the passkey the person signed in with; without it, they used their password.
+    ``passkey_id`` names the passkey the person signed in with; without it, they used their password,
+    and ``second_factor`` says how they confirmed it, if they had to.
     """
     session, token = Session.start(user.id, client, now)
     await tx.sessions.add(session)
     payload = {"user_id": str(user.id), "session_id": str(session.id), "ip": client.ip}
     if passkey_id is not None:
         payload["passkey_id"] = str(passkey_id)
+    if second_factor is not None:
+        payload["second_factor"] = second_factor.value
     await tx.journal.append([Event("account.signed_in", None, Actor.user(user.id), payload)])
     return token
