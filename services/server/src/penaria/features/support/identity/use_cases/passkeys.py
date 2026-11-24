@@ -7,6 +7,7 @@ from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
 from penaria.features.shared.actor import Actor
 from penaria.features.shared.journal import Event
+from penaria.features.support.identity.domain.mail import MailKind
 from penaria.features.support.identity.domain.passkeys import (
     Ceremony,
     Challenge,
@@ -25,6 +26,7 @@ from penaria.features.support.identity.domain.repositories import IdentityTransa
 from penaria.features.support.identity.domain.sessions import CurrentSession
 from penaria.features.support.identity.use_cases.account import load_user
 from penaria.features.support.identity.use_cases.challenges import issue_challenge
+from penaria.features.support.identity.use_cases.postman import Postman
 
 
 class ListPasskeys:
@@ -61,9 +63,12 @@ class StartPasskeyRegistration:
 
 
 class AddPasskey:
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], relying_party: RelyingParty) -> None:
+    def __init__(
+        self, uow: AsyncUnitOfWork[IdentityTransaction], relying_party: RelyingParty, postman: Postman
+    ) -> None:
         self._uow = uow
         self._relying_party = relying_party
+        self._postman = postman
 
     async def execute(
         self, current: CurrentSession, *, challenge_id: UUID, credential: CredentialJson, name: str
@@ -95,6 +100,8 @@ class AddPasskey:
             await tx.journal.append(
                 [_event("account.passkey_added", current, passkey_id=str(passkey.id), name=passkey.name)]
             )
+            user = await load_user(tx, current)
+            await self._postman.notify(tx, user, MailKind.PASSKEY_ADDED, {"passkey": passkey.name})
         return passkey
 
 

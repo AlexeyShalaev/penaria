@@ -2,7 +2,7 @@ import {fireEvent, screen} from '@testing-library/react'
 import {Route} from 'react-router'
 import {describe, expect, it} from 'vitest'
 
-import {mockApi, problem} from '@/test/api'
+import {MAIL_OFF, mockApi, problem} from '@/test/api'
 import {account} from '@/test/fixtures'
 import {renderAt} from '@/test/render'
 import {mockPasskeys} from '@/test/webauthn'
@@ -24,7 +24,7 @@ const SIGNED_OUT = {'GET /api/v1/setup': {needed: false}, 'GET /api/v1/me': prob
 describe('SignInPage', () => {
   it('offers a passkey first, and the password below it', async () => {
     mockPasskeys()
-    mockApi(SIGNED_OUT)
+    mockApi({...MAIL_OFF, ...SIGNED_OUT})
     renderPage()
 
     const passkey = await screen.findByRole('button', {name: 'Sign in with a passkey'})
@@ -34,8 +34,23 @@ describe('SignInPage', () => {
     expect(passkey.compareDocumentPosition(screen.getByLabelText('Username'))).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
 
+  it('offers a reset by email when the install sends email', async () => {
+    mockApi({...SIGNED_OUT, 'GET /api/v1/mail': {enabled: true}})
+    renderPage()
+
+    expect(await screen.findByRole('link', {name: 'Forgot your password?'})).toHaveAttribute('href', '/forgot-password')
+  })
+
+  it('offers no reset by email when the install sends none', async () => {
+    mockApi({...MAIL_OFF, ...SIGNED_OUT})
+    renderPage()
+
+    await screen.findByRole('button', {name: 'Sign in'})
+    expect(screen.queryByRole('link', {name: 'Forgot your password?'})).toBeNull()
+  })
+
   it('offers only the password where passkeys do not work', async () => {
-    mockApi(SIGNED_OUT)
+    mockApi({...MAIL_OFF, ...SIGNED_OUT})
     renderPage()
 
     expect(await screen.findByRole('button', {name: 'Sign in'})).toBeVisible()
@@ -45,6 +60,7 @@ describe('SignInPage', () => {
   it('returns to the page asked for after signing in with a passkey', async () => {
     mockPasskeys()
     mockApi({
+      ...MAIL_OFF,
       ...SIGNED_OUT,
       'POST /api/v1/sign-in/passkey/options': {
         challenge_id: '00000000-0000-4000-8000-0000000000c1',

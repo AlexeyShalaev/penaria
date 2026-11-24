@@ -2,7 +2,7 @@ import {fireEvent, screen, within} from '@testing-library/react'
 import {Route} from 'react-router'
 import {describe, expect, it, vi} from 'vitest'
 
-import {mockApi, problem} from '@/test/api'
+import {MAIL_OFF, mockApi, problem} from '@/test/api'
 import {HOME_ID, role, ROLES} from '@/test/fixtures'
 import {renderAt} from '@/test/render'
 
@@ -35,7 +35,7 @@ const roleNames = () => screen.getAllByRole('radio').filter((r) => r.getAttribut
 
 describe('InviteDialog', () => {
   it('offers the roles in plain words, owners only to an owner', async () => {
-    mockApi({[`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES})
+    mockApi({...MAIL_OFF, [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES})
     renderDialog(false)
 
     await screen.findByRole('radio', {name: /Family member/})
@@ -51,6 +51,7 @@ describe('InviteDialog', () => {
 
   it('makes a family invitation and shows its link with a QR code', async () => {
     const calls = mockApi({
+      ...MAIL_OFF,
       [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES,
       [`POST /api/v1/homes/${HOME_ID}/invitations`]: created('family'),
     })
@@ -73,6 +74,7 @@ describe('InviteDialog', () => {
   it('asks a guest invitation for the end of access, three days ahead, and a link for thirty days', async () => {
     vi.setSystemTime(new Date('2026-11-24T10:00:00Z'))
     const calls = mockApi({
+      ...MAIL_OFF,
       [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES,
       [`POST /api/v1/homes/${HOME_ID}/invitations`]: created('family'),
     })
@@ -95,7 +97,7 @@ describe('InviteDialog', () => {
   })
 
   it('asks for a place when the invitation covers one place', async () => {
-    mockApi({[`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES, [`GET /api/v1/homes/${HOME_ID}/entities`]: []})
+    mockApi({...MAIL_OFF, [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES, [`GET /api/v1/homes/${HOME_ID}/entities`]: []})
     renderDialog(false)
 
     fireEvent.click(await screen.findByRole('radio', {name: 'One place'}))
@@ -107,6 +109,7 @@ describe('InviteDialog', () => {
   it('transfers ownership after the owner confirms it is them', async () => {
     let confirmed = false
     const calls = mockApi({
+      ...MAIL_OFF,
       [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES,
       'GET /api/v1/me/passkeys': [],
       'POST /api/v1/me/reauthenticate': () => {
@@ -129,5 +132,29 @@ describe('InviteDialog', () => {
     const posts = calls.filter((call) => call.path.endsWith('/invitations'))
     expect(posts).toHaveLength(2)
     expect(posts[1]?.body).toMatchObject({role_id: 'role-owner', leave_when_accepted: true, scope_entity_id: null})
+  })
+
+  it('also mails the invitation when the install sends email', async () => {
+    const calls = mockApi({
+      'GET /api/v1/mail': {enabled: true},
+      [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES,
+      [`POST /api/v1/homes/${HOME_ID}/invitations`]: {...created('family'), emailed_to: 'ivan@example.org'},
+    })
+    renderDialog(false)
+
+    fireEvent.change(await screen.findByLabelText('Also send to email'), {target: {value: ' ivan@example.org '}})
+    fireEvent.click(screen.getByRole('button', {name: 'Make the link'}))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('The invitation went to ivan@example.org.')
+    expect(calls.find((call) => call.method === 'POST')?.body).toMatchObject({email: 'ivan@example.org'})
+  })
+
+  it('has no email field when the install sends none', async () => {
+    mockApi({...MAIL_OFF, [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES})
+    renderDialog(false)
+
+    await screen.findByRole('radio', {name: /Family member/})
+
+    expect(screen.queryByLabelText('Also send to email')).toBeNull()
   })
 })

@@ -17,6 +17,7 @@ export {
   useChangeGrant,
   useCreateGuestLink,
   useCreateInvitation,
+  useCreateResetLink,
   useGuestLinks,
   useInvitations,
   useLeaveHome,

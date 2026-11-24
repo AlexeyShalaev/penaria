@@ -20,7 +20,8 @@ from penaria.features.support.identity.api.account import (
     client_of,
 )
 from penaria.features.support.identity.api.cookies import SESSION_COOKIE, SessionCookie
-from penaria.features.support.identity.api.links import PublicLinks
+from penaria.features.support.identity.domain.links import PublicLinks
+from penaria.features.support.identity.domain.mailbox import EMAIL_MAX_LENGTH
 from penaria.features.support.identity.domain.members import (
     INVITATION_DAYS,
     INVITATION_MAX_DAYS,
@@ -55,6 +56,7 @@ from penaria.features.support.identity.use_cases.members import (
     ListRoles,
     RevokeGrant,
 )
+from penaria.features.support.identity.use_cases.recovery import CreateResetLink
 
 # Tokens are 43 characters of base64url; room for whatever a person pastes around one.
 TOKEN_INPUT_MAX_LENGTH = 200
@@ -152,6 +154,9 @@ class GrantPatch(BaseModel):
 
 class InvitationIn(BaseModel):
     role_id: UUID
+    email: str | None = Field(
+        default=None, max_length=EMAIL_MAX_LENGTH, description="Mail the link there too; needs outgoing email"
+    )
     scope_entity_id: UUID | None = Field(default=None, description="Omit for the whole home")
     valid_days: int = Field(
         default=INVITATION_DAYS, ge=1, le=INVITATION_MAX_DAYS, description="For how many days the link works"
@@ -190,6 +195,12 @@ class InvitationOut(BaseModel):
 class CreatedInvitationOut(BaseModel):
     invitation: InvitationOut
     url: str = Field(description="The link to pass on; shown only now")
+    emailed_to: str | None = Field(description="Where the link was mailed, when it was")
+
+
+class ResetLinkOut(BaseModel):
+    url: str = Field(description="The reset link to pass on by hand; shown only now")
+    expires_at: datetime
 
 
 class TokenIn(BaseModel):
@@ -324,6 +335,13 @@ async def leave_home(home_id: UUID, scope: UnitScopeDep) -> None:
     await (await scope.get(LeaveHome)).execute(await scope.get(CurrentSession), home_id)
 
 
+@router.post("/homes/{home_id}/members/{user_id}:reset-link", status_code=status.HTTP_201_CREATED)
+async def create_reset_link(home_id: UUID, user_id: UUID, scope: UnitScopeDep) -> ResetLinkOut:
+    """A password reset link for a member, to pass on by hand; it works for 24 hours. Needs a recent sign-in."""
+    link = await (await scope.get(CreateResetLink)).execute(await scope.get(CurrentSession), home_id, user_id)
+    return ResetLinkOut(url=link.url, expires_at=link.expires_at)
+
+
 # Invitations
 
 
@@ -337,7 +355,7 @@ async def list_invitations(home_id: UUID, scope: UnitScopeDep) -> list[Invitatio
 async def create_invitation(
     home_id: UUID, body: Annotated[InvitationIn, Body()], scope: UnitScopeDep
 ) -> CreatedInvitationOut:
-    view, token = await (await scope.get(CreateInvitation)).execute(
+    view, url = await (await scope.get(CreateInvitation)).execute(
         await scope.get(CurrentSession),
         home_id,
         role_id=body.role_id,
@@ -345,8 +363,13 @@ async def create_invitation(
         valid_days=body.valid_days,
         grant_expires_at=body.grant_expires_at,
         leave_when_accepted=body.leave_when_accepted,
+        email=body.email or None,
     )
-    return CreatedInvitationOut(invitation=InvitationOut.of(view), url=(await scope.get(PublicLinks)).invitation(token))
+    return CreatedInvitationOut(
+        invitation=InvitationOut.of(view),
+        url=url,
+        emailed_to=view.emailed_to,
+    )
 
 
 @router.delete("/homes/{home_id}/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -4,6 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy_foundation_kit import AsyncSQLAlchemyUowTransaction
 
 from penaria.features.core.registry.infra.repository import PostgresEntityRepository
+from penaria.features.support.identity.infra.mail_repositories import (
+    PostgresAccountLinkRepository,
+    PostgresInstallSettingsRepository,
+    PostgresMailRepository,
+)
 from penaria.features.support.identity.infra.repositories import (
     PostgresChallengeRepository,
     PostgresFailureRepository,
@@ -36,6 +41,9 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
         self._grants = PostgresGrantRepository(session)
         self._invitations = PostgresInvitationRepository(session)
         self._tokens = PostgresTokenRepository(session)
+        self._install_settings = PostgresInstallSettingsRepository(session)
+        self._mail = PostgresMailRepository(session)
+        self._account_links = PostgresAccountLinkRepository(session)
         self._entities = PostgresEntityRepository(session)
         self._journal = PostgresJournal(session)
 
@@ -86,6 +94,18 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
     @property
     def tokens(self) -> PostgresTokenRepository:
         return self._tokens
+
+    @property
+    def install_settings(self) -> PostgresInstallSettingsRepository:
+        return self._install_settings
+
+    @property
+    def mail(self) -> PostgresMailRepository:
+        return self._mail
+
+    @property
+    def account_links(self) -> PostgresAccountLinkRepository:
+        return self._account_links
 
     @property
     def entities(self) -> PostgresEntityRepository:

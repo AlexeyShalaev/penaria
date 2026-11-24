@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/email-verifications:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Email
+         * @description Make the address a confirmation link was sent to the account's email.
+         */
+        post: operations["confirm_email_api_v1_email_verifications_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entities/{entity_id}": {
         parameters: {
             query?: never;
@@ -294,6 +314,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/homes/{home_id}/members/{user_id}:reset-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Reset Link
+         * @description A password reset link for a member, to pass on by hand; it works for 24 hours. Needs a recent sign-in.
+         */
+        post: operations["create_reset_link_api_v1_homes__home_id__members__user_id__reset_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/homes/{home_id}/roles": {
         parameters: {
             query?: never;
@@ -325,6 +365,111 @@ export interface paths {
          * @description Give up your own access to the home; the last owner cannot.
          */
         post: operations["leave_home_api_v1_homes__home_id__leave_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/install/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mailbox */
+        get: operations["get_mailbox_api_v1_install_mail_get"];
+        /**
+         * Save Mailbox
+         * @description Connect the install's mailbox or change it; needs a recent sign-in. Refused when PENARIA_MAIL__* sets it.
+         */
+        put: operations["save_mailbox_api_v1_install_mail_put"];
+        post?: never;
+        /**
+         * Remove Mailbox
+         * @description Turn email off; needs a recent sign-in.
+         */
+        delete: operations["remove_mailbox_api_v1_install_mail_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/install/mail/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Mail
+         * @description The mail log, the newest first.
+         */
+        get: operations["list_mail_api_v1_install_mail_messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/install/mail/messages/{mail_id}:resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Mail
+         * @description Send a mail again now, while its link still works.
+         */
+        post: operations["resend_mail_api_v1_install_mail_messages__mail_id__resend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/install/mail/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mailbox Status
+         * @description Connect to the mailbox and sign in, without sending.
+         */
+        get: operations["mailbox_status_api_v1_install_mail_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/install/mail:test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Test Mail
+         * @description Send a test email through the saved mailbox now; a failure is an answer, not an error.
+         */
+        post: operations["send_test_mail_api_v1_install_mail_test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -391,6 +536,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mail Status */
+        get: operations["mail_status_api_v1_mail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -407,6 +569,27 @@ export interface paths {
         head?: never;
         /** Update Me */
         patch: operations["update_me_api_v1_me_patch"];
+        trace?: never;
+    };
+    "/api/v1/me/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Email Change
+         * @description Mail a confirmation link to the address; it becomes the account's email once the link is opened.
+         */
+        post: operations["request_email_change_api_v1_me_email_post"];
+        /** Remove Email */
+        delete: operations["remove_email_api_v1_me_email_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/me/passkeys": {
@@ -587,6 +770,66 @@ export interface paths {
         put?: never;
         /** Revoke Other Sessions */
         post: operations["revoke_other_sessions_api_v1_me_sessions_revoke_others_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description Set a new password with a reset link; every session of the account ends, its passkeys stay.
+         */
+        post: operations["reset_password_api_v1_password_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/password-reset:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Password Reset
+         * @description Whose password a reset link sets, and the passkeys it leaves; it changes nothing.
+         */
+        post: operations["preview_password_reset_api_v1_password_reset_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/password-reset:request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Password Reset
+         * @description Mail a reset link to the account's confirmed email; the answer is the same for any login.
+         */
+        post: operations["request_password_reset_api_v1_password_reset_request_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -785,6 +1028,28 @@ export interface components {
             /** Userhandle */
             userHandle?: string | null;
         };
+        /** AttemptOut */
+        AttemptOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /** Error */
+            error: string | null;
+            /**
+             * Manual
+             * @description Sent by an admin: a test or a resend
+             */
+            manual: boolean;
+            /** Ok */
+            ok: boolean;
+            reason: components["schemas"]["FailureReason"] | null;
+            /** Smtp Code */
+            smtp_code: number | null;
+        };
         /** AttestationResponseIn */
         AttestationResponseIn: {
             /**
@@ -825,6 +1090,11 @@ export interface components {
              */
             type: "public-key";
         };
+        /** ConfirmedEmailOut */
+        ConfirmedEmailOut: {
+            /** Email */
+            email: string;
+        };
         /** CreatedGuestLinkOut */
         CreatedGuestLinkOut: {
             link: components["schemas"]["GuestLinkOut"];
@@ -836,12 +1106,25 @@ export interface components {
         };
         /** CreatedInvitationOut */
         CreatedInvitationOut: {
+            /**
+             * Emailed To
+             * @description Where the link was mailed, when it was
+             */
+            emailed_to: string | null;
             invitation: components["schemas"]["InvitationOut"];
             /**
              * Url
              * @description The link to pass on; shown only now
              */
             url: string;
+        };
+        /** EmailIn */
+        EmailIn: {
+            /**
+             * Email
+             * @example me@example.org
+             */
+            email: string;
         };
         /** EntityDetailOut */
         EntityDetailOut: {
@@ -982,6 +1265,12 @@ export interface components {
             /** Type */
             type: string;
         };
+        /**
+         * FailureReason
+         * @description Why an attempt did not send: the kind of SMTP failure, or why no attempt was made.
+         * @enum {string}
+         */
+        FailureReason: "auth" | "connect" | "timeout" | "tls" | "disconnected" | "recipient_refused" | "sender_refused" | "data_refused" | "other" | "mail_off" | "expired" | "unreadable";
         /**
          * Freshness
          * @enum {string}
@@ -1142,6 +1431,11 @@ export interface components {
         /** InvitationIn */
         InvitationIn: {
             /**
+             * Email
+             * @description Mail the link there too; needs outgoing email
+             */
+            email?: string | null;
+            /**
              * Grant Expires At
              * @description When the access ends; the role's default when it requires an end
              */
@@ -1229,6 +1523,133 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /**
+         * MailKind
+         * @enum {string}
+         */
+        MailKind: "test" | "email_verification" | "password_reset" | "invitation" | "password_changed" | "passkey_added" | "email_changed" | "email_removed";
+        /** MailOut */
+        MailOut: {
+            /**
+             * Attempts
+             * @description The latest first
+             */
+            attempts: components["schemas"]["AttemptOut"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["MailKind"];
+            /** Locale */
+            locale: string;
+            /** Next Attempt At */
+            next_attempt_at: string | null;
+            /**
+             * Resendable
+             * @description Whether it can be sent again now: done, and its link still works
+             */
+            resendable: boolean;
+            state: components["schemas"]["MailState"];
+            /** Subject */
+            subject: string;
+            /** To */
+            to: string;
+        };
+        /**
+         * MailSecurity
+         * @enum {string}
+         */
+        MailSecurity: "starttls" | "tls" | "none";
+        /**
+         * MailState
+         * @enum {string}
+         */
+        MailState: "queued" | "sent" | "failed";
+        /** MailStatusOut */
+        MailStatusOut: {
+            /**
+             * Enabled
+             * @description Whether the install sends email; without it, links are passed on by hand
+             */
+            enabled: boolean;
+        };
+        /**
+         * MailboxHealth
+         * @enum {string}
+         */
+        MailboxHealth: "off" | "ok" | "failed";
+        /** MailboxIn */
+        MailboxIn: {
+            /**
+             * From Address
+             * @example home@example.org
+             */
+            from_address: string;
+            /**
+             * From Name
+             * @example Penaria
+             */
+            from_name?: string | null;
+            /**
+             * Host
+             * @example smtp.example.org
+             */
+            host: string;
+            /**
+             * Password
+             * @description Empty or omitted: keep the saved one; required again when the server or the login changes
+             */
+            password?: string | null;
+            /**
+             * Port
+             * @example 587
+             */
+            port: number;
+            security: components["schemas"]["MailSecurity"];
+            /**
+             * Username
+             * @description Empty: no sign-in
+             */
+            username?: string | null;
+        };
+        /** MailboxOut */
+        MailboxOut: {
+            /** From Address */
+            from_address: string | null;
+            /** From Name */
+            from_name: string | null;
+            /** Host */
+            host: string | null;
+            /**
+             * Password Set
+             * @description The password is write-only: only whether one is set
+             */
+            password_set: boolean;
+            /** Port */
+            port: number | null;
+            security: components["schemas"]["MailSecurity"] | null;
+            /** @description environment: PENARIA_MAIL__*, and the fields are locked; interface: saved here; null: mail is off */
+            source: components["schemas"]["MailboxSource"] | null;
+            /** Username */
+            username: string | null;
+        };
+        /**
+         * MailboxSource
+         * @enum {string}
+         */
+        MailboxSource: "environment" | "interface";
+        /** MailboxStatusOut */
+        MailboxStatusOut: {
+            /** Error */
+            error: string | null;
+            health: components["schemas"]["MailboxHealth"];
         };
         /** MemberOut */
         MemberOut: {
@@ -1346,6 +1767,26 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** PasswordResetIn */
+        PasswordResetIn: {
+            /** New Password */
+            new_password: string;
+            /** Token */
+            token: string;
+        };
+        /** PendingEmailOut */
+        PendingEmailOut: {
+            /**
+             * Email
+             * @description The address the confirmation link went to; it is the account's once opened
+             */
+            email: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
         /** PersonOut */
         PersonOut: {
             /** Display Name */
@@ -1419,6 +1860,51 @@ export interface components {
              */
             type: "public-key";
         };
+        /** ResetLinkOut */
+        ResetLinkOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Url
+             * @description The reset link to pass on by hand; shown only now
+             */
+            url: string;
+        };
+        /** ResetPasskeyOut */
+        ResetPasskeyOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+        };
+        /** ResetPreviewOut */
+        ResetPreviewOut: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * Passkeys
+             * @description They keep working after the reset
+             */
+            passkeys: components["schemas"]["ResetPasskeyOut"][];
+            /** Username */
+            username: string;
+        };
+        /** ResetRequestIn */
+        ResetRequestIn: {
+            /**
+             * Login
+             * @description A username or a confirmed email
+             */
+            login: string;
+        };
         /** RevokedOut */
         RevokedOut: {
             /** Revoked */
@@ -1457,6 +1943,22 @@ export interface components {
             permissions: string[];
             /** @description The preset it started as; its name is then translated */
             preset: components["schemas"]["Preset"] | null;
+        };
+        /** SendResultOut */
+        SendResultOut: {
+            /**
+             * Error
+             * @description The server's words, credentials hidden, when it was not sent
+             */
+            error: string | null;
+            /**
+             * Mail Id
+             * Format: uuid
+             */
+            mail_id: string;
+            /** Ok */
+            ok: boolean;
+            reason: components["schemas"]["FailureReason"] | null;
         };
         /** SessionOut */
         SessionOut: {
@@ -1524,6 +2026,14 @@ export interface components {
          * @enum {string}
          */
         Status: "present" | "missing" | "lent" | "in_repair";
+        /** TestMailIn */
+        TestMailIn: {
+            /**
+             * To
+             * @description Omit for your own address
+             */
+            to?: string | null;
+        };
         /** TokenIn */
         TokenIn: {
             /** Token */
@@ -1556,6 +2066,39 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    confirm_email_api_v1_email_verifications_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmedEmailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_entity_api_v1_entities__entity_id__get: {
         parameters: {
             query?: never;
@@ -2255,6 +2798,38 @@ export interface operations {
             };
         };
     };
+    create_reset_link_api_v1_homes__home_id__members__user_id__reset_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_roles_api_v1_homes__home_id__roles_get: {
         parameters: {
             query?: never;
@@ -2303,6 +2878,194 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_mailbox_api_v1_install_mail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailboxOut"];
+                };
+            };
+        };
+    };
+    save_mailbox_api_v1_install_mail_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailboxIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailboxOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_mailbox_api_v1_install_mail_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_mail_api_v1_install_mail_messages_get: {
+        parameters: {
+            query?: {
+                /** @description The last mail of the previous page */
+                before?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resend_mail_api_v1_install_mail_messages__mail_id__resend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mail_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mailbox_status_api_v1_install_mail_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailboxStatusOut"];
+                };
+            };
+        };
+    };
+    send_test_mail_api_v1_install_mail_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestMailIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendResultOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2414,6 +3177,26 @@ export interface operations {
             };
         };
     };
+    mail_status_api_v1_mail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailStatusOut"];
+                };
+            };
+        };
+    };
     me_api_v1_me_get: {
         parameters: {
             query?: never;
@@ -2463,6 +3246,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_email_change_api_v1_me_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingEmailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_email_api_v1_me_email_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountOut"];
                 };
             };
         };
@@ -2782,6 +3618,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevokedOut"];
+                };
+            };
+        };
+    };
+    reset_password_api_v1_password_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_password_reset_api_v1_password_reset_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_password_reset_api_v1_password_reset_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

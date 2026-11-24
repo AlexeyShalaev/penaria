@@ -20,7 +20,9 @@
     "account": "Account",
     "accountShort": "Account",
     "people": "People and access",
-    "peopleShort": "People"
+    "peopleShort": "People",
+    "settings": "Settings",
+    "settingsShort": "Settings"
   },
   "homes": {
     "welcomeTitle": "Welcome to Penaria",
@@ -232,7 +234,27 @@
     "account_required": "A guest cannot do this.",
     "own_grant": "You cannot change your own access. Ask someone else who manages the home's people.",
     "invalid_grant_valid_days": "An invitation works for 1 to 30 days.",
-    "invalid_grant_grant": "A guest link's access is not changed. Make a new link instead."
+    "invalid_grant_grant": "A guest link's access is not changed. Make a new link instead.",
+    "install_admin_required": "Only an admin of this Penaria can do this.",
+    "mailbox_locked": "The server's environment sets the mailbox, so it cannot be changed here.",
+    "mail_off": "This Penaria sends no email. Connect a mailbox in Settings, or pass the link on by hand.",
+    "invalid_mailbox": "Check the mailbox's settings.",
+    "invalid_mailbox_host": "The server is a host name or an address, such as smtp.example.org.",
+    "invalid_mailbox_port": "A port is from 1 to 65535.",
+    "invalid_mailbox_username": "The login has no spaces.",
+    "invalid_mailbox_from_name": "The sender's name has at most {{max_length}} characters.",
+    "invalid_email": "This does not look like an email address.",
+    "invalid_email_to": "Type the address to send the test to.",
+    "email_taken": "Another account uses this address.",
+    "account_link_not_found": "This link does not work. Check it, or ask for a new one.",
+    "account_link_expired": "This link has expired. Ask for a new one.",
+    "account_link_used": "This link has already been used. Ask for a new one.",
+    "reset_not_allowed": "You cannot reset this person's password: they have access you could not give. They can reset it by email, or ask someone who can.",
+    "account_not_found": "There is no such account.",
+    "mail_not_found": "This email is no longer in the log.",
+    "mail_expired": "This email can no longer be sent: its link stopped working, or it is too old.",
+    "mail_queued": "This email is waiting for its next attempt already.",
+    "invalid_mailbox_password": "The server or the login changed: enter the password again, so the saved one never goes to another server."
   },
   "languages": {
     "en": "English",
@@ -243,7 +265,8 @@
     "text": "Sign in to your home.",
     "username": "Username",
     "password": "Password",
-    "submit": "Sign in"
+    "submit": "Sign in",
+    "forgot": "Forgot your password?"
   },
   "setup": {
     "title": "Set up Penaria",
@@ -409,7 +432,10 @@
     "transfer": "Hand the home over to them",
     "transferHint": "When they accept, you stop being an owner. Use it to transfer ownership.",
     "readyWhole": "Pass this link on to the person you invite. They join the whole home as “{{role}}”. The link works once, until {{until}}.",
-    "readyPlace": "Pass this link on to the person you invite. They join as “{{role}}”, in {{place}} only. The link works once, until {{until}}."
+    "readyPlace": "Pass this link on to the person you invite. They join as “{{role}}”, in {{place}} only. The link works once, until {{until}}.",
+    "email": "Also send to email",
+    "emailHint": "Optional. The link goes there too, in the home's language.",
+    "emailed": "The invitation went to {{email}}."
   },
   "guestLink": {
     "title": "Guest link",
@@ -460,5 +486,154 @@
     "nothingTitle": "Nothing is shared yet",
     "nothingText": "Your hosts have not marked anything for guests.",
     "footnote": "You see only what your hosts marked for guests. Access ends on its own."
+  },
+  "settings": {
+    "title": "Settings",
+    "text": "The settings of this Penaria. They apply to every home on it, and only its admins see them."
+  },
+  "mail": {
+    "title": "Mail (SMTP)",
+    "text": "Password resets, email confirmations, invitations and account notices go out through this mailbox.",
+    "offNotice": "Mail is off. Until a mailbox is connected, reset and invitation links are shown on screen to pass on by hand, and accounts cannot add an email.",
+    "lockedNotice": "The server's environment sets this mailbox (PENARIA_MAIL__*), so it cannot be changed here. Change the variables on the server and restart it.",
+    "off": "Off",
+    "checking": "Checking…",
+    "connected": "Connected",
+    "notConnected": "Cannot connect",
+    "locked": "Set on the server",
+    "lockedHint": "PENARIA_MAIL__* sets this field",
+    "issue": {
+      "hostRequired": "Enter the server.",
+      "portInvalid": "A port is from 1 to 65535.",
+      "fromInvalid": "This does not look like an email address.",
+      "passwordAgain": "The server or the login changed: enter the password again."
+    },
+    "host": "Server",
+    "hostHint": "The address of the mail server, such as smtp.example.org.",
+    "port": "Port",
+    "security": "Connection security",
+    "securityHint": "STARTTLS suits most servers. Changing it moves the port to its usual one.",
+    "securityOption": {
+      "starttls": "STARTTLS (port 587)",
+      "tls": "TLS from the start (port 465)",
+      "none": "No encryption (port 25)"
+    },
+    "username": "Login",
+    "usernameHint": "The account that sends the emails. Leave it empty if the server needs no sign-in.",
+    "password": "Password",
+    "passwordHint": "Write-only: it is never shown again.",
+    "passwordSetHint": "Leave it empty to keep the saved password.",
+    "passwordSet": "Password is set",
+    "passwordKeep": "Saved; type to replace",
+    "fromAddress": "Sender address",
+    "fromAddressHint": "People see this address in the From field.",
+    "fromName": "Sender name",
+    "fromNameHint": "Shown next to the address, such as the name of your home.",
+    "saved": "Saved.",
+    "turnOff": "Turn mail off",
+    "test": {
+      "title": "Test email",
+      "text": "Checks the saved settings. Leave the address empty to send it to your own email.",
+      "to": "To",
+      "send": "Send",
+      "sending": "Sending…",
+      "needMailbox": "Connect a mailbox and save it first.",
+      "saveFirst": "Save your changes first: the test checks the saved settings.",
+      "needAddress": "Your account has no email: type the address to send the test to.",
+      "sent": "Sent to {{to}}. Check the inbox.",
+      "failed": "The email was not sent. The server said:",
+      "toInvalid": "This does not look like an email address."
+    }
+  },
+  "mailLog": {
+    "title": "Mail log",
+    "text": "Every email Penaria sent or tried to send in the last 30 days, with each attempt. Temporary failures are tried again after 1, 5, 15 and 30 minutes.",
+    "empty": "No email yet",
+    "emptyText": "Emails appear here once Penaria sends them.",
+    "more": "Show older",
+    "kind": {
+      "test": "Test",
+      "email_verification": "Email confirmation",
+      "password_reset": "Password reset",
+      "invitation": "Invitation",
+      "password_changed": "Password changed",
+      "passkey_added": "Passkey added",
+      "email_changed": "Email changed",
+      "email_removed": "Email removed"
+    },
+    "retryAt": "Next try {{when}}",
+    "state": {
+      "sent": "Sent",
+      "queued": "Waiting",
+      "failed": "Not sent"
+    },
+    "resend": "Send again",
+    "attempts_one": "{{count}} attempt",
+    "attempts_other": "{{count}} attempts",
+    "reason": {
+      "auth": "The server refused the login",
+      "connect": "Could not connect",
+      "timeout": "The server took too long",
+      "tls": "Encryption failed",
+      "disconnected": "The connection broke off",
+      "recipient_refused": "The address was refused",
+      "sender_refused": "The sender was refused",
+      "data_refused": "The message was refused",
+      "other": "Not sent",
+      "mail_off": "Mail was turned off",
+      "expired": "The link expired first",
+      "unreadable": "Could not be decrypted"
+    },
+    "resent": "Sent again.",
+    "notResent": "It was not sent again.",
+    "sent": "Sent",
+    "byAdmin": "by an admin"
+  },
+  "forgot": {
+    "title": "Forgot your password?",
+    "text": "Type your username or the email of your account. If the account has a confirmed email, a link to choose a new password goes there; it works for 30 minutes.",
+    "login": "Username or email",
+    "submit": "Send the link",
+    "sent": "If an account with a confirmed email matches, a link is on its way. Check your inbox, and the spam folder too.",
+    "noMail": "This Penaria sends no email. Ask an admin of your home for a reset link: they can make one on the People page. The owner of the server can make one too.",
+    "backToSignIn": "Back to sign-in"
+  },
+  "reset": {
+    "title": "Choose a new password",
+    "for": "Account: {{name}} (@{{username}}).",
+    "signsOut": "Every device signed in to the account is signed out. Passkeys keep working.",
+    "submit": "Set the password",
+    "done": "The password is set, and every device was signed out. Sign in with the new password.",
+    "signIn": "Sign in",
+    "askAgain": "Ask for a new link",
+    "passkeysTitle": "Passkeys of the account",
+    "noPasskeys": "The account has no passkeys.",
+    "passkeysText": "They keep working. If you do not recognise one, sign in and remove it on your account page."
+  },
+  "verifyEmail": {
+    "title": "Confirming your email",
+    "checking": "Checking the link…",
+    "done": "{{email}} is now the email of your account.",
+    "toAccount": "To your account"
+  },
+  "email": {
+    "title": "Email",
+    "text": "Password reset links and notices about your account go to this address. Nobody else in your homes sees it.",
+    "noMail": "This Penaria sends no email yet, so an address cannot be confirmed. Ask the admin of the install to connect a mailbox.",
+    "confirmed": "Confirmed",
+    "remove": "Remove",
+    "address": "Email",
+    "newAddress": "New email",
+    "hint": "We send a link there; the address is yours once you open it.",
+    "send": "Send the link",
+    "sent": "A link went to {{email}}. Open it within 24 hours to confirm the address."
+  },
+  "resetLink": {
+    "action": "Reset password",
+    "title": "Reset the password of {{name}}",
+    "text": "Make a link that lets {{name}} choose a new password, and pass it on by hand. It works once, for 24 hours. {{name}} is signed out everywhere; their passkeys keep working.",
+    "make": "Make the link",
+    "ready": "Pass this link on to {{name}}. It works once, until {{until}}.",
+    "shareTitle": "Penaria password reset"
   }
 }

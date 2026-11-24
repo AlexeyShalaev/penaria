@@ -50,3 +50,6 @@ export function expectEveryCallAnswered() {
   const missed = unmatched.splice(0)
   if (missed.length) throw new Error(`calls with no mocked answer: ${missed.join(', ')}`)
 }
+
+/** The answer of an install that sends no email, for the pages that ask. */
+export const MAIL_OFF = {'GET /api/v1/mail': {enabled: false}}

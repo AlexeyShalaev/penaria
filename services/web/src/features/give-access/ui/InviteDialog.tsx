@@ -2,10 +2,11 @@ import {type FormEvent, useState} from 'react'
 import {useTranslation} from 'react-i18next'
 
 import {useRecentSignIn} from '@/entities/account'
+import {useMailEnabled} from '@/entities/install'
 import {placeLabel, type Role, roleName, RolePicker, ShareLink, useCreateInvitation, useRoles} from '@/entities/member'
 import {describeError} from '@/shared/api'
 import {formatDateTime} from '@/shared/lib/time'
-import {Button, Chip, Dialog, FormActions, FormError, FormLayout, QueryState} from '@/shared/ui'
+import {Button, Chip, Dialog, Field, FormActions, FormError, FormLayout, QueryState, TextInput} from '@/shared/ui'
 
 import {daysFrom, defaultDays, endOfDay, toDateInput} from '../model/dates'
 import styles from './AccessDialog.module.css'
@@ -43,7 +44,9 @@ function InviteForm(props: {homeId: string; roles: Role[]; onClose: () => void})
   const [linkDays, setLinkDays] = useState<number>(7)
   const [ends, setEnds] = useState('')
   const [transfer, setTransfer] = useState(false)
+  const [email, setEmail] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
+  const mail = useMailEnabled()
   const owner = role?.preset === 'owner'
 
   const pickRole = (picked: Role) => {
@@ -65,15 +68,21 @@ function InviteForm(props: {homeId: string; roles: Role[]; onClose: () => void})
       valid_days: linkDays,
       grant_expires_at: owner || !ends ? null : endOfDay(ends),
       leave_when_accepted: owner && transfer,
+      ...(email.trim() ? {email: email.trim()} : {}),
     }
     const send = () => create.mutate(body, {onError: recent.retryOnError(send)})
     send()
   }
 
   if (create.data) {
-    const {invitation, url} = create.data
+    const {invitation, url, emailed_to: emailedTo} = create.data
     return (
       <FormLayout>
+        {emailedTo && (
+          <p role="status" className={styles.emailed}>
+            {t('invite.emailed', {email: emailedTo})}
+          </p>
+        )}
         <p className={styles.text}>
           {t(invitation.scope ? 'invite.readyPlace' : 'invite.readyWhole', {
             role: roleName(invitation.role, t),
@@ -130,6 +139,17 @@ function InviteForm(props: {homeId: string; roles: Role[]; onClose: () => void})
               ))}
             </div>
           </fieldset>
+          {mail.data && (
+            <Field label={t('invite.email')} hint={t('invite.emailHint')}>
+              <TextInput
+                type="email"
+                inputMode="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="off"
+              />
+            </Field>
+          )}
           {error && <FormError>{error}</FormError>}
           <FormActions>
             <Button variant="secondary" onClick={props.onClose}>

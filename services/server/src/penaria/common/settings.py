@@ -18,7 +18,10 @@ NESTED_DELIMITER = "__"
 
 
 class PenariaSettings(BaseServiceSettings):
-    model_config = SettingsConfigDict(env_prefix=ENV_PREFIX, env_nested_delimiter=NESTED_DELIMITER)
+    # A wrong value never reaches the log in an error: it may be a password.
+    model_config = SettingsConfigDict(
+        env_prefix=ENV_PREFIX, env_nested_delimiter=NESTED_DELIMITER, hide_input_in_errors=True
+    )
 
     @model_validator(mode="after")
     def _reject_unknown_variables(self) -> Self:

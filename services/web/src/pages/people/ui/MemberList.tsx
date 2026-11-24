@@ -3,6 +3,7 @@ import {useState} from 'react'
 import {useTranslation} from 'react-i18next'
 
 import {ChangeAccessDialog} from '@/features/give-access'
+import {ResetLinkDialog} from '@/features/reset-link'
 import {useRecentSignIn} from '@/entities/account'
 import {
   type Member,
@@ -27,6 +28,7 @@ export function MemberList(props: {homeId: string; owner: boolean}) {
   const members = useMembers(props.homeId)
   const [changing, setChanging] = useState<Target | null>(null)
   const [removing, setRemoving] = useState<Target | null>(null)
+  const [resetting, setResetting] = useState<Member | null>(null)
 
   return (
     <QueryState query={members}>
@@ -43,6 +45,11 @@ export function MemberList(props: {homeId: string; owner: boolean}) {
                     {member.person.display_name}
                     {member.person.username && <span className={styles.username}>@{member.person.username}</span>}
                     {member.you && <Badge tone="ok">{t('people.you')}</Badge>}
+                    {!member.you && (
+                      <Button variant="ghost" size="sm" className={styles.reset} onClick={() => setResetting(member)}>
+                        {t('resetLink.action')}
+                      </Button>
+                    )}
                   </span>
                   {member.grants.map((grant) => (
                     <GrantLine
@@ -67,6 +74,14 @@ export function MemberList(props: {homeId: string; owner: boolean}) {
             />
           )}
           {removing && <RemoveDialog homeId={props.homeId} target={removing} onClose={() => setRemoving(null)} />}
+          {resetting && (
+            <ResetLinkDialog
+              homeId={props.homeId}
+              userId={resetting.person.id}
+              name={resetting.person.display_name}
+              onClose={() => setResetting(null)}
+            />
+          )}
         </>
       )}
     </QueryState>

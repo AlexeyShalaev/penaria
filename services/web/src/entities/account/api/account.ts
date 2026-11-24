@@ -5,7 +5,7 @@ import {api, isApiError, type Schemas, unwrap} from '@/shared/api'
 export type Account = Schemas['AccountOut']
 export type AccountSession = Schemas['SessionOut']
 
-const ACCOUNT_KEY = ['account'] as const
+export const ACCOUNT_KEY = ['account'] as const
 const setupKey = ['setup'] as const
 const sessionsKey = ['sessions'] as const
 

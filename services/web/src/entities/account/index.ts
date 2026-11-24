@@ -22,6 +22,15 @@ export {
   useRenamePasskey,
   useSignInWithPasskey,
 } from './api/passkeys'
+export {
+  type ResetPreview,
+  useConfirmEmail,
+  usePasswordResetPreview,
+  useRemoveEmail,
+  useRequestEmailChange,
+  useRequestPasswordReset,
+  useResetPassword,
+} from './api/recovery'
 export {describeDevice, deviceName} from './model/device'
 export {checkNewPassword, PASSWORD_MIN_LENGTH, type PasswordProblem} from './model/password'
 export {describePasskeyError} from './model/passkeys'

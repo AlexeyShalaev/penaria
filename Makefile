@@ -41,8 +41,8 @@ hadolint:  ## Lint every Dockerfile with .hadolint.yaml, as CI does
 
 DEV_COMPOSE := docker compose -f scripts/dev/compose.yaml
 
-dev-up:  ## Start PostgreSQL (:55432) and S3 (:59000, console :59001) for local development
-	$(DEV_COMPOSE) up -d --wait postgres s3
+dev-up:  ## Start PostgreSQL (:55432), S3 (:59000, console :59001) and Mailpit (SMTP :51025, web :58025) for development
+	$(DEV_COMPOSE) up -d --wait postgres s3 mail
 	$(DEV_COMPOSE) run --rm s3-bucket
 
 dev-down:  ## Stop the development infrastructure, keeping its data

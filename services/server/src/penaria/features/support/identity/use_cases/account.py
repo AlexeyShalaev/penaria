@@ -10,12 +10,15 @@ from penaria.features.shared.actor import Actor
 from penaria.features.shared.errors import InvalidError, NotFoundError
 from penaria.features.shared.journal import Event
 from penaria.features.support.identity.domain.accounts import check_display_name, check_locale, check_password
+from penaria.features.support.identity.domain.mail import MailKind
 from penaria.features.support.identity.domain.models import User
 from penaria.features.support.identity.domain.passwords import PasswordHasher
+from penaria.features.support.identity.domain.recovery import LinkPurpose
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import CurrentSession, Session
 from penaria.features.support.identity.domain.throttle import account_key
 from penaria.features.support.identity.use_cases.attempts import attempt_succeeded, count_attempt
+from penaria.features.support.identity.use_cases.postman import Postman
 
 
 class SessionNotFoundError(NotFoundError):
@@ -62,9 +65,10 @@ class UpdateAccount:
 class ChangePassword:
     """A new password for someone who knows the current one; every other session of theirs ends."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], hasher: PasswordHasher) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], hasher: PasswordHasher, postman: Postman) -> None:
         self._uow = uow
         self._hasher = hasher
+        self._postman = postman
 
     async def execute(self, current: CurrentSession, *, current_password: str, new_password: str) -> None:
         check_password(new_password)
@@ -72,6 +76,8 @@ class ChangePassword:
         new_hash = await self._hasher.hash(new_password)
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
+            # The account first, as a reset takes it, before the counters, the password and its links.
+            await tx.users.get_for_update(current.user_id)
             await checked.still_current(tx)
             await tx.passwords.set(current.user_id, new_hash, now)
             revoked = await tx.sessions.revoke_all_but(current.user_id, current.id, now)
@@ -86,6 +92,9 @@ class ChangePassword:
                     *_revoked_events(current, revoked),
                 ]
             )
+            # A reset link made before stays a way in no longer: the person knows their password.
+            await tx.account_links.forget_unused(current.user_id, LinkPurpose.PASSWORD_RESET)
+            await self._postman.notify(tx, await load_user(tx, current), MailKind.PASSWORD_CHANGED)
 
 
 class ListSessions:

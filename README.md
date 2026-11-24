@@ -46,7 +46,7 @@ Each service has its own dependencies, lock file, `Makefile` and `Dockerfile`. T
 | Lint and type-check (as CI) | `make check` |
 | Test (the server's integration tests need `make dev-up`) | `make test` |
 | Git hooks | `make hooks` |
-| Start PostgreSQL and S3 for development | `make dev-up` |
+| Start PostgreSQL, S3 and Mailpit (a mailbox that catches every email, at http://localhost:58025) for development | `make dev-up` |
 | Stop them, keeping or deleting the data | `make dev-down`, `make dev-reset` |
 
 Released images: `ghcr.io/alexeyshalaev/penaria-server` and `ghcr.io/alexeyshalaev/penaria-web`.

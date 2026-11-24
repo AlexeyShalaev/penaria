@@ -18,7 +18,7 @@ From the root for every service, or from `services/<service>/` for one (its `Mak
 | Lint and type-check (the same steps as CI) | `make check` |
 | Test (the server's integration tests need the development stack) | `make test` |
 | Git hooks | `make hooks` |
-| Start / stop PostgreSQL and S3 for development | `make dev-up` / `make dev-down` (`make dev-reset` deletes the data) |
+| Start / stop PostgreSQL, S3 and Mailpit for development | `make dev-up` / `make dev-down` (`make dev-reset` deletes the data) |
 | Apply migrations / write one from the models | `make -C services/server migrate` / `make -C services/server migration m="..."` |
 | Run the API locally (:8000) | `make -C services/server run-api` |
 | Run the web app locally (:5173) | `make -C services/web dev` |
