@@ -1,10 +1,11 @@
-import {Map as MapIcon} from 'lucide-react'
+import {CircleUserRound, Map as MapIcon} from 'lucide-react'
 import {useEffect} from 'react'
 import {useTranslation} from 'react-i18next'
-import {Link, Outlet, useParams} from 'react-router'
+import {Link, Outlet, useLocation, useParams} from 'react-router'
 
+import {useAccount} from '@/entities/account'
 import {useEntity} from '@/entities/entity'
-import {rememberLastHome} from '@/shared/lib/lastHome'
+import {readLastHome, rememberLastHome} from '@/shared/lib/lastHome'
 
 import styles from './AppShell.module.css'
 import {HomeSwitcher} from './HomeSwitcher'
@@ -14,14 +15,20 @@ export function AppShell() {
   const {t} = useTranslation()
   const params = useParams<{homeId?: string; entityId?: string}>()
   const entity = useEntity(params.entityId)
-  const homeId = params.homeId ?? entity.data?.home_id
+  const account = useAccount()
+  const onAccountPage = useLocation().pathname === '/account'
+  const pageHomeId = params.homeId ?? entity.data?.home_id
+  // A page of no home, such as the account, keeps the home used last in the switcher.
+  const homeId = pageHomeId ?? (onAccountPage ? (readLastHome() ?? undefined) : undefined)
 
   useEffect(() => {
-    if (homeId) rememberLastHome(homeId)
-  }, [homeId])
+    if (pageHomeId) rememberLastHome(pageHomeId)
+  }, [pageHomeId])
 
-  // So far every page inside a home belongs to "Places and things", so its link is always current.
+  // So far every page inside a home belongs to "Places and things".
   const placesLink = homeId ? `/homes/${homeId}/places` : undefined
+  const placesCurrent = onAccountPage ? undefined : 'page'
+  const accountCurrent = onAccountPage ? 'page' : undefined
 
   return (
     <div className={styles.app}>
@@ -29,12 +36,19 @@ export function AppShell() {
         <HomeSwitcher homeId={homeId} />
         <nav className={styles.nav} aria-label={t('shell.navigation')}>
           {placesLink && (
-            <Link to={placesLink} className={styles.navItem} aria-current="page">
+            <Link to={placesLink} className={styles.navItem} aria-current={placesCurrent}>
               <MapIcon aria-hidden />
               {t('shell.places')}
             </Link>
           )}
         </nav>
+        <Link to="/account" className={styles.account} aria-current={accountCurrent}>
+          <CircleUserRound aria-hidden />
+          <span className={styles.accountText}>
+            <span className={styles.accountName}>{account.data?.display_name}</span>
+            <span className={styles.accountHint}>{t('shell.account')}</span>
+          </span>
+        </Link>
       </aside>
 
       <div className={styles.main}>
@@ -48,11 +62,15 @@ export function AppShell() {
 
       <nav className={styles.tabbar} aria-label={t('shell.navigation')}>
         {placesLink && (
-          <Link to={placesLink} className={styles.tab} aria-current="page">
+          <Link to={placesLink} className={styles.tab} aria-current={placesCurrent}>
             <MapIcon aria-hidden />
             {t('shell.placesShort')}
           </Link>
         )}
+        <Link to="/account" className={styles.tab} aria-current={accountCurrent}>
+          <CircleUserRound aria-hidden />
+          {t('shell.accountShort')}
+        </Link>
       </nav>
     </div>
   )

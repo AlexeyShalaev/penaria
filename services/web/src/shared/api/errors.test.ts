@@ -21,6 +21,14 @@ describe('unwrap', () => {
     expect(error).toMatchObject({status: 409, code: 'stale_version'})
   })
 
+  it('keeps the params of a problem+json body', async () => {
+    const error = await unwrap(failed(429, {code: 'too_many_attempts', params: {retry_after_seconds: 30}})).catch(
+      (e: unknown) => e,
+    )
+
+    expect(error).toMatchObject({status: 429, code: 'too_many_attempts', params: {retry_after_seconds: 30}})
+  })
+
   it('names a failure without a problem body by its status', async () => {
     const error = await unwrap(failed(502, '<html>Bad gateway</html>', 'Bad Gateway')).catch((e: unknown) => e)
 
@@ -34,6 +42,19 @@ describe('describeError', () => {
     [new ApiError(400, 'something_new', ''), 'Something went wrong. Try again.'],
     [new TypeError('Failed to fetch'), 'The server cannot be reached. Check the connection and try again.'],
     [new Error('boom'), 'Something went wrong. Try again.'],
+    [
+      new ApiError(400, 'weak_password', '', {reason: 'too_short', min_length: 12}),
+      'The password needs at least 12 characters.',
+    ],
+    [new ApiError(400, 'weak_password', '', {reason: 'unheard_of'}), 'Choose another password.'],
+    [
+      new ApiError(400, 'invalid_account', '', {field: 'username'}),
+      'A username has 3 to 32 letters, digits, dots, underscores or hyphens.',
+    ],
+    [
+      new ApiError(429, 'too_many_attempts', '', {retry_after_seconds: 31}),
+      'Too many failed attempts. Try again in 31 seconds.',
+    ],
   ])('describes %s', (error, expected) => {
     expect(describeError(error, i18n.t)).toBe(expected)
   })

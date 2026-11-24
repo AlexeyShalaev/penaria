@@ -21,6 +21,12 @@ make api                    # regenerate the types
 
 The app calls the API on its own origin (`/api`, `/system`): the dev server proxies them to the server on :8000, and an install must route them to `penaria-server` the same way in front of `penaria-web`.
 
+## Signing in
+
+The server keeps the session in an `HttpOnly` cookie, so the app holds no token: it asks `/api/v1/me` who is signed in. Every page but the setup and sign-in screens sits behind `RequireAccount` (`src/app`), which sends a visitor without a session to sign in, or to the setup screen on a fresh install, and back to the page afterwards. Any call that answers `401` with the code `unauthenticated` signs the app out the same way (`src/shared/api/queryClient.ts`).
+
+In development, `make -C ../server run-api` prints the setup token of a fresh database; the server expects the dev server's address, `http://localhost:5173`, as `PENARIA_PUBLIC_URL`, so open the app there.
+
 ## Commands
 
 | Task                    | Command        |

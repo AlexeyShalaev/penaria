@@ -2,8 +2,8 @@ import {fireEvent, screen} from '@testing-library/react'
 import {Route} from 'react-router'
 import {describe, expect, it} from 'vitest'
 
-import {mockApi} from '@/test/api'
-import {detail, home, HOME_ID} from '@/test/fixtures'
+import {mockApi, problem} from '@/test/api'
+import {account, detail, home, HOME_ID} from '@/test/fixtures'
 import {renderAt} from '@/test/render'
 
 import {AppRoutes} from './App'
@@ -18,6 +18,7 @@ describe('App', () => {
   it('welcomes a new install and lands in the tree of the home it creates', async () => {
     let homes: unknown[] = []
     const calls = mockApi({
+      'GET /api/v1/me': account(),
       'GET /api/v1/homes': () => homes,
       'POST /api/v1/homes': () => {
         homes = [home()]
@@ -44,6 +45,7 @@ describe('App', () => {
   it('opens the home used last', async () => {
     localStorage.setItem('penaria.lastHome', OTHER_ID)
     mockApi({
+      'GET /api/v1/me': account(),
       'GET /api/v1/homes': [home(), home({id: OTHER_ID, name: 'Country house'})],
       [`GET /api/v1/homes/${OTHER_ID}`]: home({id: OTHER_ID, name: 'Country house'}),
       [`GET /api/v1/homes/${OTHER_ID}/entities`]: [],
@@ -56,6 +58,7 @@ describe('App', () => {
 
   it('remembers the home of an entity page', async () => {
     mockApi({
+      'GET /api/v1/me': account(),
       'GET /api/v1/entities/drill': {...detail({id: 'drill', name: 'Drill', kind: 'item'}), home_id: OTHER_ID},
       [`GET /api/v1/homes/${OTHER_ID}`]: home({id: OTHER_ID, name: 'Country house'}),
       [`GET /api/v1/homes/${OTHER_ID}/entities?parent_id=drill`]: [],
@@ -66,5 +69,68 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', {name: 'Drill'})).toBeVisible()
     expect(localStorage.getItem('penaria.lastHome')).toBe(OTHER_ID)
+  })
+
+  it('sends a visitor without a session to sign in, and back to the page afterwards', async () => {
+    let signedIn = false
+    const calls = mockApi({
+      'GET /api/v1/me': () => (signedIn ? account() : problem(401, 'unauthenticated')),
+      'GET /api/v1/setup': {needed: false},
+      'POST /api/v1/sign-in': () => {
+        signedIn = true
+        return account()
+      },
+      'GET /api/v1/entities/drill': detail({id: 'drill', name: 'Drill', kind: 'item'}),
+      [`GET /api/v1/homes/${HOME_ID}`]: home(),
+      [`GET /api/v1/homes/${HOME_ID}/entities?parent_id=drill`]: [],
+      'GET /api/v1/homes': [home()],
+    })
+    renderApp('/entities/drill')
+
+    expect(await screen.findByRole('heading', {name: 'Sign in'})).toBeVisible()
+    fireEvent.change(screen.getByLabelText('Username'), {target: {value: ' owner '}})
+    fireEvent.change(screen.getByLabelText('Password'), {target: {value: 'correct horse battery'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Sign in'}))
+
+    expect(await screen.findByRole('heading', {name: 'Drill'})).toBeVisible()
+    expect(calls.find((call) => call.method === 'POST')?.body).toEqual({
+      username: 'owner',
+      password: 'correct horse battery',
+    })
+  })
+
+  it('sends the first visitor of a fresh install to the setup', async () => {
+    mockApi({
+      'GET /api/v1/me': problem(401, 'unauthenticated'),
+      'GET /api/v1/setup': {needed: true},
+    })
+
+    renderApp()
+
+    expect(await screen.findByRole('heading', {name: 'Set up Penaria'})).toBeVisible()
+    expect(screen.getByText('docker compose logs penaria-server | grep "setup token"')).toBeVisible()
+  })
+
+  it('goes back to sign in when the session ends while the app is open', async () => {
+    mockApi({
+      'GET /api/v1/me': account(),
+      'GET /api/v1/homes': problem(401, 'unauthenticated'),
+      'GET /api/v1/setup': {needed: false},
+    })
+
+    renderApp()
+
+    expect(await screen.findByRole('heading', {name: 'Sign in'})).toBeVisible()
+  })
+
+  it('speaks the language of the account', async () => {
+    mockApi({
+      'GET /api/v1/me': account({locale: 'ru'}),
+      'GET /api/v1/homes': [],
+    })
+
+    renderApp()
+
+    expect(await screen.findByRole('heading', {name: 'Добро пожаловать в Penaria'})).toBeVisible()
   })
 })

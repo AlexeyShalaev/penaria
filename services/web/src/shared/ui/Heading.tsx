@@ -8,6 +8,10 @@ export function PageTitle(props: {children: ReactNode; className?: string}) {
 }
 
 /** The heading of a card. */
-export function CardTitle(props: {children: ReactNode}) {
-  return <h2 className={styles.card}>{props.children}</h2>
+export function CardTitle(props: {children: ReactNode; id?: string}) {
+  return (
+    <h2 id={props.id} className={styles.card}>
+      {props.children}
+    </h2>
+  )
 }

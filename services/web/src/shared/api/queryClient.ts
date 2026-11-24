@@ -1,11 +1,20 @@
-import {QueryClient} from '@tanstack/react-query'
+import {MutationCache, QueryCache, QueryClient} from '@tanstack/react-query'
 
-import {ApiError} from './errors'
+import {ApiError, isApiError} from './errors'
 
 const MAX_RETRIES = 2
 
+/** The signed-in account's query; `null` once the server says there is no session. */
+export const ACCOUNT_KEY = ['account'] as const
+
 export function createQueryClient() {
-  return new QueryClient({
+  // Any call that finds the session gone signs the app out, and the guard sends the person to sign in.
+  const signOutOnUnauthenticated = (error: Error) => {
+    if (isApiError(error, 'unauthenticated')) client.setQueryData(ACCOUNT_KEY, null)
+  }
+  const client: QueryClient = new QueryClient({
+    queryCache: new QueryCache({onError: signOutOnUnauthenticated}),
+    mutationCache: new MutationCache({onError: signOutOnUnauthenticated}),
     defaultOptions: {
       queries: {
         // A 4xx answer does not change on retry; a network failure or a 5xx may.
@@ -14,4 +23,5 @@ export function createQueryClient() {
       },
     },
   })
+  return client
 }

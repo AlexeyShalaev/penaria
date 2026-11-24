@@ -2,7 +2,7 @@ import {StrictMode} from 'react'
 import {createRoot} from 'react-dom/client'
 
 import {App} from '@/app/App'
-import {detectLanguage, initI18n} from '@/shared/i18n'
+import {detectLanguage, i18n, initI18n} from '@/shared/i18n'
 import '@/shared/ui/tokens.css'
 import '@/shared/ui/base.css'
 
@@ -14,6 +14,9 @@ document.documentElement.lang = language
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.dataset.theme = 'dark'
 
 await initI18n(language)
+i18n.on('languageChanged', (changed) => {
+  document.documentElement.lang = changed
+})
 
 createRoot(root).render(
   <StrictMode>
