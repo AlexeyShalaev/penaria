@@ -8,6 +8,10 @@ The backend of Penaria: one Python package, `penaria`, run as several processes.
 
 More processes join `src/penaria/apps/` as their first code lands: the worker (Temporal, the outbox publisher, event handlers), standalone (api and worker in one process for home installs), the Telegram bot, the CLI and the on-site hub.
 
+## Configuration
+
+Only environment variables, all named `PENARIA_*`; `__` reaches into a section: `PENARIA_SERVER__PORT=8080` sets `server.port`. A `PENARIA_*` variable that names no setting stops the process at startup, so a typo never goes unnoticed. The settings of each process are in `src/penaria/apps/<process>/settings.py`.
+
 ## Layout
 
 ```
