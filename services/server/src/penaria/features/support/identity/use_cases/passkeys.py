@@ -1,7 +1,6 @@
 """The signed-in person's passkeys: adding, naming and removing them."""
 
 from datetime import UTC, datetime
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
@@ -17,12 +16,15 @@ from penaria.features.support.identity.domain.passkeys import (
     Passkey,
     PasskeyAlreadyRegisteredError,
     PasskeyNotFoundError,
+    PasskeyOptions,
     PasskeyRejectedError,
     RelyingParty,
     check_passkey_name,
 )
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import CurrentSession
+from penaria.features.support.identity.use_cases.account import load_user
+from penaria.features.support.identity.use_cases.challenges import issue_challenge
 
 
 class ListPasskeys:
@@ -40,19 +42,22 @@ class StartPasskeyRegistration:
         self._uow = uow
         self._relying_party = relying_party
 
-    async def execute(self, current: CurrentSession) -> tuple[Challenge, dict[str, Any]]:
-        """A challenge, and the options for ``navigator.credentials.create`` that carry it."""
+    async def execute(self, current: CurrentSession) -> PasskeyOptions:
+        """The options for ``navigator.credentials.create``.
+
+        The recent sign-in is checked here, when the ceremony starts, and not again when it ends: the
+        challenge belongs to this session, and refusing at the end would leave a credential on the
+        device that the account never got.
+        """
         now = datetime.now(UTC)
         current.require_recent_sign_in(now)
-        challenge = Challenge.issue(Ceremony.REGISTRATION, current.id, now)
+        challenge = Challenge.for_session(Ceremony.REGISTRATION, current.id, now)
         async with self._uow.transaction() as tx:
-            user = await tx.users.get(current.user_id)
-            if user is None:
-                raise RuntimeError(f"the user ({current.user_id}) of an open session does not exist")
+            user = await load_user(tx, current)
             existing = await tx.passkeys.for_user(user.id)
             await issue_challenge(tx, challenge, now)
         # The authenticators that already hold one of the account's passkeys decline to make another.
-        return challenge, self._relying_party.registration_options(user, challenge, existing)
+        return PasskeyOptions(challenge.id, self._relying_party.registration_options(user, challenge, existing))
 
 
 class AddPasskey:
@@ -66,7 +71,6 @@ class AddPasskey:
         """Keep the credential the browser made for the challenge, under the name the person gave it."""
         name = check_passkey_name(name)
         now = datetime.now(UTC)
-        current.require_recent_sign_in(now)
         async with self._uow.transaction() as tx:
             challenge = await tx.challenges.take(challenge_id, Ceremony.REGISTRATION, current.id, now)
         if challenge is None:
@@ -130,12 +134,6 @@ class RemovePasskey:
                 raise LastSignInMethodError("this passkey is the account's only way to sign in")
             await tx.passkeys.remove(current.user_id, passkey_id)
             await tx.journal.append([_event("account.passkey_removed", current, passkey_id=str(passkey_id))])
-
-
-async def issue_challenge(tx: IdentityTransaction, challenge: Challenge, now: datetime) -> None:
-    """Keep a new challenge; the expired ones go, so ceremonies people abandon do not pile up."""
-    await tx.challenges.forget_expired(now)
-    await tx.challenges.add(challenge)
 
 
 def _event(event_type: str, current: CurrentSession, **payload: str) -> Event:

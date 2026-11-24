@@ -78,10 +78,7 @@ class CurrentSession:
     def require_recent_sign_in(self, now: datetime) -> None:
         """Refuse a sensitive command in a session whose person has not proved who they are recently."""
         if now - self.authenticated_at > RECENT_SIGN_IN:
-            raise RecentSignInRequiredError(
-                "confirm it is you first: sign in again with your password or a passkey",
-                params={"max_age_seconds": int(RECENT_SIGN_IN.total_seconds())},
-            )
+            raise RecentSignInRequiredError("confirm it is you first: sign in again with your password or a passkey")
 
 
 def hash_token(token: str) -> bytes:

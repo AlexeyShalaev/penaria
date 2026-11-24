@@ -43,6 +43,7 @@ def upgrade() -> None:
         sa.Column("ceremony", sa.Text(), nullable=False),
         sa.Column("challenge", sa.LargeBinary(), nullable=False),
         sa.Column("session_id", sa.UUID(), nullable=True),
+        sa.Column("address", sa.Text(), nullable=True),
         sa.Column("expires_at", postgresql.TIMESTAMP(timezone=True), nullable=False),
         sa.CheckConstraint(
             "(ceremony = 'sign_in') = (session_id IS NULL)", name=op.f("identity_passkey_challenges_session_check")

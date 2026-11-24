@@ -1,10 +1,10 @@
-import {describe, expect, it} from 'vitest'
+import {describe, expect, it, vi} from 'vitest'
 
-import {ASSERTION_JSON, mockPasskeys, NEW_CREDENTIAL_JSON, refuse} from '@/test/webauthn'
+import {assertion, ASSERTION_JSON, mockPasskeys, NEW_CREDENTIAL_JSON, newCredential, refuse} from '@/test/webauthn'
 
 import {createCredential, fromBase64url, getCredential, passkeysSupported, toBase64url, WebAuthnError} from './webauthn'
 
-const CREATION: PublicKeyCredentialCreationOptionsJSON = {
+const CREATION = {
   rp: {id: 'localhost', name: 'Penaria'},
   user: {id: 'dXNlcg', name: 'owner', displayName: 'Alex'},
   challenge: 'Y2hhbGxlbmdl',
@@ -15,7 +15,7 @@ const CREATION: PublicKeyCredentialCreationOptionsJSON = {
   attestation: 'none',
 }
 
-const REQUEST: PublicKeyCredentialRequestOptionsJSON = {
+const REQUEST = {
   rpId: 'localhost',
   challenge: 'Y2hhbGxlbmdl',
   timeout: 300000,
@@ -54,6 +54,13 @@ describe('webauthn', () => {
     expect(passkeysSupported()).toBe(true)
   })
 
+  it.each(['192.168.1.10', '[2001:db8::1]'])('tells that passkeys do not work at the IP address %s', (hostname) => {
+    mockPasskeys()
+    vi.stubGlobal('location', {...location, hostname})
+
+    expect(passkeysSupported()).toBe(false)
+  })
+
   it('makes a passkey from the options in JSON and gives the credential back in JSON', async () => {
     const browser = mockPasskeys()
 
@@ -79,6 +86,21 @@ describe('webauthn', () => {
 
     expect(credential).toEqual(ASSERTION_JSON)
     expect(readable(browser.get.mock.lastCall)).toEqual([{publicKey: {...REQUEST, challenge: 'bytes:challenge'}}])
+  })
+
+  it('sends no user handle and no transports when the browser gives none', async () => {
+    const credential = newCredential()
+    const answer = assertion()
+    mockPasskeys({
+      create: () => Promise.resolve({...credential, response: {...credential.response, getTransports: undefined}}),
+      get: () => Promise.resolve({...answer, response: {...answer.response, userHandle: null}}),
+    })
+
+    const created = await createCredential(CREATION)
+    const signed = await getCredential(REQUEST)
+
+    expect(created.response.transports).toEqual([])
+    expect(signed.response.userHandle).toBeNull()
   })
 
   it.each([

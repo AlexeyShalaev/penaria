@@ -15,7 +15,7 @@ from servicewright.adapters.fastapi import UnitScopeDep
 from penaria.features.shared.http import SIGNED_IN
 from penaria.features.support.identity.api.account import AccountOut, client_of
 from penaria.features.support.identity.api.cookies import SessionCookie
-from penaria.features.support.identity.domain.passkeys import NAME_MAX_LENGTH, Challenge, Passkey
+from penaria.features.support.identity.domain.passkeys import NAME_MAX_LENGTH, Passkey, PasskeyOptions
 from penaria.features.support.identity.domain.sessions import CurrentSession
 from penaria.features.support.identity.use_cases.passkeys import (
     AddPasskey,
@@ -33,7 +33,9 @@ from penaria.features.support.identity.use_cases.sessions import SignInWithPassk
 # Bounds on what a browser's answer may carry: base64url of a few kilobytes at most, even with
 # an attestation certificate chain.
 ENCODED_MAX_LENGTH = 16_384
+# WebAuthn names six transports, the longest ten letters ("smart-card"); room for a few more.
 TRANSPORTS_MAX = 10
+TRANSPORT_MAX_LENGTH = 32
 
 sign_in_router = APIRouter(prefix="/api/v1", tags=["sign-in"])
 router = APIRouter(prefix="/api/v1", tags=["passkeys"], dependencies=[SIGNED_IN])
@@ -49,7 +51,9 @@ class _WebAuthnJson(BaseModel):
 class AttestationResponseIn(_WebAuthnJson):
     client_data_json: Encoded = Field(alias="clientDataJSON")
     attestation_object: Encoded = Field(alias="attestationObject")
-    transports: list[Annotated[str, Field(max_length=32)]] = Field(default=[], max_length=TRANSPORTS_MAX)
+    transports: list[Annotated[str, Field(max_length=TRANSPORT_MAX_LENGTH)]] = Field(
+        default=[], max_length=TRANSPORTS_MAX
+    )
 
 
 class AssertionResponseIn(_WebAuthnJson):
@@ -84,9 +88,8 @@ class PasskeyOptionsOut(BaseModel):
     )
 
     @classmethod
-    def of(cls, ceremony: tuple[Challenge, dict[str, Any]]) -> PasskeyOptionsOut:
-        challenge, options = ceremony
-        return cls(challenge_id=challenge.id, options=options)
+    def of(cls, ceremony: PasskeyOptions) -> PasskeyOptionsOut:
+        return cls(challenge_id=ceremony.challenge_id, options=ceremony.options)
 
 
 class PasskeySignInIn(BaseModel):
@@ -121,8 +124,9 @@ class PasskeyOut(BaseModel):
 
 
 @sign_in_router.post("/sign-in/passkey/options")
-async def passkey_sign_in_options(scope: UnitScopeDep) -> PasskeyOptionsOut:
-    return PasskeyOptionsOut.of(await (await scope.get(StartPasskeySignIn)).execute())
+async def passkey_sign_in_options(request: Request, scope: UnitScopeDep) -> PasskeyOptionsOut:
+    """An address may hold 10 sign-ins that are neither finished nor expired (``too_many_attempts``)."""
+    return PasskeyOptionsOut.of(await (await scope.get(StartPasskeySignIn)).execute(client_of(request)))
 
 
 @sign_in_router.post("/sign-in/passkey")

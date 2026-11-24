@@ -19,6 +19,8 @@ export function SignInPage() {
   const next = safeNext(params.get('next'))
   const account = useAccount()
   const setup = useSetupStatus()
+  const withPasskey = passkeysSupported()
+  const signedIn = () => navigate(next, {replace: true})
 
   return (
     <main className={styles.page}>
@@ -34,16 +36,13 @@ export function SignInPage() {
                 <p className={styles.text}>{t('signIn.text')}</p>
               </div>
               <Card className={styles.card}>
-                {passkeysSupported() && (
+                {withPasskey && (
                   <>
-                    <PasskeySignInButton onSignedIn={() => navigate(next, {replace: true})} />
+                    <PasskeySignInButton onSignedIn={signedIn} />
                     <p className={styles.or}>{t('passkeys.orPassword')}</p>
                   </>
                 )}
-                <SignInForm
-                  onSignedIn={() => navigate(next, {replace: true})}
-                  submitVariant={passkeysSupported() ? 'secondary' : 'primary'}
-                />
+                <SignInForm onSignedIn={signedIn} submitVariant={withPasskey ? 'secondary' : 'primary'} />
               </Card>
             </>
           )

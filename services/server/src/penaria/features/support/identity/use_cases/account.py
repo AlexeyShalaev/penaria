@@ -1,5 +1,6 @@
 """The signed-in person's own account: their profile, password and sessions."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -31,7 +32,7 @@ class GetAccount:
 
     async def execute(self, current: CurrentSession) -> User:
         async with self._uow.query() as tx:
-            return await _load(tx, current)
+            return await load_user(tx, current)
 
 
 class UpdateAccount:
@@ -67,32 +68,20 @@ class ChangePassword:
 
     async def execute(self, current: CurrentSession, *, current_password: str, new_password: str) -> None:
         check_password(new_password)
-        async with self._uow.transaction() as tx:
-            user = await _load(tx, current)
-            if user.username is None:
-                raise RuntimeError(f"the user ({user.id}) of an open session has no username")
-            # Guessing the current password from a stolen session is limited like signing in.
-            account = account_key(user.username)
-            await count_attempt(tx, [account], datetime.now(UTC))
-            password_hash = await tx.passwords.get(user.id)
-        if not await self._hasher.verify(password_hash, current_password):
-            raise WrongPasswordError("the current password is wrong")
+        checked = await check_current_password(self._uow, self._hasher, current, current_password)
         new_hash = await self._hasher.hash(new_password)
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
-            await attempt_succeeded(tx, account)
-            # Another change may have come first: this one was checked against a password now gone.
-            if await tx.passwords.get(user.id) != password_hash:
-                raise WrongPasswordError("the current password is wrong")
-            await tx.passwords.set(user.id, new_hash, now)
-            revoked = await tx.sessions.revoke_all_but(user.id, current.id, now)
+            await checked.still_current(tx)
+            await tx.passwords.set(current.user_id, new_hash, now)
+            revoked = await tx.sessions.revoke_all_but(current.user_id, current.id, now)
             await tx.journal.append(
                 [
                     Event(
                         "account.password_changed",
                         None,
-                        Actor.user(user.id),
-                        {"user_id": str(user.id), "sessions_ended": len(revoked)},
+                        Actor.user(current.user_id),
+                        {"user_id": str(current.user_id), "sessions_ended": len(revoked)},
                     ),
                     *_revoked_events(current, revoked),
                 ]
@@ -132,7 +121,40 @@ class RevokeOtherSessions:
         return len(revoked)
 
 
-async def _load(tx: IdentityTransaction, current: CurrentSession) -> User:
+@dataclass(frozen=True, slots=True)
+class CheckedPassword:
+    """The account's password, found right by ``check_current_password`` outside any transaction."""
+
+    user_id: UUID
+    account: str
+    password_hash: str | None
+
+    async def still_current(self, tx: IdentityTransaction) -> None:
+        """Forgive the account's failures, in the transaction that acts on the check, unless the
+        password changed since it was checked: then the check counts for nothing."""
+        await attempt_succeeded(tx, self.account)
+        if await tx.passwords.get(self.user_id) != self.password_hash:
+            raise WrongPasswordError("the password is wrong")
+
+
+async def check_current_password(
+    uow: AsyncUnitOfWork[IdentityTransaction], hasher: PasswordHasher, current: CurrentSession, password: str
+) -> CheckedPassword:
+    """Check the session's person knows the account's password; follow with ``still_current``."""
+    async with uow.transaction() as tx:
+        user = await load_user(tx, current)
+        if user.username is None:
+            raise RuntimeError(f"the user ({user.id}) of an open session has no username")
+        # Guessing the password from a stolen session is limited like signing in.
+        account = account_key(user.username)
+        await count_attempt(tx, [account], datetime.now(UTC))
+        password_hash = await tx.passwords.get(user.id)
+    if not await hasher.verify(password_hash, password):
+        raise WrongPasswordError("the password is wrong")
+    return CheckedPassword(user_id=user.id, account=account, password_hash=password_hash)
+
+
+async def load_user(tx: IdentityTransaction, current: CurrentSession) -> User:
     user = await tx.users.get(current.user_id)
     if user is None:
         raise RuntimeError(f"the user ({current.user_id}) of an open session does not exist")

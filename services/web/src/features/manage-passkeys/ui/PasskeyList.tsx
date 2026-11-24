@@ -4,7 +4,6 @@ import {useTranslation} from 'react-i18next'
 
 import {
   describePasskeyError,
-  needsRecentSignIn,
   type Passkey,
   usePasskeys,
   useRecentSignIn,
@@ -25,10 +24,10 @@ export function PasskeyList() {
   const recent = useRecentSignIn()
   const [renaming, setRenaming] = useState<string | null>(null)
   const [removing, setRemoving] = useState<Passkey | null>(null)
-  const failed = rename.error ?? (needsRecentSignIn(remove.error) ? null : remove.error)
+  const failed = rename.error ?? recent.errorToShow(remove.error)
 
   const removePasskey = (passkey: Passkey) =>
-    remove.mutate(passkey.id, {onError: (error) => recent.retryAfterConfirming(error, () => removePasskey(passkey))})
+    remove.mutate(passkey.id, {onError: recent.retryOnError(() => removePasskey(passkey))})
 
   return (
     <QueryState query={passkeys}>

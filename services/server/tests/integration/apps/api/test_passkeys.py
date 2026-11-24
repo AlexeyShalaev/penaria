@@ -1,7 +1,5 @@
 """Passkeys through the HTTP API, as the web app uses them, with a software authenticator for the browser."""
 
-import re
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -11,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from servicewright.adapters.dishka import DishkaContainer
 from sqlalchemy import delete, select, update
-from sqlalchemy_foundation_kit import AsyncSQLAlchemyUnitOfWork
+from webauthn.helpers import bytes_to_base64url
 
 from penaria.features.support.identity.domain.models import User
 from penaria.features.support.identity.infra.orm import PasskeyChallengeDB, PasskeyDB, PasswordDB, SessionDB, UserDB
@@ -19,12 +17,10 @@ from penaria.features.support.platform.infra.orm import JournalEventDB
 from penaria.integrations.postgres.transaction import PenariaTransaction
 from tests.authenticator import Authenticator
 from tests.integration.conftest import OWNER, PUBLIC_URL
+from tests.integration.helpers import UUID_PATTERN, WRONG, NewClient, add_passkey, from_address, shape, uow_of
 
 pytestmark = pytest.mark.integration
 
-NewClient = Callable[..., httpx.AsyncClient]
-UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-WRONG = "not the password"
 RP_ID = "test"
 
 
@@ -33,33 +29,23 @@ def phone() -> Authenticator:
     return Authenticator(PUBLIC_URL)
 
 
-async def uow_of(container: DishkaContainer) -> AsyncSQLAlchemyUnitOfWork[PenariaTransaction]:
-    return await container.container.get(AsyncSQLAlchemyUnitOfWork[PenariaTransaction])
-
-
-async def add_passkey(client: httpx.AsyncClient, device: Authenticator, name: str = "Phone") -> httpx.Response:
-    started = await client.post("/me/passkeys/options")
-    assert started.status_code == 200, started.text
-    ceremony = started.json()
-    credential = device.create(ceremony["options"])
-    return await client.post(
-        "/me/passkeys", json={"challenge_id": ceremony["challenge_id"], "credential": credential, "name": name}
-    )
-
-
-async def sign_in_with(client: httpx.AsyncClient, device: Authenticator) -> httpx.Response:
+async def sign_in_with(client: httpx.AsyncClient, device: Authenticator, **changes: Any) -> httpx.Response:
+    """Sign in with the device; ``changes`` replace fields of its answer's ``response``."""
     ceremony = (await client.post("/sign-in/passkey/options")).json()
+    credential = device.get(ceremony["options"])
+    credential["response"] |= changes
     return await client.post(
-        "/sign-in/passkey",
-        json={"challenge_id": ceremony["challenge_id"], "credential": device.get(ceremony["options"])},
+        "/sign-in/passkey", json={"challenge_id": ceremony["challenge_id"], "credential": credential}
     )
 
 
-async def reauthenticate_with(client: httpx.AsyncClient, device: Authenticator) -> httpx.Response:
+async def reauthenticate_with(client: httpx.AsyncClient, device: Authenticator, **changes: Any) -> httpx.Response:
+    """Confirm it is you with the device; ``changes`` replace fields of its answer's ``response``."""
     ceremony = (await client.post("/me/reauthenticate/passkey/options")).json()
+    credential = device.get(ceremony["options"])
+    credential["response"] |= changes
     return await client.post(
-        "/me/reauthenticate/passkey",
-        json={"challenge_id": ceremony["challenge_id"], "credential": device.get(ceremony["options"])},
+        "/me/reauthenticate/passkey", json={"challenge_id": ceremony["challenge_id"], "credential": credential}
     )
 
 
@@ -101,7 +87,9 @@ async def test_the_options_carry_the_account_and_exclude_its_passkeys(
     options = response.json()["options"]
     assert options["rp"] == {"id": RP_ID, "name": "Penaria"}
     assert (options["user"]["name"], options["user"]["displayName"]) == ("owner", "Owner")
-    assert [c["id"] for c in options["excludeCredentials"]] == [phone.create(options)["id"]]
+    assert options["excludeCredentials"] == [
+        {"id": bytes_to_base64url(phone.credential_id), "type": "public-key", "transports": ["hybrid", "internal"]}
+    ]
 
 
 async def test_the_same_passkey_cannot_be_added_twice(
@@ -122,10 +110,9 @@ async def test_adding_a_passkey_needs_a_recent_sign_in(
 
     assert response.status_code == 403
     assert response.json()["code"] == "recent_sign_in_required"
-    assert response.json()["params"] == {"max_age_seconds": 600}
 
 
-async def test_a_sign_in_that_ages_during_the_ceremony_adds_nothing(
+async def test_a_sign_in_that_ages_during_the_ceremony_still_adds(
     api: httpx.AsyncClient, phone: Authenticator, container: DishkaContainer
 ) -> None:
     ceremony = (await api.post("/me/passkeys/options")).json()
@@ -136,8 +123,24 @@ async def test_a_sign_in_that_ages_during_the_ceremony_adds_nothing(
         json={"challenge_id": ceremony["challenge_id"], "credential": phone.create(ceremony["options"]), "name": "P"},
     )
 
-    assert response.json()["code"] == "recent_sign_in_required"
-    assert (await api.get("/me/passkeys")).json() == []
+    assert response.status_code == 201
+
+
+async def test_a_challenge_of_another_ceremony_adds_nothing(api: httpx.AsyncClient, phone: Authenticator) -> None:
+    sign_in = (await api.post("/sign-in/passkey/options")).json()
+    registration = (await api.post("/me/passkeys/options")).json()
+
+    response = await api.post(
+        "/me/passkeys",
+        json={
+            "challenge_id": sign_in["challenge_id"],
+            "credential": phone.create(registration["options"]),
+            "name": "P",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "passkey_rejected"
 
 
 async def test_a_challenge_adds_one_passkey_at_most(api: httpx.AsyncClient, phone: Authenticator) -> None:
@@ -166,6 +169,7 @@ async def test_a_challenge_of_another_session_adds_nothing(
         json={"challenge_id": ceremony["challenge_id"], "credential": phone.create(ceremony["options"]), "name": "P"},
     )
 
+    assert response.status_code == 400
     assert response.json()["code"] == "passkey_rejected"
 
 
@@ -181,6 +185,7 @@ async def test_an_expired_challenge_adds_nothing(
         json={"challenge_id": ceremony["challenge_id"], "credential": phone.create(ceremony["options"]), "name": "P"},
     )
 
+    assert response.status_code == 400
     assert response.json()["code"] == "passkey_rejected"
 
 
@@ -269,6 +274,7 @@ async def test_a_passkey_of_a_disabled_account_does_not_sign_in(
 
     response = await sign_in_with(new_client(), phone)
 
+    assert response.status_code == 401
     assert response.json()["code"] == "invalid_passkey"
 
 
@@ -295,10 +301,7 @@ async def test_a_removed_passkey_no_longer_signs_in(
 async def test_failed_passkey_sign_ins_are_limited_per_address(
     with_passkey: dict[str, Any], phone: Authenticator, new_client: NewClient, app: FastAPI
 ) -> None:
-    def from_address(ip: str) -> httpx.AsyncClient:
-        return new_client(transport=httpx.ASGITransport(app=app, client=(ip, 1)))
-
-    guesser = from_address("192.0.2.1")
+    guesser = from_address(new_client, app, "192.0.2.1")
     stranger = Authenticator.stranger(PUBLIC_URL, RP_ID)
     statuses = [(await sign_in_with(guesser, stranger)).status_code for _ in range(5)]
 
@@ -306,23 +309,75 @@ async def test_failed_passkey_sign_ins_are_limited_per_address(
 
     assert statuses == [401] * 5
     assert blocked.status_code == 429
-    assert (await sign_in_with(from_address("198.51.100.1"), phone)).status_code == 200
+    assert (await sign_in_with(from_address(new_client, app, "198.51.100.1"), phone)).status_code == 200
+
+
+async def test_passkey_sign_ins_that_succeed_are_not_limited(
+    with_passkey: dict[str, Any], phone: Authenticator, new_client: NewClient, app: FastAPI
+) -> None:
+    household = from_address(new_client, app, "192.0.2.1")
+
+    statuses = [(await sign_in_with(household, phone)).status_code for _ in range(6)]
+
+    assert statuses == [200] * 6
+
+
+async def test_an_address_may_hold_only_ten_unfinished_sign_ins(
+    with_passkey: dict[str, Any], phone: Authenticator, new_client: NewClient, app: FastAPI
+) -> None:
+    script = from_address(new_client, app, "192.0.2.1")
+    statuses = [(await script.post("/sign-in/passkey/options")).status_code for _ in range(10)]
+
+    refused = await script.post("/sign-in/passkey/options")
+
+    assert statuses == [200] * 10
+    assert refused.status_code == 429
+    assert refused.json()["code"] == "too_many_attempts"
+    assert refused.json()["params"]["retry_after_seconds"] in range(1, 301)
+    assert (await sign_in_with(from_address(new_client, app, "198.51.100.1"), phone)).status_code == 200
+
+
+async def test_a_known_passkey_that_names_another_account_does_not_sign_in(
+    with_passkey: dict[str, Any], phone: Authenticator, new_client: NewClient
+) -> None:
+    response = await sign_in_with(new_client(), phone, userHandle=bytes_to_base64url(bytes(16)))
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "invalid_passkey"
+
+
+async def test_a_known_passkey_that_names_no_account_does_not_sign_in(
+    with_passkey: dict[str, Any], phone: Authenticator, new_client: NewClient
+) -> None:
+    response = await sign_in_with(new_client(), phone, userHandle=None)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "invalid_passkey"
+
+
+async def test_a_malformed_answer_signs_nobody_in(
+    with_passkey: dict[str, Any], phone: Authenticator, new_client: NewClient
+) -> None:
+    response = await sign_in_with(new_client(), phone, userHandle="a")
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "invalid_passkey"
 
 
 async def test_a_passkey_signs_in_while_the_password_is_blocked(
     with_passkey: dict[str, Any], phone: Authenticator, new_client: NewClient, app: FastAPI
 ) -> None:
     for octet in range(1, 6):
-        attacker = new_client(transport=httpx.ASGITransport(app=app, client=(f"192.0.2.{octet}", 1)))
+        attacker = from_address(new_client, app, f"192.0.2.{octet}")
         await attacker.post("/sign-in", json={"username": "owner", "password": WRONG})
-    owner = new_client(transport=httpx.ASGITransport(app=app, client=("198.51.100.1", 1)))
+    owner = from_address(new_client, app, "198.51.100.1")
     assert (await owner.post("/sign-in", json={"username": "owner", "password": OWNER["password"]})).status_code == 429
 
     assert (await sign_in_with(owner, phone)).status_code == 200
 
 
 async def test_signing_in_with_a_passkey_from_another_site_is_refused(
-    with_passkey: dict[str, Any], phone: Authenticator, new_client: NewClient
+    anonymous: httpx.AsyncClient, new_client: NewClient
 ) -> None:
     client = new_client(headers={"origin": "https://evil.example"})
 
@@ -354,6 +409,29 @@ async def test_a_passkey_makes_the_sign_in_recent_again(
 
     assert response.status_code == 204
     assert (await api.delete(f"/me/passkeys/{with_passkey['id']}")).status_code == 204
+
+
+async def test_a_forged_answer_does_not_confirm(
+    api: httpx.AsyncClient, with_passkey: dict[str, Any], phone: Authenticator, container: DishkaContainer
+) -> None:
+    await age_sign_ins(container)
+
+    response = await reauthenticate_with(api, phone.impostor())
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "passkey_rejected"
+    assert (await api.post("/me/passkeys/options")).json()["code"] == "recent_sign_in_required"
+
+
+async def test_a_malformed_answer_does_not_confirm(
+    api: httpx.AsyncClient, with_passkey: dict[str, Any], phone: Authenticator, container: DishkaContainer
+) -> None:
+    await age_sign_ins(container)
+
+    response = await reauthenticate_with(api, phone, userHandle="a")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "passkey_rejected"
 
 
 async def test_a_wrong_password_does_not_confirm(api: httpx.AsyncClient, container: DishkaContainer) -> None:
@@ -432,6 +510,7 @@ async def test_removing_a_passkey_needs_a_recent_sign_in(
 
     response = await api.delete(f"/me/passkeys/{with_passkey['id']}")
 
+    assert response.status_code == 403
     assert response.json()["code"] == "recent_sign_in_required"
     assert len((await api.get("/me/passkeys")).json()) == 1
 
@@ -446,6 +525,19 @@ async def test_the_last_way_to_sign_in_cannot_be_removed(
 
     assert response.status_code == 409
     assert response.json()["code"] == "last_sign_in_method"
+
+
+async def test_one_of_two_passkeys_can_go_without_a_password(
+    api: httpx.AsyncClient, with_passkey: dict[str, Any], container: DishkaContainer
+) -> None:
+    assert (await add_passkey(api, Authenticator(PUBLIC_URL), name="Key")).status_code == 201
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(delete(PasswordDB))
+
+    response = await api.delete(f"/me/passkeys/{with_passkey['id']}")
+
+    assert response.status_code == 204
+    assert [p["name"] for p in (await api.get("/me/passkeys")).json()] == ["Key"]
 
 
 async def test_a_passkey_of_another_account_is_not_found(
@@ -473,6 +565,7 @@ async def test_passkey_events_are_journalled(
     await api.patch(f"/me/passkeys/{passkey_id}", json={"name": "Phone 2"})
     await sign_in_with(new_client(), phone)
     await sign_in_with(new_client(), phone.impostor())
+    await sign_in_with(new_client(), Authenticator.stranger(PUBLIC_URL, RP_ID))
     await reauthenticate_with(api, phone)
     await api.post("/me/reauthenticate", json={"password": OWNER["password"]})
     await api.delete(f"/me/passkeys/{passkey_id}")
@@ -486,29 +579,23 @@ async def test_passkey_events_are_journalled(
             )
         ).all()
 
-    passkey = {"user_id": "uuid", "passkey_id": passkey_id}
+    passkey = {"user_id": "uuid", "passkey_id": "uuid"}
     session = {"user_id": "uuid", "session_id": "uuid"}
-    assert [(row.type, row.actor["kind"], _shape(row.payload)) for row in rows] == [
+    # The stranger's passkey belongs to no account, so nothing of it is journalled.
+    assert [(row.type, row.actor["kind"], shape(row.payload)) for row in rows] == [
         ("account.signed_in", "user", {**session, "ip": "127.0.0.1"}),
         ("account.passkey_added", "user", {**passkey, "name": "Phone"}),
         ("account.passkey_renamed", "user", {**passkey, "name": "Phone 2"}),
-        ("account.signed_in", "user", {**session, "ip": "127.0.0.1", "passkey_id": passkey_id}),
+        ("account.signed_in", "user", {**session, "ip": "127.0.0.1", "passkey_id": "uuid"}),
         ("account.sign_in_failed", "system", {**passkey, "ip": "127.0.0.1"}),
-        ("account.reauthenticated", "user", {**session, "passkey_id": passkey_id}),
+        ("account.reauthenticated", "user", {**session, "passkey_id": "uuid"}),
         ("account.reauthenticated", "user", session),
         ("account.passkey_removed", "user", passkey),
     ]
+    assert {row.payload["passkey_id"] for row in rows if "passkey_id" in row.payload} == {passkey_id}
 
 
 async def _neighbour(tx: PenariaTransaction) -> UUID:
     neighbour = User(display_name="Neighbour", locale="en", username="neighbour")
     await tx.users.add(neighbour)
     return neighbour.id
-
-
-def _shape(payload: dict[str, Any]) -> dict[str, Any]:
-    """The payload with the ids of users and sessions replaced by "uuid", so it compares whole."""
-    return {
-        key: "uuid" if key in ("user_id", "session_id") and UUID_PATTERN.match(value) else value
-        for key, value in payload.items()
-    }

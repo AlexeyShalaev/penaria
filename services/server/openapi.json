@@ -2503,6 +2503,7 @@
     },
     "/api/v1/sign-in/passkey/options": {
       "post": {
+        "description": "An address may hold 10 sign-ins that are neither finished nor expired (``too_many_attempts``).",
         "operationId": "passkey_sign_in_options_api_v1_sign_in_passkey_options_post",
         "responses": {
           "200": {

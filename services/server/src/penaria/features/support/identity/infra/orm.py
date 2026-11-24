@@ -94,6 +94,8 @@ class PasskeyChallengeDB(Base):
     ceremony: Mapped[str] = mapped_column(Text)
     challenge: Mapped[bytes] = mapped_column(LargeBinary)
     session_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_sessions.id", ondelete="CASCADE"))
+    # A sign-in's address, as its counter key (domain/throttle.py): the open ones per address are capped.
+    address: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime.datetime] = mapped_column(index=True)
 
 

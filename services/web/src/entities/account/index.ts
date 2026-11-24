@@ -21,7 +21,7 @@ export {
   useRenamePasskey,
   useSignInWithPasskey,
 } from './api/passkeys'
-export {describeDevice} from './model/device'
+export {describeDevice, deviceName} from './model/device'
 export {checkNewPassword, PASSWORD_MIN_LENGTH, type PasswordProblem} from './model/password'
-export {defaultPasskeyName, describePasskeyError} from './model/passkeys'
-export {needsRecentSignIn, useRecentSignIn} from './ui/useRecentSignIn'
+export {describePasskeyError} from './model/passkeys'
+export {useRecentSignIn} from './ui/useRecentSignIn'

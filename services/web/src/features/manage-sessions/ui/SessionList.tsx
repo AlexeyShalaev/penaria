@@ -4,6 +4,7 @@ import {useTranslation} from 'react-i18next'
 import {
   type AccountSession,
   describeDevice,
+  deviceName,
   useRevokeOtherSessions,
   useRevokeSession,
   useSessions,
@@ -60,9 +61,8 @@ export function SessionList() {
 function SessionRow(props: {session: AccountSession; onRevoke: () => void; busy: boolean}) {
   const {t, i18n} = useTranslation()
   const {session} = props
-  const {browser, system} = describeDevice(session.user_agent)
-  const device =
-    browser && system ? t('account.deviceOn', {browser, system}) : (browser ?? system ?? t('account.unknownDevice'))
+  const {system} = describeDevice(session.user_agent)
+  const device = deviceName(session.user_agent, t, t('account.unknownDevice'))
   const lastUsed = new Date(session.last_seen_at)
   const details = [
     session.ip,

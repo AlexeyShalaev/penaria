@@ -1,6 +1,7 @@
 """The service spec and the HTTP entrypoint of the API process."""
 
 import dataclasses
+import ipaddress
 import logging
 
 from fastapi import Depends
@@ -67,6 +68,11 @@ def build_http(settings: Settings) -> FastApiEntrypoint:
             "PENARIA_PUBLIC_URL is plain HTTP: passwords and session cookies cross the network unencrypted; "
             "put Penaria behind HTTPS"
         )
+    if _names_an_ip_address(settings.passkey_rp_id):
+        logger.warning(
+            "PENARIA_PUBLIC_URL names an IP address: browsers allow passkeys only at a domain name, "
+            "so people sign in with passwords"
+        )
     config = settings.server.to_config(version=__version__)
     # Every route, the public ones included, refuses a change asked for by another site.
     config = dataclasses.replace(
@@ -74,3 +80,11 @@ def build_http(settings: Settings) -> FastApiEntrypoint:
         fastapi_kwargs={**config.fastapi_kwargs, "dependencies": [Depends(origin_check(settings.public_origin))]},
     )
     return FastApiEntrypoint(config=config, routers=ROUTERS)
+
+
+def _names_an_ip_address(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        return False
+    return True

@@ -193,11 +193,8 @@ class PostgresPasskeyRepository:
         )
         return updated is not None
 
-    async def remove(self, user_id: UUID, passkey_id: UUID) -> bool:
-        removed = await self._session.scalar(
-            delete(PasskeyDB).where(PasskeyDB.id == passkey_id, PasskeyDB.user_id == user_id).returning(PasskeyDB.id)
-        )
-        return removed is not None
+    async def remove(self, user_id: UUID, passkey_id: UUID) -> None:
+        await self._session.execute(delete(PasskeyDB).where(PasskeyDB.id == passkey_id, PasskeyDB.user_id == user_id))
 
 
 class PostgresChallengeRepository:
@@ -211,6 +208,7 @@ class PostgresChallengeRepository:
                 ceremony=challenge.ceremony.value,
                 challenge=challenge.value,
                 session_id=challenge.session_id,
+                address=challenge.address,
                 expires_at=challenge.expires_at,
             )
         )
@@ -229,14 +227,29 @@ class PostgresChallengeRepository:
                     else PasskeyChallengeDB.session_id == session_id,
                     PasskeyChallengeDB.expires_at > now,
                 )
-                .returning(PasskeyChallengeDB.challenge, PasskeyChallengeDB.expires_at)
+                .returning(PasskeyChallengeDB.challenge, PasskeyChallengeDB.expires_at, PasskeyChallengeDB.address)
             )
         ).one_or_none()
         if row is None:
             return None
         return Challenge(
-            id=challenge_id, ceremony=ceremony, value=row.challenge, session_id=session_id, expires_at=row.expires_at
+            id=challenge_id,
+            ceremony=ceremony,
+            value=row.challenge,
+            session_id=session_id,
+            expires_at=row.expires_at,
+            address=row.address,
         )
+
+    async def open_sign_ins(self, address: str, now: datetime) -> list[datetime]:
+        rows = await self._session.scalars(
+            select(PasskeyChallengeDB.expires_at).where(
+                PasskeyChallengeDB.ceremony == Ceremony.SIGN_IN.value,
+                PasskeyChallengeDB.address == address,
+                PasskeyChallengeDB.expires_at > now,
+            )
+        )
+        return list(rows)
 
     async def forget_expired(self, now: datetime) -> None:
         await self._session.execute(delete(PasskeyChallengeDB).where(PasskeyChallengeDB.expires_at <= now))

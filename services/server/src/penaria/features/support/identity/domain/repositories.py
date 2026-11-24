@@ -92,9 +92,7 @@ class PasskeyRepository(Protocol):
         or another use changed its count since it was read as ``seen_sign_count``."""
         ...
 
-    async def remove(self, user_id: UUID, passkey_id: UUID) -> bool:
-        """Delete one of the user's passkeys; whether there was one."""
-        ...
+    async def remove(self, user_id: UUID, passkey_id: UUID) -> None: ...
 
 
 class ChallengeRepository(Protocol):
@@ -104,6 +102,10 @@ class ChallengeRepository(Protocol):
         self, challenge_id: UUID, ceremony: Ceremony, session_id: UUID | None, now: datetime
     ) -> Challenge | None:
         """Remove and return the challenge, if it is of this ceremony and session and has not expired."""
+        ...
+
+    async def open_sign_ins(self, address: str, now: datetime) -> list[datetime]:
+        """When the sign-in challenges this address holds, unused and unexpired, expire."""
         ...
 
     async def forget_expired(self, now: datetime) -> None: ...

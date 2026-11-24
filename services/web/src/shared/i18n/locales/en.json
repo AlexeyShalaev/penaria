@@ -200,7 +200,7 @@
     "passkey_rejected": "The passkey could not be checked. Try again.",
     "passkey_already_registered": "This passkey is already added.",
     "passkey_not_found": "This passkey has already been removed.",
-    "invalid_passkey_name": "A passkey's name needs 1 to 100 characters.",
+    "invalid_passkey_name": "A passkey's name needs 1 to {{max_length}} characters.",
     "last_sign_in_method": "This passkey is your only way to sign in, so it cannot be removed.",
     "recent_sign_in_required": "Confirm it's you first."
   },

@@ -79,6 +79,41 @@ describe('AddPasskeyButton', () => {
     })
   })
 
+  it('keeps asking when the password is wrong, and adds nothing until it is right', async () => {
+    mockPasskeys()
+    const calls = mockApi({
+      'POST /api/v1/me/passkeys/options': problem(403, 'recent_sign_in_required'),
+      'POST /api/v1/me/reauthenticate': problem(400, 'wrong_password'),
+      'GET /api/v1/me/passkeys': [],
+    })
+    renderButton()
+
+    fireEvent.click(screen.getByRole('button', {name: 'Add a passkey'}))
+    const dialog = await screen.findByRole('dialog', {name: "Confirm it's you"})
+    fireEvent.change(within(dialog).getByLabelText('Password'), {target: {value: 'not the password'}})
+    fireEvent.click(within(dialog).getByRole('button', {name: 'Confirm'}))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('The current password is wrong.')
+    expect(screen.getByRole('dialog')).toBeVisible()
+    expect(calls.filter((call) => call.path === '/api/v1/me/passkeys/options')).toHaveLength(1)
+  })
+
+  it('adds nothing when the person cancels the confirmation', async () => {
+    mockPasskeys()
+    const calls = mockApi({
+      'POST /api/v1/me/passkeys/options': problem(403, 'recent_sign_in_required'),
+      'GET /api/v1/me/passkeys': [],
+    })
+    renderButton()
+
+    fireEvent.click(screen.getByRole('button', {name: 'Add a passkey'}))
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', {name: 'Cancel'}))
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(calls.filter((call) => call.path === '/api/v1/me/passkeys/options')).toHaveLength(1)
+  })
+
   it('says when this device already keeps a passkey for the account', async () => {
     mockPasskeys({create: refuse('InvalidStateError')})
     mockApi({'POST /api/v1/me/passkeys/options': OPTIONS})

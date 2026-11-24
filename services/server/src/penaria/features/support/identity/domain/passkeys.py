@@ -5,17 +5,21 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID
 
 from penaria.features.shared.errors import ConflictError, InvalidError, NotFoundError, UnauthenticatedError
 from penaria.features.shared.ids import new_id
 from penaria.features.support.identity.domain.models import User
+from penaria.features.support.identity.domain.throttle import TooManyAttemptsError
 
 # How long a ceremony may take, from the options to the answer: enough to pick a phone through a QR code.
 CEREMONY_TIMEOUT = timedelta(minutes=5)
 # WebAuthn asks for at least 16 random bytes.
 CHALLENGE_BYTES = 32
+# Sign-in challenges need no account, so each address may hold only so many open ones: plenty for a
+# household behind one address, while a script cannot fill the table.
+OPEN_SIGN_INS_PER_ADDRESS = 10
 NAME_MAX_LENGTH = 100
 
 # A credential as the browser serializes it (PublicKeyCredential.toJSON()), checked by the relying party.
@@ -64,24 +68,44 @@ class Ceremony(StrEnum):
 class Challenge:
     """A challenge the server gave out, used at most once before it expires.
 
-    A registration or a confirmation belongs to the session that asked for it; a sign-in to none.
+    A registration or a confirmation belongs to the session that asked for it. A sign-in belongs to
+    none; it keeps the address it was asked from (its counter key), so one address cannot hold many.
     """
 
     ceremony: Ceremony
     value: bytes
     session_id: UUID | None
     expires_at: datetime
+    address: str | None = None
     id: UUID = field(default_factory=new_id)
 
     @classmethod
-    def issue(cls, ceremony: Ceremony, session_id: UUID | None, now: datetime) -> Challenge:
-        if (ceremony is Ceremony.SIGN_IN) != (session_id is None):
-            raise ValueError(f"a {ceremony} ceremony belongs to a session exactly when it is not a sign-in")
-        return cls(
-            ceremony=ceremony,
-            value=secrets.token_bytes(CHALLENGE_BYTES),
-            session_id=session_id,
-            expires_at=now + CEREMONY_TIMEOUT,
+    def for_session(
+        cls, ceremony: Literal[Ceremony.REGISTRATION, Ceremony.REAUTHENTICATION], session_id: UUID, now: datetime
+    ) -> Challenge:
+        return cls(ceremony, secrets.token_bytes(CHALLENGE_BYTES), session_id, now + CEREMONY_TIMEOUT)
+
+    @classmethod
+    def for_sign_in(cls, address: str | None, now: datetime) -> Challenge:
+        return cls(Ceremony.SIGN_IN, secrets.token_bytes(CHALLENGE_BYTES), None, now + CEREMONY_TIMEOUT, address)
+
+
+@dataclass(frozen=True, slots=True)
+class PasskeyOptions:
+    """What the browser needs for a ceremony: the options for ``navigator.credentials`` and the id of
+    their challenge, which comes back with the answer."""
+
+    challenge_id: UUID
+    options: dict[str, Any]
+
+
+def check_open_sign_ins(expiries: Sequence[datetime], now: datetime) -> None:
+    """Refuse another sign-in challenge to an address that holds too many open ones (their expiries)."""
+    if len(expiries) >= OPEN_SIGN_INS_PER_ADDRESS:
+        wait = min(expiries) - now
+        raise TooManyAttemptsError(
+            "too many sign-ins started; wait and try again",
+            params={"retry_after_seconds": int(wait.total_seconds()) + 1},
         )
 
 

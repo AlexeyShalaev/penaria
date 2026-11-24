@@ -38,8 +38,9 @@ from penaria.features.support.identity.domain.passkeys import (
 RP_NAME = "Penaria"
 TIMEOUT_MS = int(CEREMONY_TIMEOUT.total_seconds() * 1000)
 # A passkey is the only factor of its sign-in (sign-in.md, 4.3), so the authenticator must check the
-# person (a fingerprint, a face, a PIN), not just that someone touched it.
+# person (a fingerprint, a face, a PIN), not just that someone touched it: asked for, and checked.
 USER_VERIFICATION = UserVerificationRequirement.REQUIRED
+REQUIRE_USER_VERIFICATION = USER_VERIFICATION is UserVerificationRequirement.REQUIRED
 # People sign in without typing a username, so only a credential the authenticator keeps and offers
 # by itself (a discoverable one) could ever sign in.
 RESIDENT_KEY = ResidentKeyRequirement.REQUIRED
@@ -78,7 +79,7 @@ class WebAuthnRelyingParty:
                 expected_challenge=challenge.value,
                 expected_rp_id=self._rp_id,
                 expected_origin=self._origin,
-                require_user_verification=True,
+                require_user_verification=REQUIRE_USER_VERIFICATION,
             )
         except WebAuthnException as exc:
             raise CredentialRejected(str(exc)) from exc
@@ -102,7 +103,8 @@ class WebAuthnRelyingParty:
     def read_assertion(self, credential: CredentialJson) -> Assertion:
         try:
             parsed = parse_authentication_credential_json(dict(credential))
-        except WebAuthnException as exc:
+        # The library decodes userHandle outside its own error handling: bad base64url is a ValueError.
+        except (WebAuthnException, ValueError) as exc:
             raise CredentialRejected(str(exc)) from exc
         return Assertion(credential_id=parsed.raw_id, user_handle=parsed.response.user_handle)
 
@@ -117,18 +119,20 @@ class WebAuthnRelyingParty:
                 expected_origin=self._origin,
                 credential_public_key=passkey.public_key,
                 credential_current_sign_count=passkey.sign_count,
-                require_user_verification=True,
+                require_user_verification=REQUIRE_USER_VERIFICATION,
             )
-        except WebAuthnException as exc:
+        except (WebAuthnException, ValueError) as exc:
             raise CredentialRejected(str(exc)) from exc
         return verified.new_sign_count
 
 
 def _descriptors(passkeys: Sequence[Passkey]) -> list[PublicKeyCredentialDescriptor]:
     return [
-        PublicKeyCredentialDescriptor(
-            id=passkey.credential_id,
-            transports=[AuthenticatorTransport(transport) for transport in passkey.transports],
-        )
-        for passkey in passkeys
+        PublicKeyCredentialDescriptor(id=passkey.credential_id, transports=_transports(passkey)) for passkey in passkeys
     ]
+
+
+def _transports(passkey: Passkey) -> list[AuthenticatorTransport]:
+    # Only hints: one a later version of the library no longer knows is left out, as it does when reading.
+    known = {transport.value for transport in AuthenticatorTransport}
+    return [AuthenticatorTransport(transport) for transport in passkey.transports if transport in known]

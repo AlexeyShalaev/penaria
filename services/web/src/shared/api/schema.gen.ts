@@ -423,7 +423,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Passkey Sign In Options */
+        /**
+         * Passkey Sign In Options
+         * @description An address may hold 10 sign-ins that are neither finished nor expired (``too_many_attempts``).
+         */
         post: operations["passkey_sign_in_options_api_v1_sign_in_passkey_options_post"];
         delete?: never;
         options?: never;

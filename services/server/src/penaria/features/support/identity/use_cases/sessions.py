@@ -2,7 +2,6 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
@@ -20,6 +19,7 @@ from penaria.features.support.identity.domain.passkeys import (
     CredentialRejected,
     InvalidPasskeyError,
     Passkey,
+    PasskeyOptions,
     RelyingParty,
     user_handle,
 )
@@ -28,7 +28,7 @@ from penaria.features.support.identity.domain.repositories import IdentityTransa
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, Session, hash_token
 from penaria.features.support.identity.domain.throttle import account_key, address_key
 from penaria.features.support.identity.use_cases.attempts import attempt_succeeded, count_attempt
-from penaria.features.support.identity.use_cases.passkeys import issue_challenge
+from penaria.features.support.identity.use_cases.challenges import issue_challenge
 
 logger = logging.getLogger(__name__)
 
@@ -105,13 +105,13 @@ class StartPasskeySignIn:
         self._uow = uow
         self._relying_party = relying_party
 
-    async def execute(self) -> tuple[Challenge, dict[str, Any]]:
-        """A challenge, and the options for ``navigator.credentials.get`` that let the person pick any passkey."""
+    async def execute(self, client: Client) -> PasskeyOptions:
+        """The options for ``navigator.credentials.get`` that let the person pick any passkey."""
         now = datetime.now(UTC)
-        challenge = Challenge.issue(Ceremony.SIGN_IN, None, now)
+        challenge = Challenge.for_sign_in(address_key(client.ip), now)
         async with self._uow.transaction() as tx:
             await issue_challenge(tx, challenge, now)
-        return challenge, self._relying_party.authentication_options(challenge, [])
+        return PasskeyOptions(challenge.id, self._relying_party.authentication_options(challenge, []))
 
 
 class SignInWithPasskey:
@@ -161,8 +161,9 @@ class SignInWithPasskey:
     def _verify(
         self, credential: CredentialJson, assertion: Assertion, challenge: Challenge, passkey: Passkey, user: User
     ) -> int:
-        if assertion.user_handle not in (None, user_handle(user)):
-            raise CredentialRejected("the authenticator keeps the credential for another account")
+        # Nobody named the account beforehand, so the authenticator must say whose credential it is.
+        if assertion.user_handle != user_handle(user):
+            raise CredentialRejected("the authenticator keeps the credential for another account, or names none")
         return self._relying_party.verify_authentication(credential, challenge, passkey)
 
     async def _passkey_of(self, assertion: Assertion) -> tuple[Passkey, User]:

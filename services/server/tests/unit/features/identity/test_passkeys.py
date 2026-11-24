@@ -12,8 +12,10 @@ from penaria.features.support.identity.domain.passkeys import (
     CredentialRejected,
     InvalidPasskeyNameError,
     Passkey,
+    check_open_sign_ins,
     check_passkey_name,
 )
+from penaria.features.support.identity.domain.throttle import TooManyAttemptsError
 from penaria.features.support.identity.infra.webauthn import WebAuthnRelyingParty
 from tests.authenticator import Authenticator
 
@@ -26,11 +28,11 @@ OWNER = User(display_name="Alex", locale="en", username="alex")
 
 
 def registration() -> Challenge:
-    return Challenge.issue(Ceremony.REGISTRATION, new_id(), NOW)
+    return Challenge.for_session(Ceremony.REGISTRATION, new_id(), NOW)
 
 
 def sign_in() -> Challenge:
-    return Challenge.issue(Ceremony.SIGN_IN, None, NOW)
+    return Challenge.for_sign_in("ip:192.0.2.1", NOW)
 
 
 def registered(device: Authenticator) -> Passkey:
@@ -62,13 +64,14 @@ def test_a_challenge_expires_after_five_minutes() -> None:
     assert challenge.value != sign_in().value
 
 
-@pytest.mark.parametrize(
-    ("ceremony", "has_session"),
-    [(Ceremony.SIGN_IN, True), (Ceremony.REGISTRATION, False), (Ceremony.REAUTHENTICATION, False)],
-)
-def test_only_a_sign_in_belongs_to_no_session(ceremony: Ceremony, has_session: bool) -> None:
-    with pytest.raises(ValueError, match="belongs to a session"):
-        Challenge.issue(ceremony, new_id() if has_session else None, NOW)
+def test_an_address_may_hold_ten_open_sign_ins() -> None:
+    expiries = [NOW + timedelta(minutes=1, seconds=n) for n in range(9)]
+
+    check_open_sign_ins(expiries, NOW)
+    with pytest.raises(TooManyAttemptsError) as raised:
+        check_open_sign_ins([*expiries, NOW + timedelta(minutes=4)], NOW)
+
+    assert raised.value.params == {"retry_after_seconds": 61}
 
 
 def test_a_passkey_name_is_trimmed() -> None:
@@ -218,6 +221,26 @@ def test_an_assertion_names_its_credential_and_account() -> None:
 
     assert assertion.credential_id == passkey.credential_id
     assert assertion.user_handle == OWNER.id.bytes
+
+
+def test_an_assertion_with_a_malformed_user_handle_is_rejected() -> None:
+    device = Authenticator(ORIGIN)
+    credential = answer(device, registered(device), sign_in())
+    credential["response"]["userHandle"] = "a"
+
+    with pytest.raises(CredentialRejected):
+        RP.read_assertion(credential)
+
+
+def test_stored_transports_the_library_no_longer_knows_are_left_out() -> None:
+    passkey = registered(Authenticator(ORIGIN))
+    passkey.transports = ["cable-of-the-future", "internal"]
+
+    options = RP.authentication_options(sign_in(), [passkey])
+
+    assert options["allowCredentials"] == [
+        {"id": bytes_to_base64url(passkey.credential_id), "type": "public-key", "transports": ["internal"]}
+    ]
 
 
 def test_an_unreadable_assertion_is_rejected() -> None:

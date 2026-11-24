@@ -65,4 +65,3 @@ def test_a_sign_in_is_recent_for_ten_minutes() -> None:
         current.require_recent_sign_in(STARTED + timedelta(minutes=10, seconds=1))
 
     assert raised.value.code == "recent_sign_in_required"
-    assert raised.value.params == {"max_age_seconds": 600}

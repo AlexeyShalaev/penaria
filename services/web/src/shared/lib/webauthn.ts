@@ -23,29 +23,44 @@ export class WebAuthnError extends Error {
   }
 }
 
-export type RegistrationCredentialJSON = {
+type RegistrationCredentialJSON = {
   id: string
   rawId: string
   type: 'public-key'
   response: {clientDataJSON: string; attestationObject: string; transports: string[]}
 }
 
-export type AuthenticationCredentialJSON = {
+type AuthenticationCredentialJSON = {
   id: string
   rawId: string
   type: 'public-key'
   response: {clientDataJSON: string; authenticatorData: string; signature: string; userHandle: string | null}
 }
 
-/** Whether passkeys can work here: WebAuthn exists only on secure pages (https, or localhost in development). */
+/**
+ * Whether passkeys can work here: WebAuthn exists only on secure pages (https, or localhost in
+ * development), and browsers refuse passkeys for an IP address even there.
+ */
 export function passkeysSupported(): boolean {
   return (
-    window.isSecureContext === true && typeof window.PublicKeyCredential === 'function' && 'credentials' in navigator
+    window.isSecureContext === true &&
+    typeof window.PublicKeyCredential === 'function' &&
+    'credentials' in navigator &&
+    !isIpAddress(location.hostname)
   )
 }
 
+// An IPv6 hostname comes in brackets; an IPv4 one is four numbers.
+function isIpAddress(hostname: string): boolean {
+  return hostname.startsWith('[') || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)
+}
+
+/** The options the server sends, as JSON: WebAuthn's own shape, which the API types leave open. */
+type OptionsJSON = Record<string, unknown>
+
 /** Asks the browser to make a passkey for the options the server gave. */
-export async function createCredential(options: PublicKeyCredentialCreationOptionsJSON) {
+export async function createCredential(json: OptionsJSON) {
+  const options = json as unknown as PublicKeyCredentialCreationOptionsJSON
   const publicKey: PublicKeyCredentialCreationOptions = {
     ...options,
     challenge: fromBase64url(options.challenge),
@@ -67,7 +82,8 @@ export async function createCredential(options: PublicKeyCredentialCreationOptio
 }
 
 /** Asks the browser to sign the server's challenge with a passkey of this site. */
-export async function getCredential(options: PublicKeyCredentialRequestOptionsJSON) {
+export async function getCredential(json: OptionsJSON) {
+  const options = json as unknown as PublicKeyCredentialRequestOptionsJSON
   const publicKey: PublicKeyCredentialRequestOptions = {
     ...options,
     challenge: fromBase64url(options.challenge),

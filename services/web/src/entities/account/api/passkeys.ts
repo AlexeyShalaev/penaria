@@ -23,7 +23,7 @@ export function useSignInWithPasskey() {
   return useMutation({
     mutationFn: async () => {
       const ceremony = await unwrap(api.POST('/api/v1/sign-in/passkey/options'))
-      const credential = await getCredential(ceremony.options as unknown as PublicKeyCredentialRequestOptionsJSON)
+      const credential = await getCredential(ceremony.options)
       return unwrap(api.POST('/api/v1/sign-in/passkey', {body: {challenge_id: ceremony.challenge_id, credential}}))
     },
     onSuccess: start,
@@ -36,7 +36,7 @@ export function useAddPasskey() {
   return useMutation({
     mutationFn: async (name: string) => {
       const ceremony = await unwrap(api.POST('/api/v1/me/passkeys/options'))
-      const credential = await createCredential(ceremony.options as unknown as PublicKeyCredentialCreationOptionsJSON)
+      const credential = await createCredential(ceremony.options)
       return unwrap(api.POST('/api/v1/me/passkeys', {body: {challenge_id: ceremony.challenge_id, credential, name}}))
     },
     onSuccess: () => queryClient.invalidateQueries({queryKey: passkeysKey}),
@@ -78,7 +78,7 @@ export function useReauthenticateWithPasskey() {
   return useMutation({
     mutationFn: async () => {
       const ceremony = await unwrap(api.POST('/api/v1/me/reauthenticate/passkey/options'))
-      const credential = await getCredential(ceremony.options as unknown as PublicKeyCredentialRequestOptionsJSON)
+      const credential = await getCredential(ceremony.options)
       return unwrap(
         api.POST('/api/v1/me/reauthenticate/passkey', {body: {challenge_id: ceremony.challenge_id, credential}}),
       )
