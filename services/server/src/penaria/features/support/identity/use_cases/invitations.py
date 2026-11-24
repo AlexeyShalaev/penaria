@@ -17,6 +17,10 @@ from penaria.features.support.identity.domain.accounts import (
     check_password,
     check_username,
 )
+from penaria.features.support.identity.domain.links import PublicLinks
+from penaria.features.support.identity.domain.mail import MailKind
+from penaria.features.support.identity.domain.mail_texts import Link, role_name
+from penaria.features.support.identity.domain.mailbox import check_email
 from penaria.features.support.identity.domain.members import (
     AlreadyGrantedError,
     Invitation,
@@ -45,6 +49,7 @@ from penaria.features.support.identity.use_cases.members import (
     revoke,
     role_in,
 )
+from penaria.features.support.identity.use_cases.postman import Postman
 from penaria.features.support.identity.use_cases.sessions import start_session
 
 
@@ -54,6 +59,8 @@ class InvitationView:
     role: Role
     scope: Place | None
     created_by: User
+    # Where its link was mailed when it was made.
+    emailed_to: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,9 +75,17 @@ class InvitationPreview:
 
 
 class CreateInvitation:
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory) -> None:
+    def __init__(
+        self,
+        uow: AsyncUnitOfWork[IdentityTransaction],
+        places: PlaceDirectory,
+        postman: Postman,
+        links: PublicLinks,
+    ) -> None:
         self._uow = uow
         self._places = places
+        self._postman = postman
+        self._links = links
 
     async def execute(
         self,
@@ -82,8 +97,10 @@ class CreateInvitation:
         valid_days: int,
         grant_expires_at: datetime | None,
         leave_when_accepted: bool,
+        email: str | None = None,
     ) -> tuple[InvitationView, str]:
-        """The invitation and the secret token of its link, shown only now."""
+        """The invitation and the secret token of its link, shown only now; mailed to ``email`` when given."""
+        recipient = None if email is None else check_email(email)
         now = datetime.now(UTC)
         actor = Actor.user(current.user_id)
         async with self._uow.query() as tx:
@@ -111,7 +128,40 @@ class CreateInvitation:
             check_can_give(await access_in(tx, actor, home_id, scope, now), role)
             await tx.invitations.add(invitation)
             await tx.journal.append([Event("invitation.created", home_id, actor, _payload(invitation, role))])
-        return InvitationView(invitation=invitation, role=role, scope=scope, created_by=inviter), token
+            if recipient is not None:
+                await self._mail(tx, invitation, role, inviter, recipient, token, now)
+        view = InvitationView(invitation=invitation, role=role, scope=scope, created_by=inviter, emailed_to=recipient)
+        return view, token
+
+    async def _mail(
+        self,
+        tx: IdentityTransaction,
+        invitation: Invitation,
+        role: Role,
+        inviter: User,
+        to: str,
+        token: str,
+        now: datetime,
+    ) -> None:
+        """Mail the invitation's link, in the home's language: the person invited has no account to say theirs."""
+        home = await tx.homes.get(invitation.home_id)
+        if home is None:
+            raise RuntimeError(f"the home ({invitation.home_id}) of a new invitation does not exist")
+        locale = home.locale
+        await self._postman.queue(
+            tx,
+            MailKind.INVITATION,
+            to=to,
+            locale=locale,
+            values={
+                "inviter": inviter.display_name,
+                "home": home.name,
+                "role": role_name(role.preset, locale) if role.preset else (role.name or ""),
+            },
+            link=Link(self._links.invitation(token), invitation.expires_at - now),
+            user_id=None,
+            created_by=inviter.id,
+        )
 
 
 class ListInvitations:

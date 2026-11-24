@@ -19,11 +19,12 @@ from penaria.apps.api.settings import Settings
 from penaria.common.database import DatabaseSettings
 from penaria.features.support.identity.use_cases.setup import IssueSetupToken
 from penaria.migrations.runner import build_config, run_with_connection
+from tests.smtp import FakeSmtp
 
 # Every table that holds data; CASCADE reaches the rest.
 DATA_TABLES = (
     "identity_users, identity_homes, journal_events, identity_setup_tokens, identity_sign_in_failures, "
-    "identity_passkey_challenges, identity_tokens"
+    "identity_passkey_challenges, identity_tokens, identity_install_settings, identity_mail"
 )
 PUBLIC_URL = "http://test"
 OWNER = {"username": "owner", "display_name": "Owner", "password": "correct horse battery", "locale": "en"}
@@ -62,15 +63,30 @@ def public_url() -> str:
 
 
 @pytest.fixture
-def settings(database_settings: DatabaseSettings, public_url: str) -> Settings:
+def operator_mail() -> dict[str, Any]:
+    """``PENARIA_MAIL__*`` of the tests: none; a test overrides it to set the mailbox in the environment."""
+    return {}
+
+
+@pytest.fixture
+def settings(database_settings: DatabaseSettings, public_url: str, operator_mail: dict[str, Any]) -> Settings:
     return Settings.model_validate(
         {
             "server": HttpServerSettings(),
             "database": database_settings,
             "public_url": public_url,
             "secret_key": "test-secret-key-of-at-least-32-characters",
+            "mail": operator_mail,
         }
     )
+
+
+@pytest.fixture
+async def smtp() -> AsyncIterator[FakeSmtp]:
+    server = FakeSmtp()
+    await server.start()
+    yield server
+    await server.stop()
 
 
 @pytest.fixture

@@ -6,9 +6,12 @@ from typing import Protocol
 from uuid import UUID
 
 from penaria.features.shared.journal import Journal
+from penaria.features.support.identity.domain.mail import Attempt, LoggedMail, Mail
+from penaria.features.support.identity.domain.mailbox import StoredMailbox
 from penaria.features.support.identity.domain.members import GuestLink, Invitation, Token
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
 from penaria.features.support.identity.domain.passkeys import Ceremony, Challenge, Passkey
+from penaria.features.support.identity.domain.recovery import AccountLink, LinkPurpose
 from penaria.features.support.identity.domain.sessions import Session
 from penaria.features.support.identity.domain.throttle import Failures
 
@@ -30,6 +33,10 @@ class UserRepository(Protocol):
 
     async def by_username(self, username: str) -> User | None:
         """The user with this (normalized) username."""
+        ...
+
+    async def by_email(self, email: str) -> User | None:
+        """The user whose confirmed email this (normalized) address is."""
         ...
 
     async def first(self) -> User | None:
@@ -68,6 +75,10 @@ class SessionRepository(Protocol):
 
     async def revoke_all_but(self, user_id: UUID, keep: UUID, now: datetime) -> list[UUID]:
         """End every active session of the user's except ``keep``; the ids of those ended."""
+        ...
+
+    async def revoke_all(self, user_id: UUID, now: datetime) -> list[UUID]:
+        """End every active session of the user's; the ids of those ended."""
         ...
 
     async def reauthenticate(self, session_id: UUID, now: datetime) -> None:
@@ -261,6 +272,61 @@ class TokenRepository(Protocol):
         ...
 
 
+class InstallSettingsRepository(Protocol):
+    async def mailbox(self, *, for_update: bool = False) -> StoredMailbox | None:
+        """The mailbox an admin saved, if any; ``for_update`` holds it until the transaction ends."""
+        ...
+
+    async def save_mailbox(self, mailbox: StoredMailbox, by: UUID, now: datetime) -> None: ...
+
+    async def remove_mailbox(self) -> bool:
+        """Forget the saved mailbox; whether there was one."""
+        ...
+
+
+class MailRepository(Protocol):
+    async def add(self, mail: Mail) -> None: ...
+
+    async def get(self, mail_id: UUID, *, for_update: bool = False) -> Mail | None: ...
+
+    async def claim_due(self, now: datetime, lease_until: datetime, limit: int) -> list[Mail]:
+        """Take queued mails whose attempt is due, the most overdue first, and put their next attempt at
+        ``lease_until``, so no other sender takes them meanwhile; mails another transaction holds are skipped."""
+        ...
+
+    async def save(self, mail: Mail) -> None:
+        """Write the mail's state, attempts, next attempt and content."""
+        ...
+
+    async def add_attempt(self, attempt: Attempt) -> None: ...
+
+    async def page(self, before: UUID | None, limit: int) -> list[LoggedMail]:
+        """The newest mails older than ``before`` (all of them without it), with their attempts."""
+        ...
+
+    async def forget_content(self, now: datetime) -> None:
+        """Clear the content of the mails that can no longer be sent and are not queued."""
+        ...
+
+    async def delete_created_before(self, cutoff: datetime) -> None: ...
+
+
+class AccountLinkRepository(Protocol):
+    async def add(self, link: AccountLink) -> None: ...
+
+    async def by_token_hash(
+        self, token_hash: bytes, purpose: LinkPurpose, *, for_update: bool = False
+    ) -> AccountLink | None: ...
+
+    async def use(self, link_id: UUID, now: datetime) -> None: ...
+
+    async def forget_unused(self, user_id: UUID, purpose: LinkPurpose) -> None:
+        """Drop the user's links of this purpose that were not used: a new one replaces them."""
+        ...
+
+    async def forget_expired(self, now: datetime) -> None: ...
+
+
 class IdentityTransaction(Protocol):
     @property
     def users(self) -> UserRepository: ...
@@ -297,6 +363,15 @@ class IdentityTransaction(Protocol):
 
     @property
     def tokens(self) -> TokenRepository: ...
+
+    @property
+    def install_settings(self) -> InstallSettingsRepository: ...
+
+    @property
+    def mail(self) -> MailRepository: ...
+
+    @property
+    def account_links(self) -> AccountLinkRepository: ...
 
     @property
     def journal(self) -> Journal: ...

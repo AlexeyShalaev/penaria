@@ -63,6 +63,10 @@ class PostgresUserRepository:
         row = await self._session.scalar(select(UserDB).where(UserDB.username == username))
         return None if row is None else _user(row)
 
+    async def by_email(self, email: str) -> User | None:
+        row = await self._session.scalar(select(UserDB).where(UserDB.email == email))
+        return None if row is None else _user(row)
+
     async def first(self) -> User | None:
         row = await self._session.scalar(select(UserDB).order_by(UserDB.id).limit(1))
         return None if row is None else _user(row)
@@ -145,6 +149,15 @@ class PostgresSessionRepository:
         revoked = await self._session.scalars(
             update(SessionDB)
             .where(SessionDB.user_id == user_id, SessionDB.id != keep, *_active_session(now))
+            .values(revoked_at=now)
+            .returning(SessionDB.id)
+        )
+        return list(revoked)
+
+    async def revoke_all(self, user_id: UUID, now: datetime) -> list[UUID]:
+        revoked = await self._session.scalars(
+            update(SessionDB)
+            .where(SessionDB.user_id == user_id, *_active_session(now))
             .values(revoked_at=now)
             .returning(SessionDB.id)
         )

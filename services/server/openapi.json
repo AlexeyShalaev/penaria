@@ -177,6 +177,71 @@
         "title": "AssertionResponseIn",
         "type": "object"
       },
+      "AttemptOut": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "manual": {
+            "description": "Sent by an admin: a test or a resend",
+            "title": "Manual",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "smtp_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Code"
+          }
+        },
+        "required": [
+          "at",
+          "ok",
+          "reason",
+          "smtp_code",
+          "error",
+          "duration_ms",
+          "manual"
+        ],
+        "title": "AttemptOut",
+        "type": "object"
+      },
       "AttestationResponseIn": {
         "properties": {
           "attestationObject": {
@@ -246,6 +311,19 @@
         "title": "AuthenticationCredentialIn",
         "type": "object"
       },
+      "ConfirmedEmailOut": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "ConfirmedEmailOut",
+        "type": "object"
+      },
       "CreatedGuestLinkOut": {
         "properties": {
           "link": {
@@ -266,6 +344,18 @@
       },
       "CreatedInvitationOut": {
         "properties": {
+          "emailed_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the link was mailed, when it was",
+            "title": "Emailed To"
+          },
           "invitation": {
             "$ref": "#/components/schemas/InvitationOut"
           },
@@ -277,9 +367,28 @@
         },
         "required": [
           "invitation",
-          "url"
+          "url",
+          "emailed_to"
         ],
         "title": "CreatedInvitationOut",
+        "type": "object"
+      },
+      "EmailIn": {
+        "properties": {
+          "email": {
+            "examples": [
+              "me@example.org"
+            ],
+            "maxLength": 254,
+            "minLength": 1,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "EmailIn",
         "type": "object"
       },
       "EntityDetailOut": {
@@ -757,6 +866,25 @@
         "title": "EventOut",
         "type": "object"
       },
+      "FailureReason": {
+        "description": "Why an attempt did not send: the kind of SMTP failure, or why no attempt was made.",
+        "enum": [
+          "auth",
+          "connect",
+          "timeout",
+          "tls",
+          "disconnected",
+          "recipient_refused",
+          "sender_refused",
+          "data_refused",
+          "other",
+          "mail_off",
+          "expired",
+          "unreadable"
+        ],
+        "title": "FailureReason",
+        "type": "string"
+      },
       "Freshness": {
         "enum": [
           "fresh",
@@ -1143,6 +1271,19 @@
       },
       "InvitationIn": {
         "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mail the link there too; needs outgoing email",
+            "title": "Email"
+          },
           "grant_expires_at": {
             "anyOf": [
               {
@@ -1343,6 +1484,342 @@
           "status"
         ],
         "title": "LivenessResponse",
+        "type": "object"
+      },
+      "MailKind": {
+        "enum": [
+          "test",
+          "email_verification",
+          "password_reset",
+          "invitation",
+          "password_changed",
+          "passkey_added"
+        ],
+        "title": "MailKind",
+        "type": "string"
+      },
+      "MailOut": {
+        "properties": {
+          "attempts": {
+            "description": "The latest first",
+            "items": {
+              "$ref": "#/components/schemas/AttemptOut"
+            },
+            "title": "Attempts",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MailKind"
+          },
+          "locale": {
+            "title": "Locale",
+            "type": "string"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "resendable": {
+            "description": "Whether it can be sent again now: done, and its link still works",
+            "title": "Resendable",
+            "type": "boolean"
+          },
+          "state": {
+            "$ref": "#/components/schemas/MailState"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "to",
+          "subject",
+          "locale",
+          "state",
+          "created_at",
+          "next_attempt_at",
+          "resendable",
+          "attempts"
+        ],
+        "title": "MailOut",
+        "type": "object"
+      },
+      "MailSecurity": {
+        "enum": [
+          "starttls",
+          "tls",
+          "none"
+        ],
+        "title": "MailSecurity",
+        "type": "string"
+      },
+      "MailState": {
+        "enum": [
+          "queued",
+          "sent",
+          "failed"
+        ],
+        "title": "MailState",
+        "type": "string"
+      },
+      "MailStatusOut": {
+        "properties": {
+          "enabled": {
+            "description": "Whether the install sends email; without it, links are passed on by hand",
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "MailStatusOut",
+        "type": "object"
+      },
+      "MailboxHealth": {
+        "enum": [
+          "off",
+          "ok",
+          "failed"
+        ],
+        "title": "MailboxHealth",
+        "type": "string"
+      },
+      "MailboxIn": {
+        "properties": {
+          "from_address": {
+            "examples": [
+              "home@example.org"
+            ],
+            "maxLength": 254,
+            "minLength": 1,
+            "title": "From Address",
+            "type": "string"
+          },
+          "from_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "Penaria"
+            ],
+            "title": "From Name"
+          },
+          "host": {
+            "examples": [
+              "smtp.example.org"
+            ],
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Host",
+            "type": "string"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty or omitted: keep the saved one",
+            "title": "Password"
+          },
+          "port": {
+            "examples": [
+              587
+            ],
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "type": "integer"
+          },
+          "security": {
+            "$ref": "#/components/schemas/MailSecurity"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 320,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty: no sign-in",
+            "title": "Username"
+          }
+        },
+        "required": [
+          "host",
+          "port",
+          "security",
+          "from_address"
+        ],
+        "title": "MailboxIn",
+        "type": "object"
+      },
+      "MailboxOut": {
+        "properties": {
+          "from_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Address"
+          },
+          "from_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Name"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "password_set": {
+            "description": "The password is write-only: only whether one is set",
+            "title": "Password Set",
+            "type": "boolean"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "security": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailSecurity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailboxSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "environment: PENARIA_MAIL__*, and the fields are locked; interface: saved here; null: mail is off"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "source",
+          "host",
+          "port",
+          "security",
+          "username",
+          "from_address",
+          "from_name",
+          "password_set"
+        ],
+        "title": "MailboxOut",
+        "type": "object"
+      },
+      "MailboxSource": {
+        "enum": [
+          "environment",
+          "interface"
+        ],
+        "title": "MailboxSource",
+        "type": "string"
+      },
+      "MailboxStatusOut": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "health": {
+            "$ref": "#/components/schemas/MailboxHealth"
+          }
+        },
+        "required": [
+          "health",
+          "error"
+        ],
+        "title": "MailboxStatusOut",
         "type": "object"
       },
       "MemberOut": {
@@ -1608,6 +2085,48 @@
         "title": "PasswordChangeIn",
         "type": "object"
       },
+      "PasswordResetIn": {
+        "properties": {
+          "new_password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "New Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "title": "PasswordResetIn",
+        "type": "object"
+      },
+      "PendingEmailOut": {
+        "properties": {
+          "email": {
+            "description": "The address the confirmation link went to; it is the account's once opened",
+            "title": "Email",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "expires_at"
+        ],
+        "title": "PendingEmailOut",
+        "type": "object"
+      },
       "PersonOut": {
         "properties": {
           "display_name": {
@@ -1755,6 +2274,101 @@
         "title": "RegistrationCredentialIn",
         "type": "object"
       },
+      "ResetLinkOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "url": {
+            "description": "The reset link to pass on by hand; shown only now",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "ResetLinkOut",
+        "type": "object"
+      },
+      "ResetPasskeyOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "created_at",
+          "last_used_at"
+        ],
+        "title": "ResetPasskeyOut",
+        "type": "object"
+      },
+      "ResetPreviewOut": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "passkeys": {
+            "description": "They keep working after the reset",
+            "items": {
+              "$ref": "#/components/schemas/ResetPasskeyOut"
+            },
+            "title": "Passkeys",
+            "type": "array"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "display_name",
+          "passkeys"
+        ],
+        "title": "ResetPreviewOut",
+        "type": "object"
+      },
+      "ResetRequestIn": {
+        "properties": {
+          "login": {
+            "description": "A username or a confirmed email",
+            "maxLength": 254,
+            "minLength": 1,
+            "title": "Login",
+            "type": "string"
+          }
+        },
+        "required": [
+          "login"
+        ],
+        "title": "ResetRequestIn",
+        "type": "object"
+      },
       "RevokedOut": {
         "properties": {
           "revoked": {
@@ -1843,6 +2457,49 @@
           "default_duration_seconds"
         ],
         "title": "RoleOut",
+        "type": "object"
+      },
+      "SendResultOut": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The server's words, credentials hidden, when it was not sent",
+            "title": "Error"
+          },
+          "mail_id": {
+            "format": "uuid",
+            "title": "Mail Id",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "error",
+          "reason",
+          "mail_id"
+        ],
+        "title": "SendResultOut",
         "type": "object"
       },
       "SessionOut": {
@@ -1992,6 +2649,25 @@
         "title": "Status",
         "type": "string"
       },
+      "TestMailIn": {
+        "properties": {
+          "to": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omit for your own address",
+            "title": "To"
+          }
+        },
+        "title": "TestMailIn",
+        "type": "object"
+      },
       "TokenIn": {
         "properties": {
           "token": {
@@ -2068,6 +2744,48 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/email-verifications:confirm": {
+      "post": {
+        "description": "Make the address a confirmation link was sent to the account's email.",
+        "operationId": "confirm_email_api_v1_email_verifications_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmedEmailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Email",
+        "tags": [
+          "recovery"
+        ]
+      }
+    },
     "/api/v1/entities/{entity_id}": {
       "get": {
         "operationId": "get_entity_api_v1_entities__entity_id__get",
@@ -3112,6 +3830,60 @@
         ]
       }
     },
+    "/api/v1/homes/{home_id}/members/{user_id}:reset-link": {
+      "post": {
+        "description": "A password reset link for a member, to pass on by hand; it works for 24 hours. Needs a recent sign-in.",
+        "operationId": "create_reset_link_api_v1_homes__home_id__members__user_id__reset_link_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetLinkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Reset Link",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/api/v1/homes/{home_id}/roles": {
       "get": {
         "operationId": "list_roles_api_v1_homes__home_id__roles_get",
@@ -3193,6 +3965,257 @@
         "summary": "Leave Home",
         "tags": [
           "people"
+        ]
+      }
+    },
+    "/api/v1/install/mail": {
+      "delete": {
+        "description": "Turn email off; needs a recent sign-in.",
+        "operationId": "remove_mailbox_api_v1_install_mail_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Remove Mailbox",
+        "tags": [
+          "install"
+        ]
+      },
+      "get": {
+        "operationId": "get_mailbox_api_v1_install_mail_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailboxOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Mailbox",
+        "tags": [
+          "install"
+        ]
+      },
+      "put": {
+        "description": "Connect the install's mailbox or change it; needs a recent sign-in. Refused when PENARIA_MAIL__* sets it.",
+        "operationId": "save_mailbox_api_v1_install_mail_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailboxIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailboxOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Mailbox",
+        "tags": [
+          "install"
+        ]
+      }
+    },
+    "/api/v1/install/mail/messages": {
+      "get": {
+        "description": "The mail log, the newest first.",
+        "operationId": "list_mail_api_v1_install_mail_messages_get",
+        "parameters": [
+          {
+            "description": "The last mail of the previous page",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The last mail of the previous page",
+              "title": "Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MailOut"
+                  },
+                  "title": "Response List Mail Api V1 Install Mail Messages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Mail",
+        "tags": [
+          "install"
+        ]
+      }
+    },
+    "/api/v1/install/mail/messages/{mail_id}:resend": {
+      "post": {
+        "description": "Send a mail again now, while its link still works.",
+        "operationId": "resend_mail_api_v1_install_mail_messages__mail_id__resend_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mail_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mail Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendResultOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resend Mail",
+        "tags": [
+          "install"
+        ]
+      }
+    },
+    "/api/v1/install/mail/status": {
+      "get": {
+        "description": "Connect to the mailbox and sign in, without sending.",
+        "operationId": "mailbox_status_api_v1_install_mail_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailboxStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Mailbox Status",
+        "tags": [
+          "install"
+        ]
+      }
+    },
+    "/api/v1/install/mail:test": {
+      "post": {
+        "description": "Send a test email through the saved mailbox now; a failure is an answer, not an error.",
+        "operationId": "send_test_mail_api_v1_install_mail_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestMailIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendResultOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send Test Mail",
+        "tags": [
+          "install"
         ]
       }
     },
@@ -3322,6 +4345,27 @@
         ]
       }
     },
+    "/api/v1/mail": {
+      "get": {
+        "operationId": "mail_status_api_v1_mail_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Mail Status",
+        "tags": [
+          "recovery"
+        ]
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "me_api_v1_me_get",
@@ -3377,6 +4421,67 @@
           }
         },
         "summary": "Update Me",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/me/email": {
+      "delete": {
+        "operationId": "remove_email_api_v1_me_email_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Remove Email",
+        "tags": [
+          "account"
+        ]
+      },
+      "post": {
+        "description": "Mail a confirmation link to the address; it becomes the account's email once the link is opened.",
+        "operationId": "request_email_change_api_v1_me_email_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingEmailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Email Change",
         "tags": [
           "account"
         ]
@@ -3760,6 +4865,118 @@
         "summary": "Revoke Other Sessions",
         "tags": [
           "account"
+        ]
+      }
+    },
+    "/api/v1/password-reset": {
+      "post": {
+        "description": "Set a new password with a reset link; every session of the account ends, its passkeys stay.",
+        "operationId": "reset_password_api_v1_password_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Password",
+        "tags": [
+          "recovery"
+        ]
+      }
+    },
+    "/api/v1/password-reset:preview": {
+      "post": {
+        "description": "Whose password a reset link sets, and the passkeys it leaves; it changes nothing.",
+        "operationId": "preview_password_reset_api_v1_password_reset_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Password Reset",
+        "tags": [
+          "recovery"
+        ]
+      }
+    },
+    "/api/v1/password-reset:request": {
+      "post": {
+        "description": "Mail a reset link to the account's confirmed email; the answer is the same for any login.",
+        "operationId": "request_password_reset_api_v1_password_reset_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Password Reset",
+        "tags": [
+          "recovery"
         ]
       }
     },

@@ -64,6 +64,14 @@ def secret_link_key(ip: str | None) -> str | None:
     return None if address is None else f"links:{address}"
 
 
+def recovery_keys(ip: str | None, login: str) -> list[str]:
+    """The counters of asking for reset emails: per address, and per account named, apart from sign-ins,
+    so nobody floods a mailbox with them or tries many accounts from one place."""
+    address = address_key(ip)
+    named = "recovery:" + hashlib.sha256(login.encode()).hexdigest()
+    return [named] if address is None else [named, f"recovery:{address}"]
+
+
 def address_key(ip: str | None) -> str | None:
     """The counter of an address; IPv6 by its /64, the block a single household or attacker holds."""
     if ip is None:

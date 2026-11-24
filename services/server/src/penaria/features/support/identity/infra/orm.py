@@ -217,3 +217,88 @@ class TokenDB(Base):
     created_at: Mapped[datetime.datetime]
     last_used_at: Mapped[datetime.datetime | None]
     revoked_at: Mapped[datetime.datetime | None]
+
+
+class InstallSettingDB(Base):
+    """Settings of the install that its admins change in the interface; a secret goes sealed in ``secret``."""
+
+    __tablename__ = "identity_install_settings"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[dict[str, object]] = mapped_column(JSONB)
+    # Sealed with PENARIA_SECRET_KEY, bound to this table, column and key (domain/secrets.py).
+    secret: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime.datetime]
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id", ondelete="SET NULL"))
+
+
+class MailDB(Base):
+    """Every email the install sends: the queue of those waiting and the log of the rest (sign-in.md, 15)."""
+
+    __tablename__ = "identity_mail"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('test', 'email_verification', 'password_reset', 'invitation', 'password_changed', "
+            "'passkey_added')",
+            name="kind",
+        ),
+        CheckConstraint("state IN ('queued', 'sent', 'failed')", name="state"),
+        CheckConstraint("(state = 'queued') = (next_attempt_at IS NOT NULL)", name="queued"),
+        Index("identity_mail_next_attempt_at_idx", "next_attempt_at", postgresql_where=text("state = 'queued'")),
+        Index("identity_mail_expires_at_idx", "expires_at", postgresql_where=text("content IS NOT NULL")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(Text)
+    to_address: Mapped[str] = mapped_column(Text)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id", ondelete="SET NULL"))
+    locale: Mapped[str] = mapped_column(Text)
+    subject: Mapped[str] = mapped_column(Text)
+    # The text and HTML, sealed: they carry links that open accounts. Cleared once it cannot be sent.
+    content: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime] = mapped_column(index=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id", ondelete="SET NULL"))
+    expires_at: Mapped[datetime.datetime]
+    state: Mapped[str] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(server_default=text("0"))
+    next_attempt_at: Mapped[datetime.datetime | None]
+    retried: Mapped[bool]
+
+
+class MailAttemptDB(Base):
+    """One attempt to send a mail, and how it ended."""
+
+    __tablename__ = "identity_mail_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    mail_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_mail.id", ondelete="CASCADE"), index=True)
+    at: Mapped[datetime.datetime]
+    duration_ms: Mapped[int]
+    # None when it was sent.
+    reason: Mapped[str | None] = mapped_column(Text)
+    smtp_code: Mapped[int | None]
+    error: Mapped[str | None] = mapped_column(Text)
+    message_id: Mapped[str | None] = mapped_column(Text)
+    next_attempt_at: Mapped[datetime.datetime | None]
+    by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id", ondelete="SET NULL"))
+
+
+class AccountLinkDB(Base):
+    """One-time links that reset a password or confirm an email; only their tokens' hashes."""
+
+    __tablename__ = "identity_account_links"
+    __table_args__ = (
+        CheckConstraint("purpose IN ('password_reset', 'email_verification')", name="purpose"),
+        CheckConstraint("(purpose = 'email_verification') = (email IS NOT NULL)", name="email"),
+        Index("identity_account_links_user_id_idx", "user_id", postgresql_where=text("used_at IS NULL")),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"))
+    purpose: Mapped[str] = mapped_column(Text)
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    email: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime]
+    expires_at: Mapped[datetime.datetime]
+    used_at: Mapped[datetime.datetime | None]
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id", ondelete="SET NULL"))

@@ -13,6 +13,7 @@ from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession
 from penaria.features.support.identity.infra.orm import SessionDB
 from penaria.features.support.identity.use_cases.account import ChangePassword, WrongPasswordError
+from penaria.features.support.identity.use_cases.postman import Postman
 from penaria.features.support.identity.use_cases.reauthentication import ReauthenticateWithPassword
 from penaria.features.support.identity.use_cases.sessions import InvalidCredentialsError, SignIn
 from penaria.integrations.postgres.transaction import PenariaTransaction
@@ -73,7 +74,10 @@ async def test_a_change_checked_against_a_password_changed_meanwhile_is_refused(
     )
 
     with pytest.raises(WrongPasswordError):
-        await ChangePassword(uow, hasher).execute(current, current_password=OWNER["password"], new_password=NEW)
+        postman = await container.container.get(Postman)
+        await ChangePassword(uow, hasher, postman).execute(
+            current, current_password=OWNER["password"], new_password=NEW
+        )
 
     signed_in = await api.post("/sign-in", json={"username": "owner", "password": MEANWHILE})
     assert signed_in.status_code == 200

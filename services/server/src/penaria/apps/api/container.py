@@ -33,12 +33,17 @@ from penaria.features.shared.access import AccessPolicy
 from penaria.features.shared.actor import Actor
 from penaria.features.shared.places import PlaceDirectory
 from penaria.features.support.identity.api.cookies import SESSION_COOKIE, SessionCookie
-from penaria.features.support.identity.api.links import PublicLinks
+from penaria.features.support.identity.domain.links import PublicLinks
+from penaria.features.support.identity.domain.mail import MailTransport
+from penaria.features.support.identity.domain.mailbox import OperatorMailbox
 from penaria.features.support.identity.domain.passkeys import RelyingParty
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
+from penaria.features.support.identity.domain.secrets import SecretBox
 from penaria.features.support.identity.domain.sessions import CurrentSession, GuestSession, RequestSession
 from penaria.features.support.identity.infra.argon2 import Argon2PasswordHasher
+from penaria.features.support.identity.infra.fernet import FernetSecretBox
+from penaria.features.support.identity.infra.smtp import SmtpTransport
 from penaria.features.support.identity.infra.webauthn import WebAuthnRelyingParty
 from penaria.features.support.identity.use_cases.access import GrantAccessPolicy
 from penaria.features.support.identity.use_cases.account import (
@@ -49,6 +54,7 @@ from penaria.features.support.identity.use_cases.account import (
     RevokeSession,
     UpdateAccount,
 )
+from penaria.features.support.identity.use_cases.email import ConfirmEmail, RemoveEmail, RequestEmailChange
 from penaria.features.support.identity.use_cases.guest_links import (
     CreateGuestLink,
     GetGuestView,
@@ -56,6 +62,15 @@ from penaria.features.support.identity.use_cases.guest_links import (
     OpenGuestLink,
 )
 from penaria.features.support.identity.use_cases.homes import CreateHome, GetHome, ListHomes
+from penaria.features.support.identity.use_cases.install import (
+    CheckMailbox,
+    GetMailbox,
+    ListMail,
+    RemoveMailbox,
+    ResendMail,
+    SaveMailbox,
+    SendTestMail,
+)
 from penaria.features.support.identity.use_cases.invitations import (
     AcceptInvitation,
     AcceptInvitationWithNewAccount,
@@ -78,10 +93,17 @@ from penaria.features.support.identity.use_cases.passkeys import (
     RenamePasskey,
     StartPasskeyRegistration,
 )
+from penaria.features.support.identity.use_cases.postman import Mailboxes, Postman
 from penaria.features.support.identity.use_cases.reauthentication import (
     ReauthenticateWithPasskey,
     ReauthenticateWithPassword,
     StartPasskeyReauthentication,
+)
+from penaria.features.support.identity.use_cases.recovery import (
+    CreateResetLink,
+    PreviewPasswordReset,
+    RequestPasswordReset,
+    ResetPassword,
 )
 from penaria.features.support.identity.use_cases.sessions import (
     Authenticate,
@@ -124,6 +146,17 @@ class SettingsProvider(Provider):
     def relying_party(self) -> RelyingParty:
         return WebAuthnRelyingParty(rp_id=self._settings.passkey_rp_id, origin=self._settings.public_origin)
 
+    @provide
+    def secret_box(self) -> SecretBox:
+        return FernetSecretBox.of(
+            self._settings.secret_key.get_secret_value(),
+            [key.get_secret_value() for key in self._settings.retired_secret_keys],
+        )
+
+    @provide
+    def operator_mailbox(self) -> OperatorMailbox:
+        return OperatorMailbox(self._settings.mail.mailbox())
+
 
 class UnitOfWorkProvider(Provider):
     """One unit of work, seen by each context through its own transaction protocol."""
@@ -149,7 +182,24 @@ class UseCaseProvider(Provider):
     access_policy = provide(GrantAccessPolicy, provides=AccessPolicy)
     place_directory = provide(RegistryPlaces, provides=PlaceDirectory)
     password_hasher = provide(Argon2PasswordHasher, provides=PasswordHasher)
+    mail_transport = provide(SmtpTransport, provides=MailTransport)
     use_cases = provide_all(
+        Mailboxes,
+        Postman,
+        GetMailbox,
+        SaveMailbox,
+        RemoveMailbox,
+        SendTestMail,
+        CheckMailbox,
+        ListMail,
+        ResendMail,
+        RequestPasswordReset,
+        PreviewPasswordReset,
+        ResetPassword,
+        CreateResetLink,
+        RequestEmailChange,
+        ConfirmEmail,
+        RemoveEmail,
         NeedsSetup,
         IssueSetupToken,
         CompleteSetup,

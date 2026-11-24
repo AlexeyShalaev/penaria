@@ -11,6 +11,7 @@ from servicewright.adapters.fastapi import UnitScopeDep
 
 from penaria.features.shared.http import SIGNED_IN
 from penaria.features.support.identity.api.cookies import SessionCookie
+from penaria.features.support.identity.domain.mailbox import EMAIL_MAX_LENGTH
 from penaria.features.support.identity.domain.models import User
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, Session
 from penaria.features.support.identity.use_cases.account import (
@@ -21,6 +22,7 @@ from penaria.features.support.identity.use_cases.account import (
     RevokeSession,
     UpdateAccount,
 )
+from penaria.features.support.identity.use_cases.email import RemoveEmail, RequestEmailChange
 from penaria.features.support.identity.use_cases.reauthentication import ReauthenticateWithPassword
 from penaria.features.support.identity.use_cases.sessions import SignIn, SignOut
 from penaria.features.support.identity.use_cases.setup import CompleteSetup, NeedsSetup
@@ -113,6 +115,15 @@ class RevokedOut(BaseModel):
     revoked: int
 
 
+class EmailIn(BaseModel):
+    email: str = Field(min_length=1, max_length=EMAIL_MAX_LENGTH, examples=["me@example.org"])
+
+
+class PendingEmailOut(BaseModel):
+    email: str = Field(description="The address the confirmation link went to; it is the account's once opened")
+    expires_at: datetime
+
+
 @sign_in_router.get("/setup")
 async def setup_status(scope: UnitScopeDep) -> SetupStatusOut:
     return SetupStatusOut(needed=await (await scope.get(NeedsSetup)).execute())
@@ -175,6 +186,18 @@ async def change_password(body: Annotated[PasswordChangeIn, Body()], scope: Unit
 async def reauthenticate(body: Annotated[ReauthenticationIn, Body()], scope: UnitScopeDep) -> None:
     """Confirm it is still you with the password, so the session counts as signed in recently."""
     await (await scope.get(ReauthenticateWithPassword)).execute(await scope.get(CurrentSession), body.password)
+
+
+@router.post("/me/email", status_code=status.HTTP_202_ACCEPTED)
+async def request_email_change(body: Annotated[EmailIn, Body()], scope: UnitScopeDep) -> PendingEmailOut:
+    """Mail a confirmation link to the address; it becomes the account's email once the link is opened."""
+    pending = await (await scope.get(RequestEmailChange)).execute(await scope.get(CurrentSession), body.email)
+    return PendingEmailOut(email=pending.email, expires_at=pending.expires_at)
+
+
+@router.delete("/me/email")
+async def remove_email(scope: UnitScopeDep) -> AccountOut:
+    return AccountOut.of(await (await scope.get(RemoveEmail)).execute(await scope.get(CurrentSession)))
 
 
 @router.get("/me/sessions")
