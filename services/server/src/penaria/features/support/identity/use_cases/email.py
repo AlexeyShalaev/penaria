@@ -126,8 +126,11 @@ class ConfirmEmail:
 
 
 class RemoveEmail:
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction]) -> None:
+    """The account keeps no email; the address it had is told, as a change would tell it."""
+
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], postman: Postman) -> None:
         self._uow = uow
+        self._postman = postman
 
     async def execute(self, current: CurrentSession) -> User:
         current.require_recent_sign_in(datetime.now(UTC))
@@ -136,6 +139,7 @@ class RemoveEmail:
             if user is None:
                 raise RuntimeError(f"the user ({current.user_id}) of an open session does not exist")
             if user.email is not None:
+                await self._postman.notify(tx, user, MailKind.EMAIL_REMOVED)
                 user.email = None
                 await tx.users.save(user)
                 await tx.account_links.forget_unused(user.id, LinkPurpose.PASSWORD_RESET)

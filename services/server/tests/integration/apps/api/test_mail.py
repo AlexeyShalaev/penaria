@@ -13,6 +13,7 @@ from penaria.apps.api.mail import deliver_mail
 from penaria.features.support.identity.domain.mailbox import MAILBOX_SEAL
 from penaria.features.support.identity.infra.fernet import FernetSecretBox
 from penaria.features.support.identity.infra.orm import AccountLinkDB, InstallSettingDB, MailAttemptDB, MailDB
+from penaria.features.support.identity.use_cases import postman as postman_module
 from penaria.features.support.identity.use_cases.postman import Postman
 from penaria.features.support.platform.infra.orm import JournalEventDB
 from tests.integration.apps.api.test_people import age_sign_ins, make_home, member, ok
@@ -680,3 +681,35 @@ async def test_the_sweep_forgets_old_mail_and_expired_links_but_keeps_what_waits
     assert [(row.kind, row.state, row.content is not None) for row in rows] == [("email_verification", "queued", True)]
     assert set(attempts) == {rows[0].id}
     assert links == []
+
+
+async def test_a_pass_stops_at_a_mailbox_that_cannot_be_reached(
+    api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer
+) -> None:
+    await connect(api, smtp)
+    await ok(await api.post("/me/email", json={"email": "one@example.org"}), 202)
+    await ok(await api.post("/me/email", json={"email": "two@example.org"}), 202)
+    await smtp.stop()
+
+    more = await (await postman(container)).deliver_due()
+
+    async with (await uow_of(container)).query() as tx:
+        attempts = list(await tx.session.scalars(select(MailAttemptDB.reason)))
+    assert (more, attempts) == (False, ["connect"])
+
+
+async def test_a_full_pass_says_more_may_be_due(
+    api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(postman_module, "BATCH", 2)
+    await connect(api, smtp)
+    for n in range(3):
+        await ok(await api.post("/install/mail:test", json={"to": f"t{n}@example.org"}))
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(update(MailDB).values(state="queued", next_attempt_at=datetime.now(UTC), attempts=0))
+    sender = await postman(container)
+
+    first = await sender.deliver_due()
+    second = await sender.deliver_due()
+
+    assert (first, second, len(smtp.messages)) == (True, False, 6)

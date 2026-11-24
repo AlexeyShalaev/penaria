@@ -142,7 +142,7 @@ class ResetPassword:
                 raise AccountLinkNotFoundError("this link does not work: ask for a new one")
             link.check_open(now)
             if link.created_by is not None:
-                await check_can_reset(tx, link.created_by, user, places, now)
+                await _check_can_reset(tx, link.created_by, user, places, now)
             if user.username is None:
                 raise RuntimeError(f"the user ({user.id}) of a reset link has no account")
             await tx.passwords.set(user.id, password_hash, now)
@@ -193,13 +193,13 @@ class CreateResetLink:
             user = await tx.users.get_for_update(user_id)
             if user is None or user.disabled_at is not None:
                 raise AccountNotFoundError("this account is disabled", params={"user_id": str(user_id)})
-            await check_can_reset(tx, current.user_id, user, places, now)
+            await _check_can_reset(tx, current.user_id, user, places, now)
             link, token = await _new_reset_link(tx, user, HANDED_RESET_LIFETIME, now, created_by=current.user_id)
             await tx.journal.append([_created(link, user, ResetBy.ADMIN, actor, home_id=home_id)])
         return HandedLink(url=self._links.password_reset(token), expires_at=link.expires_at, user=user)
 
 
-async def check_can_reset(
+async def _check_can_reset(
     tx: IdentityTransaction, admin_id: UUID, user: User, places: dict[UUID, Place], now: datetime
 ) -> None:
     """Refuse an admin's reset link for ``user`` unless the admin could give every access the user holds.

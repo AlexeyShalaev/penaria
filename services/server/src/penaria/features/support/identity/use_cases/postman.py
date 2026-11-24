@@ -14,6 +14,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import assert_never
 from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
@@ -115,6 +116,10 @@ class Mailboxes:
             logger.error("The saved SMTP password does not open: %s", exc)  # noqa: TRY400 - expected, no trace
             return MailboxUnreadable(Failure(FailureReason.UNREADABLE, text=SEALED_LOGIN_UNREADABLE))
         return MailboxReady(Mailbox(fields=stored.fields, password=password, source=MailboxSource.INTERFACE))
+
+    async def exists(self, tx: IdentityTransaction) -> bool:
+        """Whether there is a mailbox at all, without opening its password: whether the install sends mail."""
+        return self._operator.mailbox is not None or await tx.install_settings.mailbox() is not None
 
     def seal_password(self, password: str) -> str:
         return self._box.seal(password, bound_to=MAILBOX_SEAL)
@@ -243,7 +248,7 @@ class Postman:
             await tx.account_links.forget_expired(now)
 
     async def _on(self, tx: IdentityTransaction) -> bool:
-        return not isinstance(await self._mailboxes.resolve(tx), MailOff)
+        return await self._mailboxes.exists(tx)
 
     async def _send_held(self, mail: Mail, state: MailboxState, by: UUID | None) -> Attempt:
         """One attempt at a mail this sender holds, recorded with its outcome; ``mail.attempts`` counts it."""
@@ -277,6 +282,8 @@ class Postman:
                 return failure, None
             case MailboxReady(mailbox=mailbox):
                 pass
+            case _:
+                assert_never(state)
         try:
             content = self._open(mail, mail.sealed_content)
         except SecretUnreadableError:

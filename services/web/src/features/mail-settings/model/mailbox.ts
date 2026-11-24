@@ -58,7 +58,7 @@ export function validateMailbox(draft: MailboxDraft, saved: Mailbox): MailboxIss
 }
 
 /** Whether the saved password would go to another server or login than it was given for. */
-export function needsPasswordAgain(draft: MailboxDraft, saved: Mailbox): boolean {
+function needsPasswordAgain(draft: MailboxDraft, saved: Mailbox): boolean {
   if (!saved.password_set || draft.password !== '' || draft.username.trim() === '') return false
   const before = draftOf(saved)
   return (['host', 'port', 'security', 'username'] as const).some((key) => draft[key].trim() !== before[key].trim())

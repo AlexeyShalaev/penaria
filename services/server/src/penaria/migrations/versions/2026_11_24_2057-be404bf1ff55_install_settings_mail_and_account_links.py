@@ -90,7 +90,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "kind IN ('test', 'email_verification', 'password_reset', 'invitation', 'password_changed', "
-            "'passkey_added', 'email_changed')",
+            "'passkey_added', 'email_changed', 'email_removed')",
             name=op.f("identity_mail_kind_check"),
         ),
         sa.CheckConstraint("state IN ('queued', 'sent', 'failed')", name=op.f("identity_mail_state_check")),

@@ -1494,7 +1494,8 @@
           "invitation",
           "password_changed",
           "passkey_added",
-          "email_changed"
+          "email_changed",
+          "email_removed"
         ],
         "title": "MailKind",
         "type": "string"

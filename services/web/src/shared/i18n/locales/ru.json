@@ -568,7 +568,8 @@
       "invitation": "Приглашение",
       "password_changed": "Смена пароля",
       "passkey_added": "Новый ключ доступа",
-      "email_changed": "Смена почты"
+      "email_changed": "Смена почты",
+      "email_removed": "Почта убрана"
     },
     "retryAt": "Новая попытка {{when}}",
     "state": {

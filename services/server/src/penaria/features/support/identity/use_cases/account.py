@@ -76,6 +76,8 @@ class ChangePassword:
         new_hash = await self._hasher.hash(new_password)
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
+            # The account first, as a reset takes it, before the counters, the password and its links.
+            await tx.users.get_for_update(current.user_id)
             await checked.still_current(tx)
             await tx.passwords.set(current.user_id, new_hash, now)
             revoked = await tx.sessions.revoke_all_but(current.user_id, current.id, now)

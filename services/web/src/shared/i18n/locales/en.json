@@ -558,7 +558,8 @@
       "invitation": "Invitation",
       "password_changed": "Password changed",
       "passkey_added": "Passkey added",
-      "email_changed": "Email changed"
+      "email_changed": "Email changed",
+      "email_removed": "Email removed"
     },
     "retryAt": "Next try {{when}}",
     "state": {

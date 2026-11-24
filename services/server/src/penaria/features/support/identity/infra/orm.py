@@ -239,7 +239,7 @@ class MailDB(Base):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('test', 'email_verification', 'password_reset', 'invitation', 'password_changed', "
-            "'passkey_added', 'email_changed')",
+            "'passkey_added', 'email_changed', 'email_removed')",
             name="kind",
         ),
         CheckConstraint("state IN ('queued', 'sent', 'failed')", name="state"),

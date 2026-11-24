@@ -83,6 +83,14 @@
       "notes": [
         "If it was not you, sign in at once, change your password and set your own address again, or ask the admin of your home for a reset link."
       ]
+    },
+    "email_removed": {
+      "subject": "The email of your Penaria account was removed",
+      "title": "Your email was removed",
+      "lead": "{name}, this address is no longer the email of the account {username}. Password resets and notices no longer come here.",
+      "notes": [
+        "If it was not you, sign in at once, change your password and add your address again, or ask the admin of your home for a reset link."
+      ]
     }
   }
 }

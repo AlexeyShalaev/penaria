@@ -2,7 +2,7 @@
 
 from typing import Annotated, Self
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import AnyHttpUrl, BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import NoDecode
 from servicewright.adapters.fastapi import HttpServerSettings
 
@@ -19,8 +19,6 @@ SECRET_KEY_MIN_LENGTH = 32
 class MailSettings(BaseModel):
     """``PENARIA_MAIL__*``: the install's mailbox, set by the operator. It wins over the interface as a whole:
     with these set, every mail setting comes from here (sign-in.md, 9.1)."""
-
-    model_config = ConfigDict(hide_input_in_errors=True)
 
     host: str
     # The usual port of the security when unset: 587, 465 or 25.

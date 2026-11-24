@@ -71,31 +71,33 @@ function ChangeEmail(props: {hasEmail: boolean}) {
   const error = recent.errorToShow(request.error)
 
   return (
-    <form onSubmit={submit}>
-      <FormLayout>
-        <Field label={props.hasEmail ? t('email.newAddress') : t('email.address')} hint={t('email.hint')}>
-          <TextInput
-            type="email"
-            inputMode="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            autoComplete="email"
-            required
-          />
-        </Field>
-        {error && <FormError>{describeError(error, t)}</FormError>}
-        {request.isSuccess && (
-          <p role="status" className={styles.sent}>
-            {t('email.sent', {email: request.data.email})}
-          </p>
-        )}
-        <FormActions>
-          <Button type="submit" variant="secondary" disabled={request.isPending}>
-            {t('email.send')}
-          </Button>
-        </FormActions>
-      </FormLayout>
+    <>
+      <form onSubmit={submit}>
+        <FormLayout>
+          <Field label={props.hasEmail ? t('email.newAddress') : t('email.address')} hint={t('email.hint')}>
+            <TextInput
+              type="email"
+              inputMode="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+              required
+            />
+          </Field>
+          {error && <FormError>{describeError(error, t)}</FormError>}
+          {request.isSuccess && (
+            <p role="status" className={styles.sent}>
+              {t('email.sent', {email: request.data.email})}
+            </p>
+          )}
+          <FormActions>
+            <Button type="submit" variant="secondary" disabled={request.isPending}>
+              {t('email.send')}
+            </Button>
+          </FormActions>
+        </FormLayout>
+      </form>
       {recent.dialog}
-    </form>
+    </>
   )
 }

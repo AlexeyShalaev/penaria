@@ -31,6 +31,7 @@ class MailKind(StrEnum):
     PASSWORD_CHANGED = "password_changed"  # noqa: S105 - a kind of mail, not a password
     PASSKEY_ADDED = "passkey_added"
     EMAIL_CHANGED = "email_changed"
+    EMAIL_REMOVED = "email_removed"
 
 
 class MailState(StrEnum):

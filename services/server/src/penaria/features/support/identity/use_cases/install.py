@@ -4,6 +4,7 @@
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import assert_never
 from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
@@ -182,6 +183,8 @@ class CheckMailbox:
                 return MailboxStatus(MailboxHealth.FAILED, failure.describe())
             case MailboxReady(mailbox=mailbox):
                 pass
+            case _:
+                assert_never(state)
         try:
             await self._transport.probe(mailbox)
         except MailDeliveryError as exc:

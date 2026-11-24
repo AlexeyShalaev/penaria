@@ -689,3 +689,59 @@ async def test_asking_for_confirmations_again_and_again_is_slowed_down(api: http
     statuses = [(await api.post("/me/email", json={"email": f"o{n}@example.org"})).status_code for n in range(6)]
 
     assert statuses == [202] * 5 + [429]
+
+
+async def test_the_removed_address_is_told(api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer) -> None:
+    await connect(api, smtp)
+    await confirm_email(api, smtp, container, "old@example.org")
+
+    await ok(await api.delete("/me/email"))
+    await deliver(container)
+
+    assert (smtp.messages[-1]["To"], smtp.messages[-1]["Subject"]) == (
+        "old@example.org",
+        "The email of your Penaria account was removed",
+    )
+
+
+async def test_a_new_email_disarms_a_reset_link(
+    api: httpx.AsyncClient, new_client: NewClient, smtp: FakeSmtp, container: DishkaContainer
+) -> None:
+    await connect(api, smtp)
+    ids = await make_home(api)
+    maria = await member(api, new_client, ids["home"], "family", "maria")
+    made = await ok(await api.post(f"/homes/{ids['home']}/members/{await id_of(maria)}:reset-link"), 201)
+    await confirm_email(maria, smtp, container, "maria@example.org")
+
+    response = await new_client().post("/password-reset:preview", json={"token": token_of(made["url"])})
+
+    assert (response.status_code, response.json()["code"]) == (404, "account_link_not_found")
+
+
+async def test_a_removed_email_disarms_a_reset_link(
+    api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer, anonymous: httpx.AsyncClient
+) -> None:
+    await connect(api, smtp)
+    await confirm_email(api, smtp, container, "owner@example.org")
+    await ok(await anonymous.post("/password-reset:request", json={"login": "owner"}), 204)
+    await deliver(container)
+    token = link_in(smtp, RESET_LINK)
+
+    await ok(await api.delete("/me/email"))
+    response = await anonymous.post("/password-reset:preview", json={"token": token})
+
+    assert (response.status_code, response.json()["code"]) == (404, "account_link_not_found")
+
+
+async def test_a_link_made_by_an_admin_who_was_disabled_since_is_refused(
+    api: httpx.AsyncClient, new_client: NewClient, container: DishkaContainer, anonymous: httpx.AsyncClient
+) -> None:
+    ids = await make_home(api)
+    admin = await member(api, new_client, ids["home"], "admin", "maria")
+    ivan = await member(api, new_client, ids["home"], "family", "ivan")
+    made = await ok(await admin.post(f"/homes/{ids['home']}/members/{await id_of(ivan)}:reset-link"), 201)
+    await disable(container, "maria")
+
+    response = await anonymous.post("/password-reset", json={"token": token_of(made["url"]), "new_password": FRESH})
+
+    assert (response.status_code, response.json()["code"]) == (403, "reset_not_allowed")

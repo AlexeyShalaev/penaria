@@ -1528,7 +1528,7 @@ export interface components {
          * MailKind
          * @enum {string}
          */
-        MailKind: "test" | "email_verification" | "password_reset" | "invitation" | "password_changed" | "passkey_added" | "email_changed";
+        MailKind: "test" | "email_verification" | "password_reset" | "invitation" | "password_changed" | "passkey_added" | "email_changed" | "email_removed";
         /** MailOut */
         MailOut: {
             /**
