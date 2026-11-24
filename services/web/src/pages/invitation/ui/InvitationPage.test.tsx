@@ -1,6 +1,6 @@
 import {fireEvent, screen} from '@testing-library/react'
 import {Route} from 'react-router'
-import {describe, expect, it} from 'vitest'
+import {describe, expect, it, vi} from 'vitest'
 
 import {mockApi, problem} from '@/test/api'
 import {account, HOME_ID, role} from '@/test/fixtures'
@@ -101,5 +101,25 @@ describe('InvitationPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This invitation has already been used. Each invitation works once: ask for a new one.',
     )
+  })
+
+  it("joins with the operator's provider, which makes the account when there is none", async () => {
+    const assign = vi.fn()
+    vi.stubGlobal('location', {...window.location, assign})
+    const calls = mockApi({
+      'POST /api/v1/invitations:preview': PREVIEW,
+      'GET /api/v1/me': problem(401, 'unauthenticated'),
+      'GET /api/v1/auth/config': {oidc: {name: 'Authentik'}},
+      'POST /api/v1/auth/oidc:accept-invitation': {url: 'https://auth.example.org/authorize'},
+    })
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Join with Authentik'}))
+
+    await expect.poll(() => assign.mock.calls).toEqual([['https://auth.example.org/authorize']])
+    expect(calls.find((call) => call.path.endsWith(':accept-invitation'))?.body).toEqual({
+      token: 'secret',
+      locale: 'en',
+    })
   })
 })

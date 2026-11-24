@@ -5,6 +5,7 @@ import {BrowserRouter, Route, Routes} from 'react-router'
 import {AccountPage} from '@/pages/account'
 import {EntityPage} from '@/pages/entity'
 import {ForgotPasswordPage} from '@/pages/forgot-password'
+import {ExternalSignInPage} from '@/pages/external-sign-in'
 import {GuestOpenPage, GuestPage} from '@/pages/guest'
 import {InvitationPage} from '@/pages/invitation'
 import {NewHomePage} from '@/pages/new-home'
@@ -28,6 +29,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="setup" element={<SetupPage />} />
       <Route path="sign-in" element={<SignInPage />} />
+      <Route path="sign-in/external" element={<ExternalSignInPage />} />
       <Route path="invite/:token" element={<InvitationPage />} />
       <Route path="guest/:token" element={<GuestOpenPage />} />
       <Route path="guest" element={<GuestPage />} />

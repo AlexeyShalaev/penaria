@@ -1,0 +1,41 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.text {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.title {
+  font-weight: var(--fw-semibold);
+}
+
+.details {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}

@@ -5,6 +5,7 @@ import {Link, useNavigate, useParams} from 'react-router'
 
 import {NewAccountForm} from '@/features/accept-invitation'
 import {SecondFactorForm, SignInForm} from '@/features/sign-in'
+import {ProviderInvitationButton} from '@/features/sign-in-with-provider'
 import {type SecondFactorChallenge, useAccount, useSignOut} from '@/entities/account'
 import {useHomesChanged} from '@/entities/home'
 import {
@@ -114,6 +115,7 @@ function SignInOrCreate(props: {token: string}) {
   const [challenge, setChallenge] = useState<SecondFactorChallenge | null>(null)
   return (
     <div className={styles.accept}>
+      <ProviderInvitationButton token={props.token} />
       <Tabs
         label={t('invitation.how')}
         value={mode}

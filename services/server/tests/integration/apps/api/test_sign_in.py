@@ -574,3 +574,11 @@ async def test_account_events_are_journalled_without_a_home(
         ("account.signed_out", None, "user", {"user_id": "uuid", "session_id": "uuid"}),
     ]
     assert {row.payload["user_id"] for row in rows} == {user_id}
+
+
+async def test_without_a_provider_the_sign_in_page_offers_none(anonymous: httpx.AsyncClient) -> None:
+    config = await anonymous.get("/auth/config")
+    started = await anonymous.post("/auth/oidc:sign-in", json={"locale": "en"})
+
+    assert config.json() == {"oidc": None}
+    assert (started.status_code, started.json()["code"]) == (404, "oidc_off")

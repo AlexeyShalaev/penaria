@@ -1,6 +1,6 @@
 import {fireEvent, screen} from '@testing-library/react'
 import {Route} from 'react-router'
-import {describe, expect, it} from 'vitest'
+import {describe, expect, it, vi} from 'vitest'
 
 import {MAIL_OFF, mockApi, problem} from '@/test/api'
 import {account} from '@/test/fixtures'
@@ -115,5 +115,32 @@ describe('SignInPage', () => {
     fireEvent.click(await screen.findByRole('button', {name: 'Back'}))
 
     expect(await screen.findByLabelText('Username')).toBeVisible()
+  })
+
+  it("offers the operator's provider, and leaves for it to come back to the page asked for", async () => {
+    const assign = vi.fn()
+    vi.stubGlobal('location', {...window.location, assign})
+    const calls = mockApi({
+      ...MAIL_OFF,
+      ...SIGNED_OUT,
+      'GET /api/v1/auth/config': {oidc: {name: 'Authentik'}},
+      'POST /api/v1/auth/oidc:sign-in': {url: 'https://auth.example.org/authorize?state=s'},
+    })
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Sign in with Authentik'}))
+
+    await expect.poll(() => assign.mock.calls).toEqual([['https://auth.example.org/authorize?state=s']])
+    expect(calls.find((call) => call.method === 'POST')?.body).toEqual({locale: 'en', return_to: '/account'})
+    expect(screen.getByText('or with your username and password')).toBeVisible()
+  })
+
+  it('asks for the code when the provider signed in an account with an authenticator app', async () => {
+    window.history.replaceState(null, '', '/sign-in#second-factor=pending&until=2099-01-01T00%3A00%3A00Z')
+    mockApi({...MAIL_OFF, ...SIGNED_OUT})
+    renderPage()
+
+    expect(await screen.findByRole('heading', {name: 'Two-step sign-in'})).toBeVisible()
+    expect(window.location.hash).toBe('')
   })
 })

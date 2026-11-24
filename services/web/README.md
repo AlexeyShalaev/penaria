@@ -31,6 +31,8 @@ Recovery and email: `/forgot-password` asks for a reset link by email (the sign-
 
 Two-step sign-in: signing in with the password answers `202` with a pending sign-in for an account with an authenticator app, and the sign-in page asks for its code or a recovery code (`/sign-in/second-factor`). The account page sets the app up (its QR code is drawn in the browser with `uqr`, like invitation links). An owner or an install admin without a second factor sees a prompt over every page, from `RequireAccount`, until they add a passkey or the app.
 
+Signing in with the operator's provider: when `/api/v1/auth/config` names one, the sign-in page offers "Sign in with <name>", the invitation page "Join with <name>", the account page a "Linked accounts" card and the confirm-it-is-you dialog the provider too. Each asks the server for the provider's address and leaves for it; the provider sends the browser back to the server's callback, which redirects to the page it came from, to `/sign-in` with the second step in the address's fragment for an account with an authenticator app, or to `/sign-in/external?problem=…`, which says what went wrong.
+
 Passkeys go through `navigator.credentials` in `src/shared/lib/webauthn.ts`, which converts the server's JSON options and the browser's answers; the passkey button and the suggestion to add one show only where the browser offers WebAuthn (a secure page: `https`, or `localhost`). Tests stand in for the browser with `src/test/webauthn.ts`.
 
 In development, `make -C ../server run-api` prints the setup token of a fresh database; the server expects the dev server's address, `http://localhost:5173`, as `PENARIA_PUBLIC_URL`, so open the app there.

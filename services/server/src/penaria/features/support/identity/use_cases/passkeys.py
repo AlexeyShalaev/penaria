@@ -137,10 +137,15 @@ class RemovePasskey:
             passkeys = await tx.passkeys.for_user(current.user_id)
             if all(passkey.id != passkey_id for passkey in passkeys):
                 raise PasskeyNotFoundError(params={"passkey_id": str(passkey_id)})
-            if len(passkeys) == 1 and await tx.passwords.get(current.user_id) is None:
+            if len(passkeys) == 1 and not await has_other_methods(tx, current.user_id):
                 raise LastSignInMethodError("this passkey is the account's only way to sign in")
             await tx.passkeys.remove(current.user_id, passkey_id)
             await tx.journal.append([_event("account.passkey_removed", current, passkey_id=str(passkey_id))])
+
+
+async def has_other_methods(tx: IdentityTransaction, user_id: UUID) -> bool:
+    """Whether the account signs in some other way than its passkeys: a password, or the operator's provider."""
+    return await tx.passwords.get(user_id) is not None or bool(await tx.external_identities.for_user(user_id))
 
 
 def _event(event_type: str, current: CurrentSession, **payload: str) -> Event:

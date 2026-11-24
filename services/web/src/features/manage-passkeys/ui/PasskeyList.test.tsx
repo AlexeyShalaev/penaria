@@ -118,7 +118,7 @@ describe('PasskeyList', () => {
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', {name: 'Remove'}))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This passkey is your only way to sign in, so it cannot be removed.',
+      'This is your only way to sign in, so it cannot be removed.',
     )
   })
 })
