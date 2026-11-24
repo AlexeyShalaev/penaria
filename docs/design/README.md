@@ -5,3 +5,4 @@ A new area of Penaria gets a design here before its code. A design states the de
 | Document | Covers | Status |
 |---|---|---|
 | [Core model](core-model.md) | Homes, the entity tree, aspects, relations, provenance, freshness, the journal, changesets, access | Accepted |
+| [Sign-in](sign-in.md) | The first start, accounts, passkeys and passwords, sessions, invitations, guest links, device tokens, recovery, outgoing email | Accepted |
