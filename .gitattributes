@@ -11,3 +11,7 @@
 # Lock files are generated: no diffs in reviews, never merged by hand.
 uv.lock linguist-generated=true -diff
 pnpm-lock.yaml linguist-generated=true -diff
+
+# Generated from the code: the OpenAPI document of the server and the web app's API types.
+services/server/openapi.json linguist-generated=true
+services/web/src/shared/api/schema.gen.ts linguist-generated=true

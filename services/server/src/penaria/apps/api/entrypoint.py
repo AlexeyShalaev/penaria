@@ -15,6 +15,7 @@ from penaria.features.shared.actor import Actor
 from penaria.features.support.identity.api.routes import router as identity_router
 
 SERVICE_NAME = "penaria-api"
+ROUTERS = (identity_router, registry_router)
 
 
 def build_spec() -> AppSpec[Settings, DishkaContainer]:
@@ -35,6 +36,4 @@ def build_spec() -> AppSpec[Settings, DishkaContainer]:
 
 
 def build_http(settings: Settings) -> FastApiEntrypoint:
-    return FastApiEntrypoint(
-        config=settings.server.to_config(version=__version__), routers=(identity_router, registry_router)
-    )
+    return FastApiEntrypoint(config=settings.server.to_config(version=__version__), routers=ROUTERS)

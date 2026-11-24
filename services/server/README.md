@@ -17,7 +17,7 @@ The database: `PENARIA_DATABASE__CONNECTION__HOST`, `..._PORT`, `..._USER`, `...
 
 ## HTTP API
 
-REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. So far: the actor's homes (`/homes`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`.
+REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. The same document is committed as `openapi.json` (`make openapi` exports it without a database), and the web app generates its API types from it; a unit test fails when the committed file no longer matches the code. So far: the actor's homes (`/homes`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`.
 
 Sign-in has not landed yet (it gets its own design first): until then every request acts as one local user, created on the first start. Run the API only where you alone can reach it.
 
@@ -48,5 +48,6 @@ The dependency rules live in `pyproject.toml` (`[tool.importlinter]`) and are ch
 | Apply the migrations to the development database | `make migrate` |
 | Write a migration from the models | `make migration m="what changes"` |
 | Run the API against the development database | `make run-api` |
+| Export the OpenAPI document to `openapi.json` | `make openapi` |
 
 The Makefile points every command at the development stack (`scripts/dev/compose.yaml`); set the `PENARIA_DATABASE__*` variables, or `TEST_DATABASE_URL` for the tests, to use another server. Migrations run only through the migrate process, never through the bare `alembic` command, and every migration is tested to upgrade, downgrade and upgrade again, and to match the models (`tests/integration/test_migrations.py`).
