@@ -1,11 +1,12 @@
 """What the identity use cases need from storage."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
 from penaria.features.shared.journal import Journal
+from penaria.features.support.identity.domain.members import GuestLink, Invitation, Token
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
 from penaria.features.support.identity.domain.passkeys import Ceremony, Challenge, Passkey
 from penaria.features.support.identity.domain.sessions import Session
@@ -21,6 +22,10 @@ class UserRepository(Protocol):
 
     async def get_for_update(self, user_id: UUID) -> User | None:
         """The user, locked until the transaction ends."""
+        ...
+
+    async def get_many(self, user_ids: Collection[UUID]) -> dict[UUID, User]:
+        """The users with these ids, by id."""
         ...
 
     async def by_username(self, username: str) -> User | None:
@@ -47,8 +52,8 @@ class PasswordRepository(Protocol):
 class SessionRepository(Protocol):
     async def add(self, session: Session) -> None: ...
 
-    async def by_token_hash(self, token_hash: bytes) -> tuple[Session, User] | None:
-        """The session with this token and its user, whatever their state."""
+    async def by_token_hash(self, token_hash: bytes) -> tuple[Session, User | None, Grant | None] | None:
+        """The session with this token, whatever its state, with its user, or its grant for a guest's."""
         ...
 
     async def active_for(self, user_id: UUID, now: datetime) -> list[Session]:
@@ -67,6 +72,14 @@ class SessionRepository(Protocol):
 
     async def reauthenticate(self, session_id: UUID, now: datetime) -> None:
         """Its person has just proved who they are again."""
+        ...
+
+    async def revoke_for_grant(self, grant_id: UUID, now: datetime) -> list[UUID]:
+        """End every open guest session made from the grant; the ids of those ended."""
+        ...
+
+    async def trim_for_grant(self, grant_id: UUID, keep: int, now: datetime) -> None:
+        """End the grant's open guest sessions but the ``keep`` most recently started."""
         ...
 
 
@@ -154,6 +167,10 @@ class HomeRepository(Protocol):
 
     async def get(self, home_id: UUID) -> Home | None: ...
 
+    async def lock(self, home_id: UUID) -> Home | None:
+        """The home, locked until the transaction ends: changes to its people take turns."""
+        ...
+
     async def with_grants_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> list[Home]:
         """The homes where the principal holds an active grant, by name."""
         ...
@@ -162,9 +179,41 @@ class HomeRepository(Protocol):
 class RoleRepository(Protocol):
     async def add_all(self, roles: Sequence[Role]) -> None: ...
 
+    async def for_home(self, home_id: UUID) -> list[Role]:
+        """The home's roles, the presets first in their order, then the others by name."""
+        ...
+
+    async def get_many(self, role_ids: Collection[UUID]) -> dict[UUID, Role]: ...
+
 
 class GrantRepository(Protocol):
     async def add(self, grant: Grant) -> None: ...
+
+    async def get(self, home_id: UUID, grant_id: UUID) -> Grant | None: ...
+
+    async def save(self, grant: Grant) -> None:
+        """Write a grant's role, scope and end."""
+        ...
+
+    async def revoke(self, grant_ids: Collection[UUID], now: datetime) -> None: ...
+
+    async def active_in(self, home_id: UUID, principal_type: PrincipalType, now: datetime) -> list[Grant]:
+        """The home's active grants of principals of this type, the oldest first."""
+        ...
+
+    async def active_of(
+        self, home_id: UUID, principal_type: PrincipalType, principal_id: UUID, now: datetime
+    ) -> list[Grant]:
+        """The principal's active grants in the home, the oldest first."""
+        ...
+
+    async def for_principal(self, principal_type: PrincipalType, principal_id: UUID) -> list[Grant]:
+        """Every grant of the principal, active or not, in any home."""
+        ...
+
+    async def owners(self, home_id: UUID) -> list[Grant]:
+        """The home's active owner grants (they never expire)."""
+        ...
 
     async def applicable(
         self,
@@ -175,6 +224,40 @@ class GrantRepository(Protocol):
         now: datetime,
     ) -> list[Role]:
         """The roles of the principal's active grants whose scope is the whole home or an id in ``path``."""
+        ...
+
+
+class InvitationRepository(Protocol):
+    async def add(self, invitation: Invitation) -> None: ...
+
+    async def by_token_hash(self, token_hash: bytes, *, for_update: bool = False) -> Invitation | None: ...
+
+    async def get(self, home_id: UUID, invitation_id: UUID, *, for_update: bool = False) -> Invitation | None: ...
+
+    async def pending_in(self, home_id: UUID, now: datetime) -> list[Invitation]:
+        """The home's invitations that can still be accepted, the newest first."""
+        ...
+
+    async def save(self, invitation: Invitation) -> None:
+        """Write whether and by whom it was accepted, or when it was revoked."""
+        ...
+
+
+class TokenRepository(Protocol):
+    async def add(self, token: Token) -> None: ...
+
+    async def by_token_hash(self, token_hash: bytes) -> Token | None: ...
+
+    async def for_principal(self, principal_type: PrincipalType, principal_id: UUID) -> Token | None:
+        """The principal's token; a guest link has exactly one."""
+        ...
+
+    async def used(self, token_id: UUID, now: datetime) -> None: ...
+
+    async def revoke_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> None: ...
+
+    async def links_in(self, home_id: UUID, now: datetime) -> list[GuestLink]:
+        """The home's guest links that still open, the newest first."""
         ...
 
 
@@ -208,6 +291,12 @@ class IdentityTransaction(Protocol):
 
     @property
     def grants(self) -> GrantRepository: ...
+
+    @property
+    def invitations(self) -> InvitationRepository: ...
+
+    @property
+    def tokens(self) -> TokenRepository: ...
 
     @property
     def journal(self) -> Journal: ...

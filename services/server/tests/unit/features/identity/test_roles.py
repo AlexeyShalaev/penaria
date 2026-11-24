@@ -2,7 +2,7 @@ import pytest
 
 from penaria.features.shared.access import Permission
 from penaria.features.shared.ids import new_id
-from penaria.features.support.identity.domain.models import Home, InvalidHomeError, preset_roles
+from penaria.features.support.identity.domain.models import Home, InvalidHomeError, access_of, preset_roles
 from penaria.features.support.identity.domain.permissions import GUEST_GRANT_DURATION, Preset, with_implied
 
 pytestmark = pytest.mark.unit
@@ -39,3 +39,19 @@ def test_a_new_home_gets_the_five_presets() -> None:
 def test_a_home_needs_a_name_a_known_time_zone_and_a_supported_locale(name: str, timezone: str, locale: str) -> None:
     with pytest.raises(InvalidHomeError):
         Home.create(name=name, timezone=timezone, locale=locale)
+
+
+def test_the_access_of_several_roles_is_their_union() -> None:
+    roles = preset_roles(new_id())
+
+    access = access_of([roles[Preset.GUEST], roles[Preset.CONTRACTOR]])
+
+    assert access.permissions == roles[Preset.GUEST].permissions | roles[Preset.CONTRACTOR].permissions
+    assert (access.owner, access.all_permissions, access.guest_view) == (False, False, False)
+
+
+def test_guest_view_holds_only_when_every_role_has_it() -> None:
+    roles = preset_roles(new_id())
+
+    assert access_of([roles[Preset.GUEST]]).guest_view is True
+    assert access_of([]).any is False

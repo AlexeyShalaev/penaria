@@ -27,14 +27,17 @@ from penaria.features.core.registry.use_cases.commands import (
     UpdateEntity,
     VerifyEntity,
 )
+from penaria.features.core.registry.use_cases.places import RegistryPlaces
 from penaria.features.core.registry.use_cases.queries import EntityHistory, GetEntity, ListChildren
 from penaria.features.shared.access import AccessPolicy
 from penaria.features.shared.actor import Actor
+from penaria.features.shared.places import PlaceDirectory
 from penaria.features.support.identity.api.cookies import SESSION_COOKIE, SessionCookie
+from penaria.features.support.identity.api.links import PublicLinks
 from penaria.features.support.identity.domain.passkeys import RelyingParty
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
-from penaria.features.support.identity.domain.sessions import CurrentSession
+from penaria.features.support.identity.domain.sessions import CurrentSession, GuestSession, RequestSession
 from penaria.features.support.identity.infra.argon2 import Argon2PasswordHasher
 from penaria.features.support.identity.infra.webauthn import WebAuthnRelyingParty
 from penaria.features.support.identity.use_cases.access import GrantAccessPolicy
@@ -46,7 +49,28 @@ from penaria.features.support.identity.use_cases.account import (
     RevokeSession,
     UpdateAccount,
 )
+from penaria.features.support.identity.use_cases.guest_links import (
+    CreateGuestLink,
+    GetGuestView,
+    ListGuestLinks,
+    OpenGuestLink,
+)
 from penaria.features.support.identity.use_cases.homes import CreateHome, GetHome, ListHomes
+from penaria.features.support.identity.use_cases.invitations import (
+    AcceptInvitation,
+    AcceptInvitationWithNewAccount,
+    CreateInvitation,
+    ListInvitations,
+    PreviewInvitation,
+    RevokeInvitation,
+)
+from penaria.features.support.identity.use_cases.members import (
+    ChangeGrant,
+    LeaveHome,
+    ListMembers,
+    ListRoles,
+    RevokeGrant,
+)
 from penaria.features.support.identity.use_cases.passkeys import (
     AddPasskey,
     ListPasskeys,
@@ -93,6 +117,10 @@ class SettingsProvider(Provider):
         return SessionCookie(secure=self._settings.serves_https)
 
     @provide
+    def public_links(self) -> PublicLinks:
+        return PublicLinks(origin=self._settings.public_origin)
+
+    @provide
     def relying_party(self) -> RelyingParty:
         return WebAuthnRelyingParty(rp_id=self._settings.passkey_rp_id, origin=self._settings.public_origin)
 
@@ -119,6 +147,7 @@ class UseCaseProvider(Provider):
     scope = Scope.APP
 
     access_policy = provide(GrantAccessPolicy, provides=AccessPolicy)
+    place_directory = provide(RegistryPlaces, provides=PlaceDirectory)
     password_hasher = provide(Argon2PasswordHasher, provides=PasswordHasher)
     use_cases = provide_all(
         NeedsSetup,
@@ -146,6 +175,21 @@ class UseCaseProvider(Provider):
         CreateHome,
         ListHomes,
         GetHome,
+        ListRoles,
+        ListMembers,
+        ChangeGrant,
+        RevokeGrant,
+        LeaveHome,
+        CreateInvitation,
+        ListInvitations,
+        RevokeInvitation,
+        PreviewInvitation,
+        AcceptInvitation,
+        AcceptInvitationWithNewAccount,
+        CreateGuestLink,
+        ListGuestLinks,
+        OpenGuestLink,
+        GetGuestView,
         EntityAccess,
         CreateEntity,
         UpdateEntity,
@@ -160,19 +204,27 @@ class UseCaseProvider(Provider):
 
 
 class RequestProvider(Provider):
-    """Who makes the request: resolved once per request, from its session cookie."""
+    """Who makes the request: resolved once per request, from its session cookie: an account, or a guest."""
 
     scope = Scope.REQUEST
 
     request = from_context(provides=Request)
 
     @provide
-    async def current_session(self, request: Request, authenticate: Authenticate) -> CurrentSession:
+    async def request_session(self, request: Request, authenticate: Authenticate) -> RequestSession:
         return await authenticate.execute(request.cookies.get(SESSION_COOKIE))
 
     @provide
-    def actor(self, session: CurrentSession) -> Actor:
-        return Actor.user(session.user_id)
+    def current_session(self, session: RequestSession) -> CurrentSession:
+        return session.account()
+
+    @provide
+    def guest_session(self, session: RequestSession) -> GuestSession:
+        return session.guest()
+
+    @provide
+    def actor(self, session: RequestSession) -> Actor:
+        return session.actor()
 
 
 class ApiContainer(DishkaContainer):

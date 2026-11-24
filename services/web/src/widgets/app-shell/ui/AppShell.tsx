@@ -1,4 +1,4 @@
-import {CircleUserRound, Map as MapIcon} from 'lucide-react'
+import {CircleUserRound, Map as MapIcon, Users} from 'lucide-react'
 import {useEffect} from 'react'
 import {useTranslation} from 'react-i18next'
 import {Link, Outlet, useParams} from 'react-router'
@@ -15,7 +15,9 @@ import {PasskeySuggestion} from './PasskeySuggestion'
  * The frame of the app's pages: a sidebar on wide screens, a top bar and tab bar on phones. A page
  * of one home shows that home in the switcher; the account, which belongs to no home, the home used last.
  */
-export function AppShell(props: {section: 'places' | 'account'}) {
+type AppShellProps = {section: 'places' | 'people' | 'account'}
+
+export function AppShell(props: AppShellProps) {
   const {t} = useTranslation()
   const params = useParams<{homeId?: string; entityId?: string}>()
   const entity = useEntity(params.entityId)
@@ -28,10 +30,9 @@ export function AppShell(props: {section: 'places' | 'account'}) {
     if (pageHomeId) rememberLastHome(pageHomeId)
   }, [pageHomeId])
 
-  // So far every page inside a home belongs to "Places and things".
   const placesLink = homeId ? `/homes/${homeId}/places` : undefined
-  const placesCurrent = onAccountPage ? undefined : 'page'
-  const accountCurrent = onAccountPage ? 'page' : undefined
+  const peopleLink = homeId ? `/homes/${homeId}/people` : undefined
+  const current = (section: AppShellProps['section']) => (props.section === section ? 'page' : undefined)
 
   return (
     <div className={styles.app}>
@@ -39,13 +40,19 @@ export function AppShell(props: {section: 'places' | 'account'}) {
         <HomeSwitcher homeId={homeId} />
         <nav className={styles.nav} aria-label={t('shell.navigation')}>
           {placesLink && (
-            <Link to={placesLink} className={styles.navItem} aria-current={placesCurrent}>
+            <Link to={placesLink} className={styles.navItem} aria-current={current('places')}>
               <MapIcon aria-hidden />
               {t('shell.places')}
             </Link>
           )}
+          {peopleLink && (
+            <Link to={peopleLink} className={styles.navItem} aria-current={current('people')}>
+              <Users aria-hidden />
+              {t('shell.people')}
+            </Link>
+          )}
         </nav>
-        <Link to="/account" className={styles.account} aria-current={accountCurrent}>
+        <Link to="/account" className={styles.account} aria-current={current('account')}>
           <CircleUserRound aria-hidden />
           <span className={styles.accountText}>
             <span className={styles.accountName}>{account.data?.display_name}</span>
@@ -67,12 +74,18 @@ export function AppShell(props: {section: 'places' | 'account'}) {
 
       <nav className={styles.tabbar} aria-label={t('shell.navigation')}>
         {placesLink && (
-          <Link to={placesLink} className={styles.tab} aria-current={placesCurrent}>
+          <Link to={placesLink} className={styles.tab} aria-current={current('places')}>
             <MapIcon aria-hidden />
             {t('shell.placesShort')}
           </Link>
         )}
-        <Link to="/account" className={styles.tab} aria-current={accountCurrent}>
+        {peopleLink && (
+          <Link to={peopleLink} className={styles.tab} aria-current={current('people')}>
+            <Users aria-hidden />
+            {t('shell.peopleShort')}
+          </Link>
+        )}
+        <Link to="/account" className={styles.tab} aria-current={current('account')}>
           <CircleUserRound aria-hidden />
           {t('shell.accountShort')}
         </Link>

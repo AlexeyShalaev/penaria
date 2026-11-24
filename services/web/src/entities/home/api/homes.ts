@@ -31,3 +31,15 @@ export function useCreateHome() {
     },
   })
 }
+
+/**
+ * For a change that adds a home to the account's list or takes one off it, such as accepting an
+ * invitation or leaving: the list is read again, and a home left is forgotten.
+ */
+export function useHomesChanged() {
+  const queryClient = useQueryClient()
+  return async (left?: string) => {
+    if (left) queryClient.removeQueries({queryKey: homeKeys.one(left)})
+    await queryClient.invalidateQueries({queryKey: homeKeys.all, exact: true})
+  }
+}

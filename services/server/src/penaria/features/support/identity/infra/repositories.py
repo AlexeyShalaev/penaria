@@ -1,6 +1,6 @@
 """PostgreSQL repositories of the identity context."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 from uuid import UUID
 
@@ -8,6 +8,7 @@ from sqlalchemy import ColumnElement, case, delete, exists, func, or_, select, u
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from penaria.features.support.identity.domain.members import GuestLink, Invitation, Token
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
 from penaria.features.support.identity.domain.passkeys import Ceremony, Challenge, Passkey
 from penaria.features.support.identity.domain.permissions import Preset
@@ -16,6 +17,7 @@ from penaria.features.support.identity.domain.throttle import Failures
 from penaria.features.support.identity.infra.orm import (
     GrantDB,
     HomeDB,
+    InvitationDB,
     PasskeyChallengeDB,
     PasskeyDB,
     PasswordDB,
@@ -23,6 +25,7 @@ from penaria.features.support.identity.infra.orm import (
     SessionDB,
     SetupTokenDB,
     SignInFailureDB,
+    TokenDB,
     UserDB,
 )
 
@@ -49,6 +52,12 @@ class PostgresUserRepository:
     async def get_for_update(self, user_id: UUID) -> User | None:
         row = await self._session.scalar(select(UserDB).where(UserDB.id == user_id).with_for_update())
         return None if row is None else _user(row)
+
+    async def get_many(self, user_ids: Collection[UUID]) -> dict[UUID, User]:
+        if not user_ids:
+            return {}
+        rows = await self._session.scalars(select(UserDB).where(UserDB.id.in_(list(user_ids))))
+        return {row.id: _user(row) for row in rows}
 
     async def by_username(self, username: str) -> User | None:
         row = await self._session.scalar(select(UserDB).where(UserDB.username == username))
@@ -88,6 +97,7 @@ class PostgresSessionRepository:
                 id=session.id,
                 token_hash=session.token_hash,
                 user_id=session.user_id,
+                grant_id=session.grant_id,
                 created_at=session.created_at,
                 last_seen_at=session.last_seen_at,
                 authenticated_at=session.authenticated_at,
@@ -97,15 +107,19 @@ class PostgresSessionRepository:
             )
         )
 
-    async def by_token_hash(self, token_hash: bytes) -> tuple[Session, User] | None:
+    async def by_token_hash(self, token_hash: bytes) -> tuple[Session, User | None, Grant | None] | None:
         row = (
             await self._session.execute(
-                select(SessionDB, UserDB)
-                .join(UserDB, UserDB.id == SessionDB.user_id)
+                select(SessionDB, UserDB, GrantDB)
+                .outerjoin(UserDB, UserDB.id == SessionDB.user_id)
+                .outerjoin(GrantDB, GrantDB.id == SessionDB.grant_id)
                 .where(SessionDB.token_hash == token_hash)
             )
         ).one_or_none()
-        return None if row is None else (_session(row[0]), _user(row[1]))
+        if row is None:
+            return None
+        session, user, grant = row
+        return _session(session), None if user is None else _user(user), None if grant is None else _grant(grant)
 
     async def active_for(self, user_id: UUID, now: datetime) -> list[Session]:
         rows = await self._session.scalars(
@@ -138,6 +152,28 @@ class PostgresSessionRepository:
 
     async def reauthenticate(self, session_id: UUID, now: datetime) -> None:
         await self._session.execute(update(SessionDB).where(SessionDB.id == session_id).values(authenticated_at=now))
+
+    async def trim_for_grant(self, grant_id: UUID, keep: int, now: datetime) -> None:
+        newest = (
+            select(SessionDB.id)
+            .where(SessionDB.grant_id == grant_id, *_active_session(now))
+            .order_by(SessionDB.created_at.desc(), SessionDB.id.desc())
+            .limit(keep)
+        )
+        await self._session.execute(
+            update(SessionDB)
+            .where(SessionDB.grant_id == grant_id, *_active_session(now), SessionDB.id.not_in(newest))
+            .values(revoked_at=now)
+        )
+
+    async def revoke_for_grant(self, grant_id: UUID, now: datetime) -> list[UUID]:
+        revoked = await self._session.scalars(
+            update(SessionDB)
+            .where(SessionDB.grant_id == grant_id, SessionDB.revoked_at.is_(None))
+            .values(revoked_at=now)
+            .returning(SessionDB.id)
+        )
+        return list(revoked)
 
 
 class PostgresPasskeyRepository:
@@ -331,6 +367,10 @@ class PostgresHomeRepository:
         row = await self._session.get(HomeDB, home_id)
         return None if row is None else _home(row)
 
+    async def lock(self, home_id: UUID) -> Home | None:
+        row = await self._session.scalar(select(HomeDB).where(HomeDB.id == home_id).with_for_update())
+        return None if row is None else _home(row)
+
     async def with_grants_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> list[Home]:
         granted = select(GrantDB.home_id).where(
             GrantDB.principal_type == principal_type.value,
@@ -364,6 +404,25 @@ class PostgresRoleRepository:
         )
         await self._session.flush()
 
+    async def for_home(self, home_id: UUID) -> list[Role]:
+        presets = [preset.value for preset in Preset]
+        rows = await self._session.scalars(
+            select(RoleDB)
+            .where(RoleDB.home_id == home_id)
+            .order_by(
+                case(*((RoleDB.preset == p, i) for i, p in enumerate(presets)), else_=len(presets)),
+                func.lower(RoleDB.name),
+                RoleDB.id,
+            )
+        )
+        return [_role(row) for row in rows]
+
+    async def get_many(self, role_ids: Collection[UUID]) -> dict[UUID, Role]:
+        if not role_ids:
+            return {}
+        rows = await self._session.scalars(select(RoleDB).where(RoleDB.id.in_(list(role_ids))))
+        return {row.id: _role(row) for row in rows}
+
 
 class PostgresGrantRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -381,8 +440,70 @@ class PostgresGrantRepository:
                 expires_at=grant.expires_at,
                 revoked_at=grant.revoked_at,
                 created_at=grant.created_at,
+                granted_by=grant.granted_by,
             )
         )
+        # Guest sessions reference the row.
+        await self._session.flush()
+
+    async def get(self, home_id: UUID, grant_id: UUID) -> Grant | None:
+        row = await self._session.scalar(select(GrantDB).where(GrantDB.id == grant_id, GrantDB.home_id == home_id))
+        return None if row is None else _grant(row)
+
+    async def save(self, grant: Grant) -> None:
+        await self._session.execute(
+            update(GrantDB)
+            .where(GrantDB.id == grant.id)
+            .values(role_id=grant.role_id, scope_entity_id=grant.scope_entity_id, expires_at=grant.expires_at)
+        )
+
+    async def revoke(self, grant_ids: Collection[UUID], now: datetime) -> None:
+        if grant_ids:
+            await self._session.execute(
+                update(GrantDB)
+                .where(GrantDB.id.in_(list(grant_ids)), GrantDB.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+
+    async def active_in(self, home_id: UUID, principal_type: PrincipalType, now: datetime) -> list[Grant]:
+        rows = await self._session.scalars(
+            select(GrantDB)
+            .where(GrantDB.home_id == home_id, GrantDB.principal_type == principal_type.value, *_active(now))
+            .order_by(GrantDB.created_at, GrantDB.id)
+        )
+        return [_grant(row) for row in rows]
+
+    async def active_of(
+        self, home_id: UUID, principal_type: PrincipalType, principal_id: UUID, now: datetime
+    ) -> list[Grant]:
+        rows = await self._session.scalars(
+            select(GrantDB)
+            .where(
+                GrantDB.home_id == home_id,
+                GrantDB.principal_type == principal_type.value,
+                GrantDB.principal_id == principal_id,
+                *_active(now),
+            )
+            .order_by(GrantDB.created_at, GrantDB.id)
+        )
+        return [_grant(row) for row in rows]
+
+    async def for_principal(self, principal_type: PrincipalType, principal_id: UUID) -> list[Grant]:
+        rows = await self._session.scalars(
+            select(GrantDB)
+            .where(GrantDB.principal_type == principal_type.value, GrantDB.principal_id == principal_id)
+            .order_by(GrantDB.created_at, GrantDB.id)
+        )
+        return [_grant(row) for row in rows]
+
+    async def owners(self, home_id: UUID) -> list[Grant]:
+        rows = await self._session.scalars(
+            select(GrantDB)
+            .join(RoleDB, RoleDB.id == GrantDB.role_id)
+            .where(GrantDB.home_id == home_id, RoleDB.preset == Preset.OWNER.value, GrantDB.revoked_at.is_(None))
+            .order_by(GrantDB.created_at, GrantDB.id)
+        )
+        return [_grant(row) for row in rows]
 
     async def applicable(
         self,
@@ -407,6 +528,108 @@ class PostgresGrantRepository:
             )
         )
         return [_role(row) for row in rows]
+
+
+class PostgresInvitationRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, invitation: Invitation) -> None:
+        self._session.add(InvitationDB(id=invitation.id, **_invitation_fields(invitation)))
+
+    async def by_token_hash(self, token_hash: bytes, *, for_update: bool = False) -> Invitation | None:
+        query = select(InvitationDB).where(InvitationDB.token_hash == token_hash)
+        row = await self._session.scalar(query.with_for_update() if for_update else query)
+        return None if row is None else _invitation(row)
+
+    async def get(self, home_id: UUID, invitation_id: UUID, *, for_update: bool = False) -> Invitation | None:
+        query = select(InvitationDB).where(InvitationDB.id == invitation_id, InvitationDB.home_id == home_id)
+        row = await self._session.scalar(query.with_for_update() if for_update else query)
+        return None if row is None else _invitation(row)
+
+    async def pending_in(self, home_id: UUID, now: datetime) -> list[Invitation]:
+        rows = await self._session.scalars(
+            select(InvitationDB)
+            .where(
+                InvitationDB.home_id == home_id,
+                InvitationDB.accepted_at.is_(None),
+                InvitationDB.revoked_at.is_(None),
+                InvitationDB.expires_at > now,
+            )
+            .order_by(InvitationDB.created_at.desc(), InvitationDB.id.desc())
+        )
+        return [_invitation(row) for row in rows]
+
+    async def save(self, invitation: Invitation) -> None:
+        await self._session.execute(
+            update(InvitationDB)
+            .where(InvitationDB.id == invitation.id)
+            .values(
+                accepted_at=invitation.accepted_at,
+                accepted_by=invitation.accepted_by,
+                revoked_at=invitation.revoked_at,
+            )
+        )
+
+
+class PostgresTokenRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, token: Token) -> None:
+        self._session.add(
+            TokenDB(
+                id=token.id,
+                token_hash=token.token_hash,
+                principal_type=token.principal_type.value,
+                principal_id=token.principal_id,
+                name=token.name,
+                created_at=token.created_at,
+                last_used_at=token.last_used_at,
+                revoked_at=token.revoked_at,
+            )
+        )
+
+    async def by_token_hash(self, token_hash: bytes) -> Token | None:
+        row = await self._session.scalar(select(TokenDB).where(TokenDB.token_hash == token_hash))
+        return None if row is None else _token(row)
+
+    async def for_principal(self, principal_type: PrincipalType, principal_id: UUID) -> Token | None:
+        row = await self._session.scalar(
+            select(TokenDB).where(TokenDB.principal_type == principal_type.value, TokenDB.principal_id == principal_id)
+        )
+        return None if row is None else _token(row)
+
+    async def used(self, token_id: UUID, now: datetime) -> None:
+        await self._session.execute(update(TokenDB).where(TokenDB.id == token_id).values(last_used_at=now))
+
+    async def revoke_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> None:
+        await self._session.execute(
+            update(TokenDB)
+            .where(
+                TokenDB.principal_type == principal_type.value,
+                TokenDB.principal_id == principal_id,
+                TokenDB.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+
+    async def links_in(self, home_id: UUID, now: datetime) -> list[GuestLink]:
+        rows = await self._session.execute(
+            select(GrantDB, TokenDB)
+            .join(
+                TokenDB,
+                (TokenDB.principal_type == GrantDB.principal_type) & (TokenDB.principal_id == GrantDB.principal_id),
+            )
+            .where(
+                GrantDB.home_id == home_id,
+                GrantDB.principal_type == PrincipalType.LINK.value,
+                TokenDB.revoked_at.is_(None),
+                *_active(now),
+            )
+            .order_by(GrantDB.created_at.desc(), GrantDB.id.desc())
+        )
+        return [GuestLink(grant=_grant(grant), token=_token(token)) for grant, token in rows]
 
 
 def _active(now: datetime) -> tuple[ColumnElement[bool], ...]:
@@ -449,6 +672,7 @@ def _session(row: SessionDB) -> Session:
     return Session(
         id=row.id,
         user_id=row.user_id,
+        grant_id=row.grant_id,
         token_hash=row.token_hash,
         created_at=row.created_at,
         last_seen_at=row.last_seen_at,
@@ -469,6 +693,69 @@ def _passkey(row: PasskeyDB) -> Passkey:
         transports=list(row.transports),
         created_at=row.created_at,
         last_used_at=row.last_used_at,
+    )
+
+
+def _grant(row: GrantDB) -> Grant:
+    return Grant(
+        id=row.id,
+        home_id=row.home_id,
+        principal_type=PrincipalType(row.principal_type),
+        principal_id=row.principal_id,
+        role_id=row.role_id,
+        scope_entity_id=row.scope_entity_id,
+        expires_at=row.expires_at,
+        revoked_at=row.revoked_at,
+        granted_by=row.granted_by,
+        created_at=row.created_at,
+    )
+
+
+def _invitation_fields(invitation: Invitation) -> dict[str, object]:
+    return {
+        "home_id": invitation.home_id,
+        "token_hash": invitation.token_hash,
+        "role_id": invitation.role_id,
+        "scope_entity_id": invitation.scope_entity_id,
+        "grant_expires_at": invitation.grant_expires_at,
+        "leave_when_accepted": invitation.leave_when_accepted,
+        "created_by": invitation.created_by,
+        "created_at": invitation.created_at,
+        "expires_at": invitation.expires_at,
+        "accepted_at": invitation.accepted_at,
+        "accepted_by": invitation.accepted_by,
+        "revoked_at": invitation.revoked_at,
+    }
+
+
+def _invitation(row: InvitationDB) -> Invitation:
+    return Invitation(
+        id=row.id,
+        home_id=row.home_id,
+        token_hash=row.token_hash,
+        role_id=row.role_id,
+        scope_entity_id=row.scope_entity_id,
+        grant_expires_at=row.grant_expires_at,
+        leave_when_accepted=row.leave_when_accepted,
+        created_by=row.created_by,
+        created_at=row.created_at,
+        expires_at=row.expires_at,
+        accepted_at=row.accepted_at,
+        accepted_by=row.accepted_by,
+        revoked_at=row.revoked_at,
+    )
+
+
+def _token(row: TokenDB) -> Token:
+    return Token(
+        id=row.id,
+        token_hash=row.token_hash,
+        principal_type=PrincipalType(row.principal_type),
+        principal_id=row.principal_id,
+        name=row.name,
+        created_at=row.created_at,
+        last_used_at=row.last_used_at,
+        revoked_at=row.revoked_at,
     )
 
 

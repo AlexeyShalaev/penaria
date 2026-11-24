@@ -54,11 +54,17 @@ class PasswordDB(Base):
 
 class SessionDB(Base):
     __tablename__ = "identity_sessions"
-    __table_args__ = (Index("identity_sessions_user_id_idx", "user_id", postgresql_where=text("revoked_at IS NULL")),)
+    __table_args__ = (
+        Index("identity_sessions_user_id_idx", "user_id", postgresql_where=text("revoked_at IS NULL")),
+        Index("identity_sessions_grant_id_idx", "grant_id", postgresql_where=text("revoked_at IS NULL")),
+        # An account's session, or a guest's of a guest link's grant (sign-in.md, 10).
+        CheckConstraint("(user_id IS NULL) <> (grant_id IS NULL)", name="principal"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
     token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"))
+    grant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_grants.id", ondelete="CASCADE"))
     created_at: Mapped[datetime.datetime]
     last_seen_at: Mapped[datetime.datetime]
     authenticated_at: Mapped[datetime.datetime]
@@ -165,3 +171,49 @@ class GrantDB(Base):
     expires_at: Mapped[datetime.datetime | None]
     revoked_at: Mapped[datetime.datetime | None]
     created_at: Mapped[datetime.datetime] = mapped_column(server_default=func.now())
+    granted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id"))
+
+
+class InvitationDB(Base):
+    __tablename__ = "identity_invitations"
+    __table_args__ = (
+        Index(
+            "identity_invitations_home_id_idx",
+            "home_id",
+            postgresql_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
+        ),
+        CheckConstraint("(accepted_at IS NULL) = (accepted_by IS NULL)", name="accepted"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    home_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_homes.id", ondelete="CASCADE"))
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_roles.id"))
+    scope_entity_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("registry_entities.id"))
+    grant_expires_at: Mapped[datetime.datetime | None]
+    leave_when_accepted: Mapped[bool] = mapped_column(server_default=text("false"))
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id"))
+    created_at: Mapped[datetime.datetime]
+    expires_at: Mapped[datetime.datetime]
+    accepted_at: Mapped[datetime.datetime | None]
+    accepted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("identity_users.id"))
+    revoked_at: Mapped[datetime.datetime | None]
+
+
+class TokenDB(Base):
+    """Secrets that stand for a principal; so far the tokens of guest links (sign-in.md, 10)."""
+
+    __tablename__ = "identity_tokens"
+    __table_args__ = (
+        CheckConstraint("principal_type IN ('user', 'device', 'link')", name="principal_type"),
+        Index("identity_tokens_principal_id_idx", "principal_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    principal_type: Mapped[str] = mapped_column(Text)
+    principal_id: Mapped[uuid.UUID]
+    name: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime]
+    last_used_at: Mapped[datetime.datetime | None]
+    revoked_at: Mapped[datetime.datetime | None]

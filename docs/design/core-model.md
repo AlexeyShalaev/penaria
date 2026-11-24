@@ -58,6 +58,7 @@ A home has a name, a time zone (IANA, such as `Europe/Moscow`), and a default lo
 - A home always has at least one owner. Revoking an owner grant, or an owner leaving, is refused for the last one. The command locks the home row (`SELECT ... FOR UPDATE`), so two owners cannot remove each other at the same moment.
 - A new owner is invited and becomes an owner only on accepting. **Transferring ownership** is the same invitation marked "leave when accepted": once the new owner accepts, the old owner's grant is revoked in the same transaction.
 - Adding or removing an owner is journalled, and every owner is notified.
+- An owner grant is never edited: owners are made by invitation and leave by revocation, and only owners do either. How it is built, with the other rules of a home's people, is in [sign-in.md](sign-in.md), section 14.
 
 ## 4. The entity tree
 
@@ -386,7 +387,7 @@ A preset keeps a translated name until someone renames it. A role with active gr
 
 ### 11.2 Grants
 
-A grant gives a role to a principal (`user`, `device` or `link`) over a scope, which is an entity's subtree or the whole home. It may have an expiry, and must have one if its role requires it or if the principal is a guest link. A grant is revoked by setting `revoked_at`, never by deleting the row, so the journal can explain past access.
+A grant gives a role to a principal (`user`, `device` or `link`) over a scope, which is an entity's subtree or the whole home. It may have an expiry, and must have one if its role requires it or if the principal is a guest link. A grant is revoked by setting `revoked_at`, never by deleting the row, so the journal can explain past access. A grant keeps who gave it (`granted_by`), and only someone who could give a grant can change or revoke it.
 
 What a principal may do with an entity is the union of the permissions of the roles of its active grants whose scope contains the entity: the whole home, or `scope.path @> entity.path`. The query for one entity reads that entity's path once. A list query puts the same condition into SQL, so access is filtered in the query, not after it.
 
@@ -442,6 +443,7 @@ CREATE TABLE identity_grants (
   role_id uuid NOT NULL REFERENCES identity_roles,
   scope_entity_id uuid REFERENCES registry_entities,  -- NULL: the whole home
   expires_at timestamptz, revoked_at timestamptz,
+  granted_by uuid REFERENCES identity_users,         -- NULL: a home creator's first grant
   CHECK (principal_type <> 'link' OR expires_at IS NOT NULL)
   -- owner and "expiry required" rules depend on the role: checked in the domain
 );

@@ -11,6 +11,7 @@ export {
   useSetupStatus,
   useSignIn,
   useSignOut,
+  useStartSession,
   useUpdateAccount,
 } from './api/account'
 export {
@@ -24,4 +25,5 @@ export {
 export {describeDevice, deviceName} from './model/device'
 export {checkNewPassword, PASSWORD_MIN_LENGTH, type PasswordProblem} from './model/password'
 export {describePasskeyError} from './model/passkeys'
+export {type NewAccount, useNewAccountFields} from './ui/NewAccountFields'
 export {useRecentSignIn} from './ui/useRecentSignIn'

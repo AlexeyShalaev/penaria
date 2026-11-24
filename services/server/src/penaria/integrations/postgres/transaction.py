@@ -9,11 +9,13 @@ from penaria.features.support.identity.infra.repositories import (
     PostgresFailureRepository,
     PostgresGrantRepository,
     PostgresHomeRepository,
+    PostgresInvitationRepository,
     PostgresPasskeyRepository,
     PostgresPasswordRepository,
     PostgresRoleRepository,
     PostgresSessionRepository,
     PostgresSetupTokenRepository,
+    PostgresTokenRepository,
     PostgresUserRepository,
 )
 from penaria.features.support.platform.infra.journal import PostgresJournal
@@ -32,6 +34,8 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
         self._homes = PostgresHomeRepository(session)
         self._roles = PostgresRoleRepository(session)
         self._grants = PostgresGrantRepository(session)
+        self._invitations = PostgresInvitationRepository(session)
+        self._tokens = PostgresTokenRepository(session)
         self._entities = PostgresEntityRepository(session)
         self._journal = PostgresJournal(session)
 
@@ -74,6 +78,14 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
     @property
     def grants(self) -> PostgresGrantRepository:
         return self._grants
+
+    @property
+    def invitations(self) -> PostgresInvitationRepository:
+        return self._invitations
+
+    @property
+    def tokens(self) -> PostgresTokenRepository:
+        return self._tokens
 
     @property
     def entities(self) -> PostgresEntityRepository:

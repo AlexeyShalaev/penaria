@@ -1,6 +1,7 @@
 import type {Account, AccountSession} from '@/entities/account'
 import type {EntityDetail, EntitySummary} from '@/entities/entity'
 import type {Home} from '@/entities/home'
+import type {Role} from '@/entities/member'
 
 export const HOME_ID = '00000000-0000-4000-8000-000000000001'
 
@@ -62,3 +63,24 @@ export function session(overrides: Partial<AccountSession> & Pick<AccountSession
     ...overrides,
   }
 }
+
+type PresetName = NonNullable<Role['preset']>
+
+export function role(preset: PresetName, overrides: Partial<Role> = {}): Role {
+  const guest = preset === 'guest'
+  return {
+    id: `role-${preset}`,
+    preset,
+    name: null,
+    all_permissions: preset === 'owner' || preset === 'admin',
+    permissions: guest ? ['devices.control', 'entities.view'] : [],
+    guest_view: guest,
+    expiry_required: guest,
+    default_duration_seconds: guest ? 3 * 24 * 3600 : null,
+    ...overrides,
+  }
+}
+
+export const ROLES: Role[] = (['owner', 'admin', 'family', 'guest', 'contractor'] as const).map((preset) =>
+  role(preset),
+)

@@ -117,6 +117,7 @@ async def test_a_passkey_used_while_its_answer_is_checked_confirms_nothing(
     async with uow.transaction() as tx:
         await tx.session.execute(update(SessionDB).values(authenticated_at=long_ago))
         session_id, user_id = (await tx.session.execute(select(SessionDB.id, SessionDB.user_id))).one()
+    assert user_id is not None
     current = CurrentSession(id=session_id, user_id=user_id, authenticated_at=long_ago)
     ceremony = await StartPasskeyReauthentication(uow, real).execute(current)
     confirm = ReauthenticateWithPasskey(uow, ChangingMidway(real, test_database_url, USED_BY_ANOTHER_SIGN_IN))

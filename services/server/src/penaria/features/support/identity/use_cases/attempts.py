@@ -5,11 +5,19 @@ so parallel guesses cannot all pass the check while the slow password hash runs,
 transaction stays open during it. A successful attempt takes its count back.
 """
 
-from collections.abc import Sequence
-from datetime import datetime
+from collections.abc import Awaitable, Callable, Sequence
+from datetime import UTC, datetime
+
+from servicewright import ServiceError
+from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
-from penaria.features.support.identity.domain.throttle import FAILURES_EXPIRE_AFTER, check_not_blocked
+from penaria.features.support.identity.domain.sessions import Client
+from penaria.features.support.identity.domain.throttle import (
+    FAILURES_EXPIRE_AFTER,
+    check_not_blocked,
+    secret_link_key,
+)
 
 
 async def count_attempt(tx: IdentityTransaction, keys: Sequence[str], now: datetime) -> None:
@@ -31,3 +39,27 @@ async def attempt_succeeded(tx: IdentityTransaction, account: str, others: Seque
     await tx.failures.lock([account])
     await tx.failures.clear(account)
     await tx.failures.uncount(others)
+
+
+async def find_by_secret[T](
+    uow: AsyncUnitOfWork[IdentityTransaction],
+    client: Client,
+    find: Callable[[IdentityTransaction], Awaitable[T | None]],
+    missing: ServiceError,
+) -> T:
+    """What a secret link's token stands for (an invitation, a guest link), or ``missing`` raised.
+
+    Tokens are guessed like passwords, so every look-up counts against the address first, under a
+    key apart from sign-ins (sign-in.md, 14); a token found takes its count back at once.
+    """
+    key = secret_link_key(client.ip)
+    keys = [] if key is None else [key]
+    async with uow.transaction() as tx:
+        await count_attempt(tx, keys, datetime.now(UTC))
+    async with uow.query() as tx:
+        found = await find(tx)
+    if found is None:
+        raise missing
+    async with uow.transaction() as tx:
+        await tx.failures.uncount(keys)
+    return found

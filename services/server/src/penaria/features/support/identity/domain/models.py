@@ -6,6 +6,7 @@ from enum import StrEnum
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from penaria.features.shared.access import Access
 from penaria.features.shared.errors import InvalidError
 from penaria.features.shared.ids import new_id
 from penaria.features.support.identity.domain.permissions import (
@@ -80,6 +81,19 @@ class Role:
         return self.preset is Preset.OWNER
 
 
+def access_of(roles: list[Role]) -> Access:
+    """What the roles of the grants that cover a place allow there, together (core-model.md, 11.2)."""
+    if not roles:
+        return Access(permissions=frozenset())
+    owner = any(role.is_owner for role in roles)
+    return Access(
+        permissions=frozenset().union(*(role.permissions for role in roles)),
+        owner=owner,
+        all_permissions=owner or any(role.all_permissions for role in roles),
+        guest_view=all(role.guest_view for role in roles),
+    )
+
+
 def preset_roles(home_id: UUID) -> dict[Preset, Role]:
     """The roles a new home starts with (docs/design/core-model.md, section 11.1)."""
     return {
@@ -106,5 +120,10 @@ class Grant:
     scope_entity_id: UUID | None = None
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
+    # Who gave it: None for the grant a home's creator starts with.
+    granted_by: UUID | None = None
     id: UUID = field(default_factory=new_id)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def is_active(self, now: datetime) -> bool:
+        return self.revoked_at is None and (self.expires_at is None or now < self.expires_at)

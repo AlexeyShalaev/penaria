@@ -6,9 +6,10 @@ from uuid import UUID
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
 from penaria.features.shared.access import Access, AccessPolicy
-from penaria.features.shared.actor import Actor
-from penaria.features.shared.errors import NotFoundError
+from penaria.features.shared.actor import Actor, ActorKind
+from penaria.features.shared.errors import ForbiddenError, NotFoundError
 from penaria.features.shared.journal import Event
+from penaria.features.support.identity.domain.members import grant_payload
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, preset_roles
 from penaria.features.support.identity.domain.permissions import Preset
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
@@ -29,6 +30,8 @@ class CreateHome:
         self._uow = uow
 
     async def execute(self, actor: Actor, *, name: str, timezone: str, locale: str) -> Home:
+        if actor.kind is not ActorKind.USER:
+            raise ForbiddenError("only an account can own a home", code="account_required")
         home = Home.create(name=name, timezone=timezone, locale=locale)
         roles = preset_roles(home.id)
         principal_type, principal_id = principal_of(actor)
@@ -45,12 +48,7 @@ class CreateHome:
             await tx.journal.append(
                 [
                     Event("home.created", home.id, actor, {"name": home.name, "timezone": home.timezone}),
-                    Event(
-                        "grant.created",
-                        home.id,
-                        actor,
-                        {"grant_id": str(owner.id), "principal_id": str(principal_id), "role": Preset.OWNER.value},
-                    ),
+                    Event("grant.created", home.id, actor, grant_payload(owner, roles[Preset.OWNER])),
                 ]
             )
         return home

@@ -29,6 +29,11 @@ class Actor:
         return cls(ActorKind.USER, user_id)
 
     @classmethod
+    def link(cls, link_id: UUID) -> Actor:
+        """A guest who opened a guest link: the link is the principal."""
+        return cls(ActorKind.LINK, link_id)
+
+    @classmethod
     def system(cls) -> Actor:
         return cls(ActorKind.SYSTEM, SYSTEM_ID)
 

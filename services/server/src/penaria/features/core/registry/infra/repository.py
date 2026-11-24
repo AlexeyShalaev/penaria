@@ -1,9 +1,9 @@
 """The PostgreSQL repository of entities."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from uuid import UUID
 
-from sqlalchemy import exists, func, select, text
+from sqlalchemy import ColumnElement, exists, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -32,6 +32,12 @@ class PostgresEntityRepository:
             query = query.with_for_update()
         row = await self._session.scalar(query)
         return None if row is None else _entity(row)
+
+    async def get_many(self, entity_ids: Collection[UUID]) -> dict[UUID, Entity]:
+        if not entity_ids:
+            return {}
+        rows = await self._session.scalars(select(EntityDB).where(EntityDB.id.in_(list(entity_ids))))
+        return {row.id: _entity(row) for row in rows}
 
     async def ancestors(self, entity: Entity) -> list[Entity]:
         above = entity.path[:-1]
@@ -65,16 +71,9 @@ class PostgresEntityRepository:
             conditions.append(EntityDB.privacy != Privacy.PRIVATE.value)
             count_conditions.append(child.privacy != Privacy.PRIVATE.value)
         if filter.guest_view:
-            # A place shows when it, or something below it, is guest-visible.
-            visible = aliased(EntityDB)
-            conditions.append(
-                exists().where(
-                    visible.home_id == home_id,
-                    visible.path.op("<@")(EntityDB.path),
-                    visible.privacy == Privacy.GUEST_VISIBLE.value,
-                    visible.archived_at.is_(None),
-                )
-            )
+            # A place shows when it, or something below it, is guest-visible; its count, likewise.
+            conditions.append(_leads_to_guest_visible(EntityDB, home_id))
+            count_conditions.append(_leads_to_guest_visible(child, home_id))
         count = select(func.count()).where(*count_conditions).correlate(EntityDB).scalar_subquery()
         rows = await self._session.execute(
             select(EntityDB, count).where(*conditions).order_by(func.lower(EntityDB.name), EntityDB.id)
@@ -109,6 +108,16 @@ class PostgresEntityRepository:
             ),
             {"new": to_ltree(new_path), "old": to_ltree(old_path), "depth": len(old_path)},
         )
+
+
+def _leads_to_guest_visible(place: type[EntityDB], home_id: UUID) -> ColumnElement[bool]:
+    visible = aliased(EntityDB)
+    return exists().where(
+        visible.home_id == home_id,
+        visible.path.op("<@")(place.path),
+        visible.privacy == Privacy.GUEST_VISIBLE.value,
+        visible.archived_at.is_(None),
+    )
 
 
 def _copy(entity: Entity, row: EntityDB) -> None:

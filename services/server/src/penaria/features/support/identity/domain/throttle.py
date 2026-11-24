@@ -58,6 +58,12 @@ def account_key(username: str) -> str:
     return "account:" + hashlib.sha256(username.encode()).hexdigest()
 
 
+def secret_link_key(ip: str | None) -> str | None:
+    """The counter of an address trying invitation and guest-link tokens, apart from its sign-ins."""
+    address = address_key(ip)
+    return None if address is None else f"links:{address}"
+
+
 def address_key(ip: str | None) -> str | None:
     """The counter of an address; IPv6 by its /64, the block a single household or attacker holds."""
     if ip is None:

@@ -23,7 +23,9 @@ The app calls the API on its own origin (`/api`, `/system`): the dev server prox
 
 ## Signing in
 
-The server keeps the session in an `HttpOnly` cookie, so the app holds no token: it asks `/api/v1/me` who is signed in. Every page but the setup and sign-in screens sits behind `RequireAccount` (`src/app`), which sends a visitor without a session to sign in, or to the setup screen on a fresh install, and back to the page afterwards. Any call that answers `401` with the code `unauthenticated` signs the app out the same way: the query client calls `forgetAccount` of the account entity, wired in `src/app/App.tsx`.
+The server keeps the session in an `HttpOnly` cookie, so the app holds no token: it asks `/api/v1/me` who is signed in. Every page but the setup, sign-in, invitation and guest screens sits behind `RequireAccount` (`src/app`), which sends a visitor without a session to sign in, or to the setup screen on a fresh install, and back to the page afterwards. Any call that answers `401` with the code `unauthenticated` signs the app out the same way: the query client calls `forgetAccount` of the account entity, wired in `src/app/App.tsx`.
+
+The invitation and guest pages: `/invite/:token` shows what an invitation offers and accepts it with the signed-in account, or makes an account through it. `/guest/:token` opens a guest link: it exchanges the token for a guest session and moves on to `/guest`, the guest's read-only view of the home. QR codes of these links are drawn in the browser (`src/shared/ui/QrCode.tsx`, with `uqr`).
 
 Passkeys go through `navigator.credentials` in `src/shared/lib/webauthn.ts`, which converts the server's JSON options and the browser's answers; the passkey button and the suggestion to add one show only where the browser offers WebAuthn (a secure page: `https`, or `localhost`). Tests stand in for the browser with `src/test/webauthn.ts`.
 
