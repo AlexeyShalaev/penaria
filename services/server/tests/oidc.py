@@ -45,6 +45,10 @@ class FakeOidc:
     keys: list[RSAKey] = field(default_factory=lambda: [_new_key("first")])
     up: bool = True
     advertised_issuer: str | None = None
+    # What its discovery document says it signs ID tokens with.
+    signing_algorithms: list[str] = field(default_factory=lambda: ["RS256"])
+    # Shared secrets it publishes with its keys, as a misconfigured provider might: anyone could sign with them.
+    published_secrets: list[OctKey] = field(default_factory=list)
     port: int = 0
     _codes: dict[str, _IssuedCode] = field(default_factory=dict)
     _server: uvicorn.Server | None = None
@@ -122,13 +126,16 @@ class FakeOidc:
                 "jwks_uri": f"{self.issuer}/keys",
                 "response_types_supported": ["code"],
                 "subject_types_supported": ["public"],
-                "id_token_signing_alg_values_supported": ["RS256"],
+                "id_token_signing_alg_values_supported": self.signing_algorithms,
             }
 
         @app.get("/keys")
         async def keys() -> dict[str, Any]:
             check_up()
-            return {"keys": [key.as_dict(private=False) for key in self.keys]}
+            return {
+                "keys": [key.as_dict(private=False) for key in self.keys]
+                + [secret.as_dict() for secret in self.published_secrets]
+            }
 
         @app.post("/token")
         async def token(request: Request, authorization: Annotated[str, Header()]) -> dict[str, Any]:
@@ -145,7 +152,7 @@ class FakeOidc:
                 raise HTTPException(status_code=400, detail="invalid_grant")
             key = grant.key or self.keys[0]
             alg = "HS256" if isinstance(key, OctKey) else "RS256"
-            header = {"alg": alg} if isinstance(key, OctKey) else {"alg": alg, "kid": key.kid}
+            header = {"alg": alg, "kid": key.kid} if key.kid else {"alg": alg}
             id_token = jwt.encode(header, grant.claims, key, algorithms=[alg])
             return {"access_token": secrets.token_urlsafe(16), "token_type": "Bearer", "id_token": id_token}
 

@@ -13,10 +13,10 @@ from joserfc.jwk import OctKey
 from servicewright.adapters.dishka import DishkaContainer
 from sqlalchemy import func, select, update
 
-from penaria.features.support.identity.infra.orm import OidcFlowDB, SignInFailureDB, UserDB
+from penaria.features.support.identity.infra.orm import ExternalIdentityDB, OidcFlowDB, SignInFailureDB, UserDB
 from tests.integration.apps.api.test_people import age_sign_ins, invite, last_events, make_home, member, ok
 from tests.integration.apps.api.test_totp import enrol, forget_used_codes, now_code
-from tests.integration.conftest import PUBLIC_URL
+from tests.integration.conftest import OWNER, PUBLIC_URL
 from tests.integration.helpers import NewClient, add_second_factor, from_address, uow_of
 from tests.oidc import CLIENT_ID, CLIENT_SECRET, FakeOidc
 
@@ -310,6 +310,22 @@ async def test_a_token_signed_with_the_client_secret_is_refused(
     assert location(response) == "/sign-in/external?problem=failed"
 
 
+@pytest.mark.parametrize("allow_sign_up", [True])
+async def test_a_provider_signing_only_with_shared_secrets_is_not_trusted(
+    anonymous: httpx.AsyncClient, provider: FakeOidc, container: DishkaContainer, setup_token: str
+) -> None:
+    # Before Penaria first reads its discovery document.
+    provider.signing_algorithms = ["HS256"]
+    published = OctKey.import_key(CLIENT_SECRET, parameters={"kid": "shared"})
+    provider.published_secrets.append(published)
+    before = await accounts(container)
+
+    response = await sign_in(anonymous, provider, "kim-1", sign_with=published)
+
+    assert location(response) == "/sign-in/external?problem=failed"
+    assert await accounts(container) == before
+
+
 async def test_a_provider_naming_another_issuer_is_not_used(anonymous: httpx.AsyncClient, provider: FakeOidc) -> None:
     provider.advertised_issuer = "https://elsewhere.example"
 
@@ -584,6 +600,25 @@ async def test_an_account_made_through_the_provider_may_remove_its_only_passkey(
 
 
 @pytest.mark.parametrize("allow_sign_up", [True])
+async def test_an_identity_of_an_earlier_issuer_is_no_way_to_sign_in(
+    anonymous: httpx.AsyncClient, provider: FakeOidc, setup_token: str, container: DishkaContainer
+) -> None:
+    await sign_in(anonymous, provider, "kim-1", preferred_username="kim")
+    await add_second_factor(anonymous, PUBLIC_URL)
+    [passkey] = await ok(await anonymous.get("/me/passkeys"))
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(update(ExternalIdentityDB).values(issuer="https://old-provider.example"))
+
+    methods = await ok(await anonymous.get("/me/sign-in-methods"))
+    removed = await anonymous.delete(f"/me/passkeys/{passkey['id']}")
+    relinked = await link(anonymous, provider, "kim-1")
+
+    assert methods == {"password": False, "external_identities": []}
+    assert (removed.status_code, removed.json()["code"]) == (409, "last_sign_in_method")
+    assert location(relinked) == "/account"
+
+
+@pytest.mark.parametrize("allow_sign_up", [True])
 async def test_a_verified_email_another_account_has_is_not_taken(
     api: httpx.AsyncClient, new_client: NewClient, provider: FakeOidc, container: DishkaContainer
 ) -> None:
@@ -636,6 +671,22 @@ async def test_an_account_without_an_identity_cannot_confirm_with_the_provider(a
     response = await api.post("/me/reauthenticate/oidc", json={})
 
     assert (response.status_code, response.json()["code"]) == (404, "external_identity_not_found")
+
+
+async def test_a_code_is_not_spent_on_a_confirmation_that_cannot_go_on(
+    api: httpx.AsyncClient, anonymous: httpx.AsyncClient, provider: FakeOidc, container: DishkaContainer
+) -> None:
+    _, codes = await enrol(api)
+    await link(api, provider, "alex")
+    # The address holds as many open sign-ins as it may.
+    for _ in range(10):
+        await start_sign_in(anonymous)
+
+    refused = await api.post("/me/reauthenticate/oidc", json={"recovery_code": codes[0]})
+    confirmed = await api.post("/me/reauthenticate", json={"password": OWNER["password"], "recovery_code": codes[0]})
+
+    assert (refused.status_code, refused.json()["code"]) == (429, "too_many_attempts")
+    assert confirmed.status_code == 204
 
 
 async def test_a_wrong_code_confirms_nothing_and_counts(
