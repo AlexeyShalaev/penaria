@@ -27,7 +27,7 @@ Penaria has a small core and modules on top of it.
 | Backend | Python, servicewright, FastAPI, Pydantic v2, async SQLAlchemy 2, Alembic; uv |
 | Frontend | TypeScript, React, PWA; pnpm; API client generated from OpenAPI |
 | Infrastructure (you provide it) | PostgreSQL 15+, S3-compatible storage, Qdrant, Temporal; Redis for more than one API replica; an LLM provider is optional |
-| Delivery | Docker images `penaria-server` (every backend process, chosen by the command) and `penaria-web`; Docker Compose, Kubernetes with one Helm chart |
+| Delivery | Docker images `penaria-server` (every backend process, chosen by the command) and `penaria-web`; Docker Compose, Docker Swarm, Kubernetes with one Helm chart |
 
 ## Repository layout
 
