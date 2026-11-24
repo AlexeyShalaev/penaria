@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest something Penaria should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do, and what stops you today?
+      description: Describe the situation at home, not the solution. "I can't find which box the winter tyres are in" helps more than "add a search field".
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could Penaria help?
+      description: Optional. Your idea of a solution, or how another product does it.
+
+  - type: dropdown
+    id: integration
+    attributes:
+      label: Is it about a smart home system or another integration?
+      options:
+        - "No"
+        - KNX
+        - Yandex (Alice)
+        - Home Assistant
+        - Iridium
+        - Another one (name it above)
