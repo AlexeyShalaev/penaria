@@ -26,7 +26,7 @@ class JournalEventDB(Base):
     seq: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     at: Mapped[datetime.datetime] = mapped_column(primary_key=True)
     id: Mapped[uuid.UUID]
-    home_id: Mapped[uuid.UUID]
+    home_id: Mapped[uuid.UUID | None]
     type: Mapped[str] = mapped_column(Text)
     version: Mapped[int]
     entity_id: Mapped[uuid.UUID | None]

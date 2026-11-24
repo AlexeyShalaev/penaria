@@ -50,7 +50,7 @@ The setup screen creates:
 
 The token is single-use. Restarting the server before setup prints a new one and invalidates the old.
 
-**Upgrading from the current single-user mode.** The one local user that every request acts as today becomes the account that setup completes. Its homes and history stay theirs.
+**Upgrading from the single-user mode before sign-in.** The one local user that every request acted as becomes the account that setup completes. Its homes and history stay theirs.
 
 ## 3. Accounts
 
@@ -107,7 +107,7 @@ The same table of linked identities later holds Telegram accounts, linked from t
 
 A browser signs in once and holds a session.
 
-- **Storage.** The session is a random 256-bit token in a cookie named `penaria_session`, set `HttpOnly`, `Secure` (except on `localhost`), `SameSite=Lax` and `Path=/`. The server stores only a SHA-256 hash of the token, with the user, the time created, the time last seen, the user agent and the IP address.
+- **Storage.** The session is a random 256-bit token in a cookie named `penaria_session`, set `HttpOnly`, `Secure` when `PENARIA_PUBLIC_URL` is `https` (section 12), `SameSite=Lax` and `Path=/`. The server stores only a SHA-256 hash of the token, with the user, the time created, the time last seen, the user agent and the IP address.
 - **Lifetime.** **Decision:** a session ends after 30 days without use, and in any case after 180 days.
 - **Sensitive commands need a recent sign-in, within 10 minutes:** adding a sign-in method, transferring ownership, changing roles. A session older than that asks for the passkey or password again.
 - **Revocation.** The account page lists every session: device, place and last use. Each one can be ended. Signing out ends the current one, and disabling the account ends them all.
@@ -236,3 +236,21 @@ The author accepted every decision below on 2026-11-24 and added outgoing email 
 | 9 | Device tokens without expiry, with last use shown and revocation (6.3) | Yes |
 | 10 | Recovery without SMTP through an admin's link and a CLI command (8) | Yes |
 | 11 | The order of work | 1) accounts, passwords, sessions, setup token, sign-out, account page; 2) passkeys; 3) invitations and guest links; 4) TOTP; 5) device tokens; 6) OIDC. Each is a pull request, and the demo keeps working after each |
+
+## 12. Notes from step 1
+
+Step 1 (accounts, passwords, sessions, the setup token, sign-out and the account page) settled what the sections above left open:
+
+- **The `Secure` flag follows the scheme of `PENARIA_PUBLIC_URL`,** not "except on `localhost`" (section 5). Browsers drop a `Secure` cookie set over plain HTTP, so an install opened at `http://192.168.1.10` could not sign in at all. The server warns at start when `PENARIA_PUBLIC_URL` is plain HTTP on another host than the machine itself.
+- **Usernames are stored in lower case,** so a plain unique index keeps them unique case-insensitively. A username is 3 to 32 letters or digits of any script, dots, underscores or hyphens.
+- **The setup token** is 32 hexadecimal characters. Only its SHA-256 hash is kept, in `identity_setup_tokens`. Issuing and completing the setup take one lock, so the table holds at most one row: with several api replicas, the replica that started last holds the valid token. The install needs setup while no user has an account (a username), whatever sign-in methods later steps add. Setup turns the earliest user into the account, or creates one when there is none.
+- **Rate limits** (section 7) count failures in `identity_sign_in_failures`, under the account (a hash of the username typed, so unknown names are limited too and no typed name is stored) and under the address: an IPv4 address, or the /64 block of an IPv6 one, which a single household or attacker holds. Five failures are free; then the wait is 30 seconds, doubling up to 15 minutes. A count is forgotten an hour after its last failure.
+  - An attempt is counted as failed before its password is checked, in a short transaction under a lock on its counters, and a success takes the count back: the account's count is cleared, the address's loses this one attempt. Parallel guesses therefore cannot all pass the check, and no transaction stays open while the password is hashed. The success itself then takes the account's lock and checks that the password is still the one it checked, so a sign-in or a change that crosses a password change refuses instead of opening a session or writing the old password back.
+  - Wrong setup tokens are counted per address, wrong current passwords (changing the password) per account. The server answers 429 with `too_many_attempts` and `retry_after_seconds`.
+  - At most as many Argon2 hashes run at once as the cores allow (each takes 64 MiB), so a burst of attempts cannot exhaust a small home server.
+  - **Accepted trade-off:** someone who knows a username can keep that account from signing in with a few wrong attempts an hour; the per-account limit cannot tell the owner's attempt from theirs. Passkeys (step 2) and the operator's reset command (section 8), both still to come, will not be limited this way. The same holds for the address of a reverse proxy that does not pass on people's addresses, which is why the server README asks to trust its `X-Forwarded-For`.
+- **Changing the password ends every other session** of the account.
+- **The `Origin` check** (section 5) falls back to `Referer` when a request has no `Origin`. A request with neither comes from a client that is not a browser, which a forged page cannot make carry the cookie, and passes.
+- **Account events are journalled with no home:** `journal_events.home_id` is nullable (core-model 9.3). The types are `account.setup_completed`, `account.signed_in`, `account.sign_in_failed`, `account.signed_out`, `account.updated`, `account.password_changed` and `session.revoked`, each with the `user_id` in the payload. A failed sign-in is recorded only for an existing account, with the `system` actor: nobody is signed in.
+- **A session's last use** is written at most every 5 minutes, so reading pages does not write on every request.
+- **`identity_sessions` has no `grant_id` yet:** it comes with guest links (step 3), and `user_id` is required until then.

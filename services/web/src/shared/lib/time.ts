@@ -17,6 +17,12 @@ export function formatRelative(date: Date, language: string, now: Date = new Dat
   return format.format(0, 'second')
 }
 
+/** "in 30 seconds", "in 15 minutes": how long until something may be tried again. */
+export function formatWait(seconds: number, language: string): string {
+  const format = new Intl.RelativeTimeFormat(language)
+  return seconds < 60 ? format.format(Math.ceil(seconds), 'second') : format.format(Math.ceil(seconds / 60), 'minute')
+}
+
 export function formatDateTime(date: Date, language: string): string {
   return new Intl.DateTimeFormat(language, {dateStyle: 'long', timeStyle: 'short'}).format(date)
 }

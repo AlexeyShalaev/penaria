@@ -274,10 +274,10 @@ Rebuilding state by replaying events would make every schema change a replay pro
 | `seq` | The order of events within one transaction and a tie-breaker; with `tx`, the position readers keep (section 9.4) |
 | `tx` | The id of the transaction that wrote the event |
 | `id` | UUIDv7 of the event |
-| `home_id` | The home the event belongs to |
+| `home_id` | The home the event belongs to; none for an event of an account, such as a sign-in ([sign-in.md](sign-in.md), 12) |
 | `type`, `version` | `entity.moved`, version 1; module events carry their namespace (`knx.bus.offline`) |
 | `entity_id` | The main entity, if any |
-| `actor` | `{kind: user \| device \| link \| module \| hub \| system, id, on_behalf_of}` |
+| `actor` | `{kind: user \| device \| link \| module \| hub \| system, id, on_behalf_of}`; the install itself is `system` with the nil UUID |
 | `command_id`, `changeset_id` | What caused it |
 | `at` | When it happened, UTC |
 | `payload` | What changed. Ids, plus the names they had then, so history reads well after a rename |
@@ -528,7 +528,7 @@ CREATE INDEX ON changes_operations (target_entity_id) WHERE decision = 'pending'
 
 -- journal: append-only, monthly partitions (pg-partsmith)
 CREATE TABLE journal_events (
-  seq bigserial, id uuid NOT NULL, home_id uuid NOT NULL,   -- identity columns need PostgreSQL 17 on partitioned tables
+  seq bigserial, id uuid NOT NULL, home_id uuid,   -- home_id is NULL for an account's events; identity columns need PostgreSQL 17 on partitioned tables
   type text NOT NULL, version int NOT NULL, entity_id uuid,
   actor jsonb NOT NULL, command_id uuid, changeset_id uuid,
   tx xid8 NOT NULL DEFAULT pg_current_xact_id(),

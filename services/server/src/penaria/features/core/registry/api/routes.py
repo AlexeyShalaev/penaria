@@ -22,8 +22,9 @@ from penaria.features.core.registry.use_cases.commands import (
 from penaria.features.core.registry.use_cases.queries import EntityHistory, EntityView, GetEntity, ListChildren
 from penaria.features.shared.access import Permission
 from penaria.features.shared.actor import Actor
+from penaria.features.shared.http import SIGNED_IN
 
-router = APIRouter(prefix="/api/v1", tags=["entities"])
+router = APIRouter(prefix="/api/v1", tags=["entities"], dependencies=[SIGNED_IN])
 
 
 class PlaceOut(BaseModel):

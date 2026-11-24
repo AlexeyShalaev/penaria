@@ -50,6 +50,50 @@
   color: var(--accent-text);
 }
 
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: auto;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.account svg {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: var(--text-muted);
+}
+
+.account:hover {
+  background: var(--bg-sunken);
+}
+
+.account[aria-current='page'] {
+  background: var(--accent-soft);
+}
+
+.accountText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.accountName {
+  overflow: hidden;
+  font-weight: var(--fw-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountHint {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
 .main {
   flex: 1;
   min-width: 0;

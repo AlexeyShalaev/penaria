@@ -15,7 +15,9 @@
     "homes": "Your homes",
     "addHome": "Add a home",
     "owner": "Owner",
-    "member": "Member"
+    "member": "Member",
+    "account": "Account",
+    "accountShort": "Account"
   },
   "homes": {
     "welcomeTitle": "Welcome to Penaria",
@@ -177,6 +179,80 @@
     "invalid_home": "Check the name and the time zone.",
     "entity_archived": "It is archived. Restore it first.",
     "entity_not_archived": "It is not archived.",
-    "permission_denied": "You are not allowed to do this."
+    "permission_denied": "You are not allowed to do this.",
+    "unauthenticated": "Your session has ended. Sign in again.",
+    "invalid_credentials": "Wrong username or password.",
+    "too_many_attempts": "Too many failed attempts. Try again {{wait}}.",
+    "invalid_setup_token": "This setup token does not work. Copy the token from the server's latest log: every restart makes a new one.",
+    "already_set_up": "Penaria is already set up. Sign in instead.",
+    "weak_password": "Choose another password.",
+    "weak_password_too_short": "The password needs at least {{min_length}} characters.",
+    "weak_password_too_long": "The password can have at most {{max_length}} characters.",
+    "weak_password_common": "This password is one of the most common ones. Choose another.",
+    "invalid_account": "Check the account's details.",
+    "invalid_account_username": "A username has 3 to 32 letters, digits, dots, underscores or hyphens.",
+    "invalid_account_display_name": "Your name needs 1 to 200 characters.",
+    "invalid_account_locale": "This language is not available.",
+    "wrong_password": "The current password is wrong.",
+    "session_not_found": "This device is already signed out.",
+    "cross_origin_request": "The request came from another site and was refused. Open Penaria at its own address."
+  },
+  "languages": {
+    "en": "English",
+    "ru": "Русский"
+  },
+  "signIn": {
+    "title": "Sign in",
+    "text": "Sign in to your home with your username and password.",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in"
+  },
+  "setup": {
+    "title": "Set up Penaria",
+    "text": "Create the first account. It manages this install and owns the homes it creates.",
+    "tokenTitle": "Where is the setup token?",
+    "tokenText": "The server printed a one-time setup token to its log when it started. It proves that you have access to the machine. With Docker Compose, run:",
+    "tokenRestart": "Each restart prints a new token, and the old one stops working.",
+    "token": "Setup token",
+    "username": "Username",
+    "usernameHint": "You sign in with it: 3 to 32 letters, digits, dots, underscores or hyphens.",
+    "displayName": "Your name",
+    "displayNameHint": "What others in your homes see.",
+    "password": "Password",
+    "repeatPassword": "Repeat the password",
+    "submit": "Create account"
+  },
+  "password": {
+    "tooShort": "The password needs at least {{min}} characters.",
+    "mismatch": "The passwords do not match.",
+    "hint": "At least {{min}} characters. A few unrelated words make a good one."
+  },
+  "account": {
+    "title": "Account",
+    "profile": "Profile",
+    "username": "Username",
+    "displayName": "Your name",
+    "language": "Language",
+    "saved": "Saved.",
+    "passwordTitle": "Password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "repeatPassword": "Repeat the new password",
+    "changePassword": "Change password",
+    "passwordChanged": "The password is changed. Your other devices were signed out.",
+    "sessions": "Where you are signed in",
+    "sessionsText": "Sign out a device you do not recognise or no longer use.",
+    "thisDevice": "This device",
+    "deviceOn": "{{browser}} on {{system}}",
+    "unknownDevice": "Unknown device",
+    "lastUsed": "Last used {{when}}",
+    "signedInAt": "signed in {{when}}",
+    "revoke": "Sign out",
+    "revokeLabel": "Sign out {{device}}",
+    "revokeOthers": "Sign out everywhere else",
+    "othersRevoked_one": "Signed out of {{count}} other device.",
+    "othersRevoked_other": "Signed out of {{count}} other devices.",
+    "signOut": "Sign out"
   }
 }
