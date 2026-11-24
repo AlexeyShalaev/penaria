@@ -1,9 +1,10 @@
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {type QueryClient, useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 
 import {api, type Schemas, unwrap} from '@/shared/api'
 import {createCredential, getCredential} from '@/shared/lib/webauthn'
 
-import {useStartSession} from './account'
+import {type SecondFactorCode, useStartSession} from './account'
+import {SECOND_FACTOR_KEY} from './secondFactor'
 
 export type Passkey = Schemas['PasskeyOut']
 
@@ -39,7 +40,8 @@ export function useAddPasskey() {
       const credential = await createCredential(ceremony.options)
       return unwrap(api.POST('/api/v1/me/passkeys', {body: {challenge_id: ceremony.challenge_id, credential, name}}))
     },
-    onSuccess: () => queryClient.invalidateQueries({queryKey: passkeysKey}),
+    // A passkey is a second factor too.
+    onSuccess: () => invalidatePasskeys(queryClient),
   })
 }
 
@@ -63,14 +65,18 @@ export function useRemovePasskey() {
   return useMutation({
     mutationFn: (passkeyId: string) =>
       unwrap(api.DELETE('/api/v1/me/passkeys/{passkey_id}', {params: {path: {passkey_id: passkeyId}}})),
-    onSettled: () => queryClient.invalidateQueries({queryKey: passkeysKey}),
+    onSettled: () => invalidatePasskeys(queryClient),
   })
 }
 
-/** Confirms it is still the person, so the session counts as signed in recently. */
+/**
+ * Confirms it is still the person, so the session counts as signed in recently: the password, and a code
+ * while the account has an authenticator app.
+ */
 export function useReauthenticate() {
   return useMutation({
-    mutationFn: (password: string) => unwrap(api.POST('/api/v1/me/reauthenticate', {body: {password}})),
+    mutationFn: (body: {password: string} & Partial<SecondFactorCode>) =>
+      unwrap(api.POST('/api/v1/me/reauthenticate', {body})),
   })
 }
 
@@ -84,4 +90,11 @@ export function useReauthenticateWithPasskey() {
       )
     },
   })
+}
+
+function invalidatePasskeys(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({queryKey: passkeysKey}),
+    queryClient.invalidateQueries({queryKey: SECOND_FACTOR_KEY}),
+  ])
 }

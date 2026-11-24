@@ -105,6 +105,35 @@ class PasskeyChallengeDB(Base):
     expires_at: Mapped[datetime.datetime] = mapped_column(index=True)
 
 
+class TotpDB(Base):
+    """An account's authenticator app (sign-in.md, 4.3): waiting for its first code until ``confirmed_at``."""
+
+    __tablename__ = "identity_totp"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"), primary_key=True)
+    # The base32 secret, sealed with PENARIA_SECRET_KEY and bound to the account (domain/totp.py).
+    secret: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime]
+    confirmed_at: Mapped[datetime.datetime | None]
+    last_used_step: Mapped[int | None] = mapped_column(BigInteger)
+    # SHA-256 hashes, in hex, of the recovery codes not used yet.
+    recovery_codes: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{}'"))
+
+
+class PendingSignInDB(Base):
+    """Sign-ins whose password was right and whose second factor is still to come; only their tokens' hashes."""
+
+    __tablename__ = "identity_pending_sign_ins"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"), index=True)
+    # The counter key of the address the password came from (domain/throttle.py).
+    address: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime]
+    expires_at: Mapped[datetime.datetime] = mapped_column(index=True)
+
+
 class SetupTokenDB(Base):
     """At most one row: the hash of the setup token printed at the last start before setup."""
 
@@ -239,7 +268,8 @@ class MailDB(Base):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('test', 'email_verification', 'password_reset', 'invitation', 'password_changed', "
-            "'passkey_added', 'email_changed', 'email_removed')",
+            "'passkey_added', 'email_changed', 'email_removed', 'totp_enabled', 'totp_disabled', "
+            "'recovery_code_used', 'recovery_codes_regenerated')",
             name="kind",
         ),
         CheckConstraint("state IN ('queued', 'sent', 'failed')", name="state"),

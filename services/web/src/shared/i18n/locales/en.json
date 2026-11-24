@@ -254,7 +254,16 @@
     "mail_not_found": "This email is no longer in the log.",
     "mail_expired": "This email can no longer be sent: its link stopped working, or it is too old.",
     "mail_queued": "This email is waiting for its next attempt already.",
-    "invalid_mailbox_password": "The server or the login changed: enter the password again, so the saved one never goes to another server."
+    "invalid_mailbox_password": "The server or the login changed: enter the password again, so the saved one never goes to another server.",
+    "wrong_code": "The code is wrong or was already used. Wait for the next code and try again.",
+    "second_factor_expired": "Signing in took too long. Go back and sign in again.",
+    "second_factor_code_required": "Enter the code from your authenticator app too.",
+    "totp_already_enabled": "Two-step sign-in is already on.",
+    "totp_not_enabled": "Two-step sign-in is already off.",
+    "totp_enrolment_not_found": "Setting up took too long. Cancel and start again.",
+    "totp_unreadable": "The code from the app cannot be checked on this server. Use a recovery code instead.",
+    "last_second_factor": "Owners and admins need a second step to sign in. Add a passkey before you turn the authenticator app off.",
+    "second_factor_required": "Add a passkey or an authenticator app first: owners and admins need a second step to sign in."
   },
   "languages": {
     "en": "English",
@@ -351,6 +360,44 @@
     "orPassword": "or enter your password",
     "password": "Password",
     "submit": "Confirm"
+  },
+  "twoStep": {
+    "title": "Two-step sign-in",
+    "text": "With an authenticator app, signing in with your password also asks for a six-digit code from your phone. Passkeys need no code.",
+    "setUp": "Set up an authenticator app",
+    "scan": "Scan the QR code with an authenticator app, such as Google Authenticator, Microsoft Authenticator, 1Password or Bitwarden. Or type the key into it by hand.",
+    "qr": "QR code for the authenticator app",
+    "key": "Key",
+    "code": "Code from the app",
+    "codeHint": "Six digits; the app shows a new code every 30 seconds.",
+    "turnOn": "Turn on",
+    "codesTitle": "Recovery codes",
+    "codesText": "If you lose your phone, sign in with one of these codes instead of a code from the app. Each code works once. Keep them somewhere safe: they are shown only now.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "download": "Download",
+    "saved": "I have saved them",
+    "on": "Two-step sign-in is on",
+    "since": "since {{when}}",
+    "codesLeft_one": "{{count}} recovery code left",
+    "codesLeft_other": "{{count}} recovery codes left",
+    "newCodes": "New recovery codes",
+    "turnOff": "Turn off",
+    "turnOffTitle": "Turn off two-step sign-in?",
+    "turnOffText": "Signing in with your password will no longer ask for a code, and your recovery codes will stop working. You can also remove Penaria from the authenticator app.",
+    "recoveryCode": "Recovery code",
+    "useRecovery": "Use a recovery code",
+    "useApp": "Use the authenticator app",
+    "enterCode": "Enter the code from your authenticator app.",
+    "enterRecoveryCode": "Enter one of your recovery codes. Each code works once."
+  },
+  "secondFactorPrompt": {
+    "title": "Add a second step to sign in",
+    "text": "You own a home or run this Penaria, so a password alone is not enough to protect it. Add a passkey or an authenticator app. Until then, you cannot hand over a home, change people's access or change the settings.",
+    "passkey": "A passkey",
+    "passkeyText": "Sign in with your fingerprint, face or screen lock. A passkey needs no password and no code.",
+    "app": "An authenticator app",
+    "appText": "Keep your password, and confirm each sign-in with a six-digit code from your phone."
   },
   "roles": {
     "owner": {

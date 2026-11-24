@@ -81,6 +81,7 @@ class ChangePassword:
             await checked.still_current(tx)
             await tx.passwords.set(current.user_id, new_hash, now)
             revoked = await tx.sessions.revoke_all_but(current.user_id, current.id, now)
+            await tx.pending_sign_ins.forget_for(current.user_id)
             await tx.journal.append(
                 [
                     Event(
@@ -126,6 +127,8 @@ class RevokeOtherSessions:
         """End every session of the account but the current one; how many ended."""
         async with self._uow.transaction() as tx:
             revoked = await tx.sessions.revoke_all_but(current.user_id, current.id, datetime.now(UTC))
+            # A sign-in waiting for its code would open a session after this one.
+            await tx.pending_sign_ins.forget_for(current.user_id)
             await tx.journal.append(_revoked_events(current, revoked))
         return len(revoked)
 

@@ -1495,7 +1495,11 @@
           "password_changed",
           "passkey_added",
           "email_changed",
-          "email_removed"
+          "email_removed",
+          "totp_enabled",
+          "totp_disabled",
+          "recovery_code_used",
+          "recovery_codes_regenerated"
         ],
         "title": "MailKind",
         "type": "string"
@@ -2227,18 +2231,64 @@
         "type": "string"
       },
       "ReauthenticationIn": {
+        "description": "The password; with a code or a recovery code too while the account's authenticator app is on.",
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A code the authenticator app shows",
+            "title": "Code"
+          },
           "password": {
             "maxLength": 1024,
             "minLength": 1,
             "title": "Password",
             "type": "string"
+          },
+          "recovery_code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of the recovery codes",
+            "title": "Recovery Code"
           }
         },
         "required": [
           "password"
         ],
         "title": "ReauthenticationIn",
+        "type": "object"
+      },
+      "RecoveryCodesOut": {
+        "properties": {
+          "codes": {
+            "description": "Ten single-use codes, shown only now; each replaces a code of the app once",
+            "items": {
+              "type": "string"
+            },
+            "title": "Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "codes"
+        ],
+        "title": "RecoveryCodesOut",
         "type": "object"
       },
       "RegistrationCredentialIn": {
@@ -2459,6 +2509,123 @@
           "default_duration_seconds"
         ],
         "title": "RoleOut",
+        "type": "object"
+      },
+      "SecondFactorAskedOut": {
+        "description": "The password was right; a code of the account's authenticator app must follow (``/sign-in/second-factor``).",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "token": {
+            "description": "The pending sign-in, to bring back with the code; it works once, from this address",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_at"
+        ],
+        "title": "SecondFactorAskedOut",
+        "type": "object"
+      },
+      "SecondFactorOut": {
+        "properties": {
+          "missing": {
+            "description": "Required, and the account has neither: owner-level commands answer 403 second_factor_required until it adds one",
+            "title": "Missing",
+            "type": "boolean"
+          },
+          "recovery_codes_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Unused recovery codes; none while the app is off",
+            "title": "Recovery Codes Left"
+          },
+          "required": {
+            "description": "The account is an owner or an install admin with a password: it must keep a second factor, an authenticator app or a passkey",
+            "title": "Required",
+            "type": "boolean"
+          },
+          "totp_enabled": {
+            "description": "Whether signing in with the password asks for a code of the app",
+            "title": "Totp Enabled",
+            "type": "boolean"
+          },
+          "totp_enabled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totp Enabled At"
+          }
+        },
+        "required": [
+          "totp_enabled",
+          "totp_enabled_at",
+          "recovery_codes_left",
+          "required",
+          "missing"
+        ],
+        "title": "SecondFactorOut",
+        "type": "object"
+      },
+      "SecondFactorSignInIn": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A code the authenticator app shows",
+            "title": "Code"
+          },
+          "recovery_code": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of the recovery codes",
+            "title": "Recovery Code"
+          },
+          "token": {
+            "description": "The token of ``/sign-in``",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "SecondFactorSignInIn",
         "type": "object"
       },
       "SendResultOut": {
@@ -2683,6 +2850,49 @@
           "token"
         ],
         "title": "TokenIn",
+        "type": "object"
+      },
+      "TotpCodeIn": {
+        "properties": {
+          "code": {
+            "description": "A code the app shows",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "TotpCodeIn",
+        "type": "object"
+      },
+      "TotpEnrolmentOut": {
+        "properties": {
+          "expires_at": {
+            "description": "Confirm with a code before this, or start again",
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "secret": {
+            "description": "The secret in base32, to type into the app by hand",
+            "title": "Secret",
+            "type": "string"
+          },
+          "uri": {
+            "description": "The otpauth:// address, for a QR code",
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "uri",
+          "expires_at"
+        ],
+        "title": "TotpEnrolmentOut",
         "type": "object"
       },
       "ValidationError": {
@@ -4700,7 +4910,7 @@
     },
     "/api/v1/me/reauthenticate": {
       "post": {
-        "description": "Confirm it is still you with the password, so the session counts as signed in recently.",
+        "description": "Confirm it is still you with the password, so the session counts as signed in recently; with a code too\nwhile the authenticator app is on (``second_factor_code_required`` otherwise).",
         "operationId": "reauthenticate_api_v1_me_reauthenticate_post",
         "requestBody": {
           "content": {
@@ -4788,6 +4998,27 @@
         ]
       }
     },
+    "/api/v1/me/second-factor": {
+      "get": {
+        "operationId": "second_factor_api_v1_me_second_factor_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecondFactorOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Second Factor",
+        "tags": [
+          "second factor"
+        ]
+      }
+    },
     "/api/v1/me/sessions": {
       "get": {
         "operationId": "list_sessions_api_v1_me_sessions_get",
@@ -4867,6 +5098,105 @@
         "summary": "Revoke Other Sessions",
         "tags": [
           "account"
+        ]
+      }
+    },
+    "/api/v1/me/totp": {
+      "delete": {
+        "description": "Turn the app off, with its recovery codes. Needs a recent sign-in; an owner or an install admin keeps it\nunless they have a passkey (``409 last_second_factor``).",
+        "operationId": "turn_off_totp_api_v1_me_totp_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Turn Off Totp",
+        "tags": [
+          "second factor"
+        ]
+      },
+      "post": {
+        "description": "Start setting up an authenticator app: a new secret, on once a code confirms it. Needs a recent sign-in.",
+        "operationId": "start_totp_api_v1_me_totp_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpEnrolmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Start Totp",
+        "tags": [
+          "second factor"
+        ]
+      }
+    },
+    "/api/v1/me/totp/recovery-codes": {
+      "post": {
+        "description": "Ten new recovery codes; the earlier ones stop working. Needs a recent sign-in.",
+        "operationId": "regenerate_recovery_codes_api_v1_me_totp_recovery_codes_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Regenerate Recovery Codes",
+        "tags": [
+          "second factor"
+        ]
+      }
+    },
+    "/api/v1/me/totp:confirm": {
+      "post": {
+        "description": "Turn the app on with its first code; the recovery codes come only in this answer.",
+        "operationId": "confirm_totp_api_v1_me_totp_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpCodeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Totp",
+        "tags": [
+          "second factor"
         ]
       }
     },
@@ -5044,6 +5374,7 @@
     },
     "/api/v1/sign-in": {
       "post": {
+        "description": "Sign in with the password: a session, or the second step an authenticator app asks for.",
         "operationId": "sign_in_api_v1_sign_in_post",
         "requestBody": {
           "content": {
@@ -5065,6 +5396,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecondFactorAskedOut"
+                }
+              }
+            },
+            "description": "The account has an authenticator app: no session yet; send a code to the second step"
           },
           "422": {
             "content": {
@@ -5141,6 +5482,48 @@
           }
         },
         "summary": "Passkey Sign In Options",
+        "tags": [
+          "sign-in"
+        ]
+      }
+    },
+    "/api/v1/sign-in/second-factor": {
+      "post": {
+        "description": "The second step of signing in with a password: a code of the authenticator app, or a recovery code.",
+        "operationId": "sign_in_second_factor_api_v1_sign_in_second_factor_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecondFactorSignInIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign In Second Factor",
         "tags": [
           "sign-in"
         ]

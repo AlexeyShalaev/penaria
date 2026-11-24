@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 from sqlalchemy_foundation_kit import AsyncSQLAlchemyUnitOfWork
 
 from penaria.features.support.identity.domain.passwords import PasswordHasher
+from penaria.features.support.identity.domain.secrets import SecretBox
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession
 from penaria.features.support.identity.infra.orm import SessionDB
 from penaria.features.support.identity.use_cases.account import ChangePassword, WrongPasswordError
@@ -96,8 +97,11 @@ async def test_a_confirmation_checked_against_a_password_changed_meanwhile_is_re
         id=UUID(session["id"]), user_id=UUID((await api.get("/me")).json()["id"]), authenticated_at=long_ago
     )
 
+    box = await container.container.get(SecretBox)
+    postman = await container.container.get(Postman)
+
     with pytest.raises(WrongPasswordError):
-        await ReauthenticateWithPassword(uow, hasher).execute(current, OWNER["password"])
+        await ReauthenticateWithPassword(uow, hasher, box, postman).execute(current, OWNER["password"], None)
 
     async with uow.query() as tx:
         assert await tx.session.scalar(select(SessionDB.authenticated_at)) == long_ago

@@ -91,6 +91,40 @@
       "notes": [
         "If it was not you, sign in at once, change your password and add your address again, or ask the admin of your home for a reset link."
       ]
+    },
+    "totp_enabled": {
+      "subject": "Two-step sign-in is on for your Penaria account",
+      "title": "Two-step sign-in is on",
+      "lead": "{name}, signing in to the account {username} with the password now also asks for a code from your authenticator app.",
+      "notes": [
+        "Keep your recovery codes somewhere safe: each one replaces a code once if you lose your phone.",
+        "If it was not you, someone knows your password: reset it from the sign-in page, or ask the admin of your home for a reset link."
+      ]
+    },
+    "totp_disabled": {
+      "subject": "Two-step sign-in is off for your Penaria account",
+      "title": "Two-step sign-in is off",
+      "lead": "{name}, the authenticator app of the account {username} was turned off. Signing in with the password no longer asks for a code, and the recovery codes no longer work.",
+      "notes": [
+        "If it was not you, sign in at once, change your password and turn two-step sign-in on again."
+      ]
+    },
+    "recovery_code_used": {
+      "subject": "A recovery code was used for your Penaria account",
+      "title": "A recovery code was used",
+      "lead": "{name}, a recovery code was just used instead of a code from the authenticator app of the account {username}. Each code works once. Recovery codes left: {left}.",
+      "notes": [
+        "If you lost your phone, set up the authenticator app again on the account page. If you are running out of codes, make new ones there.",
+        "If it was not you, someone has your password and your recovery codes: sign in, change your password and make new recovery codes."
+      ]
+    },
+    "recovery_codes_regenerated": {
+      "subject": "New recovery codes for your Penaria account",
+      "title": "New recovery codes",
+      "lead": "{name}, new recovery codes were just made for the account {username}. The earlier ones no longer work.",
+      "notes": [
+        "If it was not you, sign in at once, change your password and make new recovery codes."
+      ]
     }
   }
 }

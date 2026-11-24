@@ -17,10 +17,19 @@ from penaria.features.support.identity.use_cases import postman as postman_modul
 from penaria.features.support.identity.use_cases.postman import Postman
 from penaria.features.support.platform.infra.orm import JournalEventDB
 from tests.integration.apps.api.test_people import age_sign_ins, make_home, member, ok
-from tests.integration.helpers import NewClient, uow_of
+from tests.integration.conftest import PUBLIC_URL
+from tests.integration.helpers import NewClient, add_second_factor, uow_of
 from tests.smtp import FakeSmtp, html_of, text_of
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.fixture
+async def api(api: httpx.AsyncClient) -> httpx.AsyncClient:
+    """The owner, who has a passkey as owners must for owner-level commands (sign-in.md, 4.3)."""
+    await add_second_factor(api, PUBLIC_URL)
+    return api
+
 
 SECRET = "smtp-password-of-the-test"  # noqa: S105 - a value of the tests
 

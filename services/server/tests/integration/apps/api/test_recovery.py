@@ -20,10 +20,18 @@ from penaria.features.support.platform.infra.orm import JournalEventDB
 from tests.authenticator import Authenticator
 from tests.integration.apps.api.test_people import CHOSEN, age_sign_ins, join, make_home, member, ok
 from tests.integration.conftest import OWNER, PUBLIC_URL
-from tests.integration.helpers import NewClient, add_passkey, from_address, uow_of
+from tests.integration.helpers import NewClient, add_passkey, add_second_factor, from_address, uow_of
 from tests.smtp import FakeSmtp, html_of, text_of
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.fixture
+async def api(api: httpx.AsyncClient) -> httpx.AsyncClient:
+    """The owner, who has a passkey as owners must for owner-level commands (sign-in.md, 4.3)."""
+    await add_second_factor(api, PUBLIC_URL)
+    return api
+
 
 FRESH = "a fresh new passphrase"
 RESET_LINK = re.compile(re.escape(f"{PUBLIC_URL}/reset-password/") + r"([\w-]+)")
@@ -163,7 +171,11 @@ async def test_a_reset_by_email_sets_a_new_password_and_ends_every_session(
     await ok(await anonymous.post("/password-reset", json={"token": token, "new_password": FRESH}), 204)
     await deliver(container)
 
-    assert preview == {"username": "owner", "display_name": "Owner", "passkeys": []}
+    assert {**preview, "passkeys": [p["name"] for p in preview["passkeys"]]} == {
+        "username": "owner",
+        "display_name": "Owner",
+        "passkeys": ["Second factor"],
+    }
     assert (await api.get("/me")).status_code == 401
     old = await anonymous.post("/sign-in", json={"username": "owner", "password": OWNER["password"]})
     new = await anonymous.post("/sign-in", json={"username": "owner", "password": FRESH})
@@ -185,10 +197,10 @@ async def test_a_reset_keeps_the_passkeys_and_shows_them(
     preview = await ok(await anonymous.post("/password-reset:preview", json={"token": token}))
     await ok(await anonymous.post("/password-reset", json={"token": token, "new_password": FRESH}), 204)
 
-    assert [passkey["name"] for passkey in preview["passkeys"]] == ["Phone"]
+    assert [passkey["name"] for passkey in preview["passkeys"]] == ["Second factor", "Phone"]
     owner = await ok(await anonymous.post("/sign-in", json={"username": "owner", "password": FRESH}))
     assert owner["username"] == "owner"
-    assert [p["name"] for p in await ok(await anonymous.get("/me/passkeys"))] == ["Phone"]
+    assert [p["name"] for p in await ok(await anonymous.get("/me/passkeys"))] == ["Second factor", "Phone"]
 
 
 @pytest.mark.parametrize("login", ["nobody", "nobody@example.org", "owner"])
@@ -314,6 +326,7 @@ async def test_an_admin_cannot_reset_someone_who_owns_another_home(
     ivan_id = (await ok(await ivan.get("/me")))["id"]
     # Maria owns the dacha, where Ivan is family; Ivan owns a home of his own.
     await make_home(ivan, "Ivan's place")
+    await add_second_factor(admin, PUBLIC_URL)
 
     response = await admin.post(f"/homes/{dacha['home']}/members/{ivan_id}:reset-link")
 
@@ -540,6 +553,7 @@ async def test_only_an_install_admin_resets_an_install_admin(api: httpx.AsyncCli
     maria = await join(new_client, transfer["url"].rsplit("/", 1)[1], "maria")
     back = await ok(await maria.post(f"/homes/{ids['home']}/invitations", json={"role_id": roles["family"]}), 201)
     await ok(await api.post("/invitations:accept", json={"token": back["url"].rsplit("/", 1)[1]}))
+    await add_second_factor(maria, PUBLIC_URL)
 
     response = await maria.post(f"/homes/{ids['home']}/members/{await id_of(api)}:reset-link")
 

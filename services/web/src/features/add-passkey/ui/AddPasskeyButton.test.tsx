@@ -2,7 +2,7 @@ import {fireEvent, screen, within} from '@testing-library/react'
 import {Route} from 'react-router'
 import {describe, expect, it, vi} from 'vitest'
 
-import {mockApi, problem} from '@/test/api'
+import {mockApi, problem, SECOND_FACTOR_FINE} from '@/test/api'
 import {renderAt} from '@/test/render'
 import {mockPasskeys, NEW_CREDENTIAL_JSON, refuse} from '@/test/webauthn'
 
@@ -37,6 +37,7 @@ describe('AddPasskeyButton', () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(IPHONE)
     mockPasskeys()
     const calls = mockApi({
+      ...SECOND_FACTOR_FINE,
       'POST /api/v1/me/passkeys/options': OPTIONS,
       'POST /api/v1/me/passkeys': ADDED,
     })
@@ -56,6 +57,7 @@ describe('AddPasskeyButton', () => {
     let recent = false
     mockPasskeys()
     const calls = mockApi({
+      ...SECOND_FACTOR_FINE,
       'POST /api/v1/me/passkeys/options': () => (recent ? OPTIONS : problem(403, 'recent_sign_in_required')),
       'POST /api/v1/me/reauthenticate': () => {
         recent = true
@@ -82,6 +84,7 @@ describe('AddPasskeyButton', () => {
   it('keeps asking when the password is wrong, and adds nothing until it is right', async () => {
     mockPasskeys()
     const calls = mockApi({
+      ...SECOND_FACTOR_FINE,
       'POST /api/v1/me/passkeys/options': problem(403, 'recent_sign_in_required'),
       'POST /api/v1/me/reauthenticate': problem(400, 'wrong_password'),
       'GET /api/v1/me/passkeys': [],
@@ -101,6 +104,7 @@ describe('AddPasskeyButton', () => {
   it('adds nothing when the person cancels the confirmation', async () => {
     mockPasskeys()
     const calls = mockApi({
+      ...SECOND_FACTOR_FINE,
       'POST /api/v1/me/passkeys/options': problem(403, 'recent_sign_in_required'),
       'GET /api/v1/me/passkeys': [],
     })
@@ -116,7 +120,7 @@ describe('AddPasskeyButton', () => {
 
   it('says when this device already keeps a passkey for the account', async () => {
     mockPasskeys({create: refuse('InvalidStateError')})
-    mockApi({'POST /api/v1/me/passkeys/options': OPTIONS})
+    mockApi({...SECOND_FACTOR_FINE, 'POST /api/v1/me/passkeys/options': OPTIONS})
     renderButton()
 
     fireEvent.click(screen.getByRole('button', {name: 'Add a passkey'}))

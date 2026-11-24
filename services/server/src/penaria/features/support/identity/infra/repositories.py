@@ -14,6 +14,7 @@ from penaria.features.support.identity.domain.passkeys import Ceremony, Challeng
 from penaria.features.support.identity.domain.permissions import Preset
 from penaria.features.support.identity.domain.sessions import ABSOLUTE_LIFETIME, IDLE_TIMEOUT, Client, Session
 from penaria.features.support.identity.domain.throttle import Failures
+from penaria.features.support.identity.domain.totp import PendingSignIn, Totp
 from penaria.features.support.identity.infra.orm import (
     GrantDB,
     HomeDB,
@@ -21,11 +22,13 @@ from penaria.features.support.identity.infra.orm import (
     PasskeyChallengeDB,
     PasskeyDB,
     PasswordDB,
+    PendingSignInDB,
     RoleDB,
     SessionDB,
     SetupTokenDB,
     SignInFailureDB,
     TokenDB,
+    TotpDB,
     UserDB,
 )
 
@@ -304,6 +307,88 @@ class PostgresChallengeRepository:
         await self._session.execute(delete(PasskeyChallengeDB).where(PasskeyChallengeDB.expires_at <= now))
 
 
+class PostgresTotpRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, user_id: UUID) -> Totp | None:
+        row = await self._session.get(TotpDB, user_id)
+        if row is None:
+            return None
+        return Totp(
+            user_id=row.user_id,
+            sealed_secret=row.secret,
+            created_at=row.created_at,
+            confirmed_at=row.confirmed_at,
+            last_used_step=row.last_used_step,
+            recovery_codes=list(row.recovery_codes),
+        )
+
+    async def save(self, totp: Totp) -> None:
+        values = {
+            "secret": totp.sealed_secret,
+            "created_at": totp.created_at,
+            "confirmed_at": totp.confirmed_at,
+            "last_used_step": totp.last_used_step,
+            "recovery_codes": totp.recovery_codes,
+        }
+        await self._session.execute(
+            insert(TotpDB)
+            .values(user_id=totp.user_id, **values)
+            .on_conflict_do_update(index_elements=[TotpDB.user_id], set_=values)
+        )
+
+    async def remove(self, user_id: UUID) -> bool:
+        removed = await self._session.scalar(delete(TotpDB).where(TotpDB.user_id == user_id).returning(TotpDB.user_id))
+        return removed is not None
+
+
+class PostgresPendingSignInRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, pending: PendingSignIn) -> None:
+        self._session.add(
+            PendingSignInDB(
+                id=pending.id,
+                token_hash=pending.token_hash,
+                user_id=pending.user_id,
+                address=pending.address,
+                created_at=pending.created_at,
+                expires_at=pending.expires_at,
+            )
+        )
+
+    async def get(self, token_hash: bytes, now: datetime) -> PendingSignIn | None:
+        row = await self._session.scalar(
+            select(PendingSignInDB).where(PendingSignInDB.token_hash == token_hash, PendingSignInDB.expires_at > now)
+        )
+        if row is None:
+            return None
+        return PendingSignIn(
+            id=row.id,
+            user_id=row.user_id,
+            token_hash=row.token_hash,
+            address=row.address,
+            created_at=row.created_at,
+            expires_at=row.expires_at,
+        )
+
+    async def take(self, pending_id: UUID, now: datetime) -> bool:
+        taken = await self._session.scalar(
+            delete(PendingSignInDB)
+            .where(PendingSignInDB.id == pending_id, PendingSignInDB.expires_at > now)
+            .returning(PendingSignInDB.id)
+        )
+        return taken is not None
+
+    async def forget_expired(self, now: datetime) -> None:
+        await self._session.execute(delete(PendingSignInDB).where(PendingSignInDB.expires_at <= now))
+
+    async def forget_for(self, user_id: UUID) -> None:
+        await self._session.execute(delete(PendingSignInDB).where(PendingSignInDB.user_id == user_id))
+
+
 class PostgresSetupTokenRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -508,6 +593,19 @@ class PostgresGrantRepository:
             .order_by(GrantDB.created_at, GrantDB.id)
         )
         return [_grant(row) for row in rows]
+
+    async def owns_a_home(self, user_id: UUID) -> bool:
+        owner = (
+            select(GrantDB.id)
+            .join(RoleDB, RoleDB.id == GrantDB.role_id)
+            .where(
+                GrantDB.principal_type == PrincipalType.USER.value,
+                GrantDB.principal_id == user_id,
+                RoleDB.preset == Preset.OWNER.value,
+                GrantDB.revoked_at.is_(None),
+            )
+        )
+        return bool(await self._session.scalar(select(owner.exists())))
 
     async def owners(self, home_id: UUID) -> list[Grant]:
         rows = await self._session.scalars(

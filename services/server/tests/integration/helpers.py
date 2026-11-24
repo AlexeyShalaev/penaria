@@ -40,3 +40,11 @@ async def add_passkey(client: httpx.AsyncClient, device: Authenticator, name: st
     return await client.post(
         "/me/passkeys", json={"challenge_id": ceremony["challenge_id"], "credential": credential, "name": name}
     )
+
+
+async def add_second_factor(client: httpx.AsyncClient, origin: str) -> Authenticator:
+    """Give the signed-in account a passkey, so it may run owner-level commands (sign-in.md, 4.3); the device."""
+    device = Authenticator(origin)
+    response = await add_passkey(client, device, "Second factor")
+    assert response.status_code == 201, response.text
+    return device

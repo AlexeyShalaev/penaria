@@ -10,6 +10,7 @@ from penaria.common.database import DatabaseSettings
 from penaria.common.settings import PenariaSettings
 from penaria.common.urls import origin_of
 from penaria.features.shared.errors import InvalidError
+from penaria.features.support.identity.domain.links import PublicLinks
 from penaria.features.support.identity.domain.mailbox import DEFAULT_PORTS, MailboxFields, MailSecurity
 
 # Stored secrets are encrypted with keys derived from it; shorter keys are too easy to guess.
@@ -88,9 +89,7 @@ class Settings(PenariaSettings):
     @property
     def passkey_rp_id(self) -> str:
         """The passkeys' relying party: the host name people open, which browsers check passkeys against."""
-        if self.public_url.host is None:
-            raise RuntimeError("PENARIA_PUBLIC_URL has no host")
-        return self.public_url.host
+        return PublicLinks(origin=self.public_origin).host
 
     @property
     def serves_https(self) -> bool:

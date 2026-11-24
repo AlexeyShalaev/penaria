@@ -35,6 +35,7 @@ from penaria.features.support.identity.domain.models import Grant, PrincipalType
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import CurrentSession
 from penaria.features.support.identity.use_cases.homes import HomeNotFoundError, principal_of
+from penaria.features.support.identity.use_cases.second_factor import require_second_factor
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +118,7 @@ class ChangeGrant:
         actor = Actor.user(current.user_id)
         async with self._uow.query() as tx:
             await require_member(tx, actor, home_id, now)
+            await require_second_factor(tx, current.user_id)
             grant = await active_grant(tx, home_id, grant_id, now)
             roles = await tx.roles.get_many({grant.role_id} | ({changes.role_id} if changes.role_id else set()))
         if grant.principal_type is not PrincipalType.USER:
@@ -167,7 +169,9 @@ class RevokeGrant:
             await require_member(tx, actor, home_id, now)
             grant = await active_grant(tx, home_id, grant_id, now)
             role = (await tx.roles.get_many({grant.role_id}))[grant.role_id]
-        own = grant.principal_type is PrincipalType.USER and grant.principal_id == current.user_id
+            own = grant.principal_type is PrincipalType.USER and grant.principal_id == current.user_id
+            if role.is_owner and not own:
+                await require_second_factor(tx, current.user_id)
         if role.is_owner:
             current.require_recent_sign_in(now)
         scope = await place_for(self._places, grant.scope_entity_id)

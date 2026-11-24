@@ -17,10 +17,12 @@ from penaria.features.support.identity.infra.repositories import (
     PostgresInvitationRepository,
     PostgresPasskeyRepository,
     PostgresPasswordRepository,
+    PostgresPendingSignInRepository,
     PostgresRoleRepository,
     PostgresSessionRepository,
     PostgresSetupTokenRepository,
     PostgresTokenRepository,
+    PostgresTotpRepository,
     PostgresUserRepository,
 )
 from penaria.features.support.platform.infra.journal import PostgresJournal
@@ -34,6 +36,8 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
         self._sessions = PostgresSessionRepository(session)
         self._passkeys = PostgresPasskeyRepository(session)
         self._challenges = PostgresChallengeRepository(session)
+        self._totp = PostgresTotpRepository(session)
+        self._pending_sign_ins = PostgresPendingSignInRepository(session)
         self._setup_tokens = PostgresSetupTokenRepository(session)
         self._failures = PostgresFailureRepository(session)
         self._homes = PostgresHomeRepository(session)
@@ -66,6 +70,14 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
     @property
     def challenges(self) -> PostgresChallengeRepository:
         return self._challenges
+
+    @property
+    def totp(self) -> PostgresTotpRepository:
+        return self._totp
+
+    @property
+    def pending_sign_ins(self) -> PostgresPendingSignInRepository:
+        return self._pending_sign_ins
 
     @property
     def setup_tokens(self) -> PostgresSetupTokenRepository:

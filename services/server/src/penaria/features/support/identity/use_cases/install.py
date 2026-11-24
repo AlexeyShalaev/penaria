@@ -39,6 +39,7 @@ from penaria.features.support.identity.use_cases.postman import (
     MailOff,
     Postman,
 )
+from penaria.features.support.identity.use_cases.second_factor import require_second_factor
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,6 +231,7 @@ async def require_install_admin(tx: IdentityTransaction, current: CurrentSession
     user = await load_user(tx, current)
     if not user.install_admin:
         raise InstallAdminRequiredError("only an admin of the install can do this")
+    await require_second_factor(tx, user.id)
     return user
 
 

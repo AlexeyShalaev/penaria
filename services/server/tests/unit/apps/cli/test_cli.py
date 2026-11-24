@@ -12,6 +12,11 @@ def test_users_reset_takes_a_username() -> None:
     assert (args.group, args.command, args.username) == ("users", "reset", "Owner")
 
 
+def test_users_reset_may_also_turn_the_second_factor_off() -> None:
+    assert parse(["users", "reset", "owner"]).disable_second_factor is False
+    assert parse(["users", "reset", "owner", "--disable-second-factor"]).disable_second_factor is True
+
+
 def test_a_command_is_required() -> None:
     with pytest.raises(SystemExit):
         parse(["users"])

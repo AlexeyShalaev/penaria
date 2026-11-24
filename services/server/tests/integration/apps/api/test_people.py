@@ -15,9 +15,17 @@ from penaria.features.support.identity.infra.orm import GrantDB, InvitationDB, S
 from penaria.features.support.identity.use_cases import guest_links
 from penaria.features.support.platform.infra.orm import JournalEventDB
 from tests.integration.conftest import PUBLIC_URL
-from tests.integration.helpers import NewClient, shape, uow_of
+from tests.integration.helpers import NewClient, add_second_factor, shape, uow_of
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.fixture
+async def api(api: httpx.AsyncClient) -> httpx.AsyncClient:
+    """The owner, who has a passkey as owners must for owner-level commands (sign-in.md, 4.3)."""
+    await add_second_factor(api, PUBLIC_URL)
+    return api
+
 
 CHOSEN = "a long family password"
 

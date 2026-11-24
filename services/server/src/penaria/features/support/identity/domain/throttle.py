@@ -59,6 +59,12 @@ def account_key(username: str) -> str:
     return "account:" + hashlib.sha256(username.encode()).hexdigest()
 
 
+def second_factor_key(user_id: UUID) -> str:
+    """The counter of an account's wrong second-factor codes, apart from its wrong passwords: a right
+    password forgives those, and must not forgive guessing the code that follows it."""
+    return f"second-factor:{user_id}"
+
+
 def secret_link_key(ip: str | None) -> str | None:
     """The counter of an address trying invitation and guest-link tokens, apart from its sign-ins."""
     address = address_key(ip)

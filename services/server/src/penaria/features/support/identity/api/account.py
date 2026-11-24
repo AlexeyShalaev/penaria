@@ -2,11 +2,12 @@
 
 import ipaddress
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Self, assert_never
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Request, Response, status
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, model_validator
 from servicewright.adapters.fastapi import UnitScopeDep
 
 from penaria.features.shared.http import SIGNED_IN
@@ -24,7 +25,14 @@ from penaria.features.support.identity.use_cases.account import (
 )
 from penaria.features.support.identity.use_cases.email import RemoveEmail, RequestEmailChange
 from penaria.features.support.identity.use_cases.reauthentication import ReauthenticateWithPassword
-from penaria.features.support.identity.use_cases.sessions import SignIn, SignOut
+from penaria.features.support.identity.use_cases.second_factor import AppCode, RecoveryCode, SecondFactorProof
+from penaria.features.support.identity.use_cases.sessions import (
+    SecondFactorAsked,
+    SignedIn,
+    SignIn,
+    SignInWithSecondFactor,
+    SignOut,
+)
 from penaria.features.support.identity.use_cases.setup import CompleteSetup, NeedsSetup
 
 # What a session keeps of the browser's description of itself.
@@ -33,6 +41,9 @@ USER_AGENT_MAX_LENGTH = 512
 # rules (accounts.py) are stricter and answer with a reason the interface can show.
 NAME_INPUT_MAX_LENGTH = 200
 PASSWORD_INPUT_MAX_LENGTH = 1024
+# A code of an authenticator app or a recovery code, with whatever spaces and dashes people type.
+CODE_INPUT_MAX_LENGTH = 64
+TOKEN_INPUT_MAX_LENGTH = 200
 
 sign_in_router = APIRouter(prefix="/api/v1", tags=["sign-in"])
 router = APIRouter(prefix="/api/v1", tags=["account"], dependencies=[SIGNED_IN])
@@ -77,6 +88,54 @@ class SignInIn(BaseModel):
     password: str = Field(min_length=1, max_length=PASSWORD_INPUT_MAX_LENGTH)
 
 
+class SecondFactorAskedOut(BaseModel):
+    """The password was right; a code of the account's authenticator app must follow (``/sign-in/second-factor``)."""
+
+    token: str = Field(description="The pending sign-in, to bring back with the code; it works once, from this address")
+    expires_at: datetime
+
+
+class SecondFactorFields(BaseModel):
+    """A code of the authenticator app, or one of the account's recovery codes; not both."""
+
+    code: str | None = Field(
+        default=None, min_length=1, max_length=CODE_INPUT_MAX_LENGTH, description="A code the authenticator app shows"
+    )
+    recovery_code: str | None = Field(
+        default=None, min_length=1, max_length=CODE_INPUT_MAX_LENGTH, description="One of the recovery codes"
+    )
+
+    @model_validator(mode="after")
+    def _not_both(self) -> Self:
+        if self.code is not None and self.recovery_code is not None:
+            raise ValueError("give a code of the authenticator app or a recovery code, not both")
+        return self
+
+    def proof(self) -> SecondFactorProof | None:
+        if self.code is not None:
+            return AppCode(self.code)
+        if self.recovery_code is not None:
+            return RecoveryCode(self.recovery_code)
+        return None
+
+
+class SecondFactorSignInIn(SecondFactorFields):
+    token: str = Field(min_length=1, max_length=TOKEN_INPUT_MAX_LENGTH, description="The token of ``/sign-in``")
+
+    @model_validator(mode="after")
+    def _one_of_them(self) -> Self:
+        if self.code is None and self.recovery_code is None:
+            raise ValueError("give a code of the authenticator app or a recovery code")
+        return self
+
+    def given_proof(self) -> SecondFactorProof:
+        """The code or the recovery code, one of which the model requires."""
+        proof = self.proof()
+        if proof is None:
+            raise RuntimeError("the model requires a code or a recovery code")
+        return proof
+
+
 class AccountPatch(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
     locale: str | None = None
@@ -87,7 +146,9 @@ class PasswordChangeIn(BaseModel):
     new_password: str = Field(min_length=1, max_length=PASSWORD_INPUT_MAX_LENGTH)
 
 
-class ReauthenticationIn(BaseModel):
+class ReauthenticationIn(SecondFactorFields):
+    """The password; with a code or a recovery code too while the account's authenticator app is on."""
+
     password: str = Field(min_length=1, max_length=PASSWORD_INPUT_MAX_LENGTH)
 
 
@@ -145,12 +206,40 @@ async def complete_setup(
     return AccountOut.of(user)
 
 
-@sign_in_router.post("/sign-in")
-async def sign_in(
-    body: Annotated[SignInIn, Body()], request: Request, response: Response, scope: UnitScopeDep
-) -> AccountOut:
-    user, token = await (await scope.get(SignIn)).execute(
+@sign_in_router.post(
+    "/sign-in",
+    response_model=AccountOut,
+    responses={
+        status.HTTP_202_ACCEPTED: {
+            "model": SecondFactorAskedOut,
+            "description": "The account has an authenticator app: no session yet; send a code to the second step",
+        }
+    },
+)
+async def sign_in(body: Annotated[SignInIn, Body()], request: Request, scope: UnitScopeDep) -> Response:
+    """Sign in with the password: a session, or the second step an authenticator app asks for."""
+    result = await (await scope.get(SignIn)).execute(
         username=body.username, password=body.password, client=client_of(request)
+    )
+    match result:
+        case SignedIn(user=user, token=token):
+            response = JSONResponse(AccountOut.of(user).model_dump(mode="json"))
+            (await scope.get(SessionCookie)).set(response, token)
+            return response
+        case SecondFactorAsked(token=token, expires_at=expires_at):
+            asked = SecondFactorAskedOut(token=token, expires_at=expires_at)
+            return JSONResponse(asked.model_dump(mode="json"), status_code=status.HTTP_202_ACCEPTED)
+        case _:
+            assert_never(result)
+
+
+@sign_in_router.post("/sign-in/second-factor")
+async def sign_in_second_factor(
+    body: Annotated[SecondFactorSignInIn, Body()], request: Request, response: Response, scope: UnitScopeDep
+) -> AccountOut:
+    """The second step of signing in with a password: a code of the authenticator app, or a recovery code."""
+    user, token = await (await scope.get(SignInWithSecondFactor)).execute(
+        token=body.token, proof=body.given_proof(), client=client_of(request)
     )
     (await scope.get(SessionCookie)).set(response, token)
     return AccountOut.of(user)
@@ -184,8 +273,11 @@ async def change_password(body: Annotated[PasswordChangeIn, Body()], scope: Unit
 
 @router.post("/me/reauthenticate", status_code=status.HTTP_204_NO_CONTENT)
 async def reauthenticate(body: Annotated[ReauthenticationIn, Body()], scope: UnitScopeDep) -> None:
-    """Confirm it is still you with the password, so the session counts as signed in recently."""
-    await (await scope.get(ReauthenticateWithPassword)).execute(await scope.get(CurrentSession), body.password)
+    """Confirm it is still you with the password, so the session counts as signed in recently; with a code too
+    while the authenticator app is on (``second_factor_code_required`` otherwise)."""
+    await (await scope.get(ReauthenticateWithPassword)).execute(
+        await scope.get(CurrentSession), body.password, body.proof()
+    )
 
 
 @router.post("/me/email", status_code=status.HTTP_202_ACCEPTED)

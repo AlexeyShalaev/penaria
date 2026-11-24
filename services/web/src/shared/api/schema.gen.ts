@@ -682,7 +682,8 @@ export interface paths {
         put?: never;
         /**
          * Reauthenticate
-         * @description Confirm it is still you with the password, so the session counts as signed in recently.
+         * @description Confirm it is still you with the password, so the session counts as signed in recently; with a code too
+         *     while the authenticator app is on (``second_factor_code_required`` otherwise).
          */
         post: operations["reauthenticate_api_v1_me_reauthenticate_post"];
         delete?: never;
@@ -719,6 +720,23 @@ export interface paths {
         put?: never;
         /** Passkey Reauthentication Options */
         post: operations["passkey_reauthentication_options_api_v1_me_reauthenticate_passkey_options_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/second-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Second Factor */
+        get: operations["second_factor_api_v1_me_second_factor_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -770,6 +788,71 @@ export interface paths {
         put?: never;
         /** Revoke Other Sessions */
         post: operations["revoke_other_sessions_api_v1_me_sessions_revoke_others_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Totp
+         * @description Start setting up an authenticator app: a new secret, on once a code confirms it. Needs a recent sign-in.
+         */
+        post: operations["start_totp_api_v1_me_totp_post"];
+        /**
+         * Turn Off Totp
+         * @description Turn the app off, with its recovery codes. Needs a recent sign-in; an owner or an install admin keeps it
+         *     unless they have a passkey (``409 last_second_factor``).
+         */
+        delete: operations["turn_off_totp_api_v1_me_totp_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/totp/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Regenerate Recovery Codes
+         * @description Ten new recovery codes; the earlier ones stop working. Needs a recent sign-in.
+         */
+        post: operations["regenerate_recovery_codes_api_v1_me_totp_recovery_codes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/totp:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Totp
+         * @description Turn the app on with its first code; the recovery codes come only in this answer.
+         */
+        post: operations["confirm_totp_api_v1_me_totp_confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -863,7 +946,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sign In */
+        /**
+         * Sign In
+         * @description Sign in with the password: a session, or the second step an authenticator app asks for.
+         */
         post: operations["sign_in_api_v1_sign_in_post"];
         delete?: never;
         options?: never;
@@ -902,6 +988,26 @@ export interface paths {
          * @description An address may hold 10 sign-ins that are neither finished nor expired (``too_many_attempts``).
          */
         post: operations["passkey_sign_in_options_api_v1_sign_in_passkey_options_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sign-in/second-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign In Second Factor
+         * @description The second step of signing in with a password: a code of the authenticator app, or a recovery code.
+         */
+        post: operations["sign_in_second_factor_api_v1_sign_in_second_factor_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1528,7 +1634,7 @@ export interface components {
          * MailKind
          * @enum {string}
          */
-        MailKind: "test" | "email_verification" | "password_reset" | "invitation" | "password_changed" | "passkey_added" | "email_changed" | "email_removed";
+        MailKind: "test" | "email_verification" | "password_reset" | "invitation" | "password_changed" | "passkey_added" | "email_changed" | "email_removed" | "totp_enabled" | "totp_disabled" | "recovery_code_used" | "recovery_codes_regenerated";
         /** MailOut */
         MailOut: {
             /**
@@ -1833,10 +1939,31 @@ export interface components {
          * @enum {string}
          */
         Privacy: "normal" | "guest_visible" | "private";
-        /** ReauthenticationIn */
+        /**
+         * ReauthenticationIn
+         * @description The password; with a code or a recovery code too while the account's authenticator app is on.
+         */
         ReauthenticationIn: {
+            /**
+             * Code
+             * @description A code the authenticator app shows
+             */
+            code?: string | null;
             /** Password */
             password: string;
+            /**
+             * Recovery Code
+             * @description One of the recovery codes
+             */
+            recovery_code?: string | null;
+        };
+        /** RecoveryCodesOut */
+        RecoveryCodesOut: {
+            /**
+             * Codes
+             * @description Ten single-use codes, shown only now; each replaces a code of the app once
+             */
+            codes: string[];
         };
         /**
          * RegistrationCredentialIn
@@ -1944,6 +2071,65 @@ export interface components {
             /** @description The preset it started as; its name is then translated */
             preset: components["schemas"]["Preset"] | null;
         };
+        /**
+         * SecondFactorAskedOut
+         * @description The password was right; a code of the account's authenticator app must follow (``/sign-in/second-factor``).
+         */
+        SecondFactorAskedOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Token
+             * @description The pending sign-in, to bring back with the code; it works once, from this address
+             */
+            token: string;
+        };
+        /** SecondFactorOut */
+        SecondFactorOut: {
+            /**
+             * Missing
+             * @description Required, and the account has neither: owner-level commands answer 403 second_factor_required until it adds one
+             */
+            missing: boolean;
+            /**
+             * Recovery Codes Left
+             * @description Unused recovery codes; none while the app is off
+             */
+            recovery_codes_left: number | null;
+            /**
+             * Required
+             * @description The account is an owner or an install admin with a password: it must keep a second factor, an authenticator app or a passkey
+             */
+            required: boolean;
+            /**
+             * Totp Enabled
+             * @description Whether signing in with the password asks for a code of the app
+             */
+            totp_enabled: boolean;
+            /** Totp Enabled At */
+            totp_enabled_at: string | null;
+        };
+        /** SecondFactorSignInIn */
+        SecondFactorSignInIn: {
+            /**
+             * Code
+             * @description A code the authenticator app shows
+             */
+            code?: string | null;
+            /**
+             * Recovery Code
+             * @description One of the recovery codes
+             */
+            recovery_code?: string | null;
+            /**
+             * Token
+             * @description The token of ``/sign-in``
+             */
+            token: string;
+        };
         /** SendResultOut */
         SendResultOut: {
             /**
@@ -2038,6 +2224,33 @@ export interface components {
         TokenIn: {
             /** Token */
             token: string;
+        };
+        /** TotpCodeIn */
+        TotpCodeIn: {
+            /**
+             * Code
+             * @description A code the app shows
+             */
+            code: string;
+        };
+        /** TotpEnrolmentOut */
+        TotpEnrolmentOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             * @description Confirm with a code before this, or start again
+             */
+            expires_at: string;
+            /**
+             * Secret
+             * @description The secret in base32, to type into the app by hand
+             */
+            secret: string;
+            /**
+             * Uri
+             * @description The otpauth:// address, for a QR code
+             */
+            uri: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -3553,6 +3766,26 @@ export interface operations {
             };
         };
     };
+    second_factor_api_v1_me_second_factor_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecondFactorOut"];
+                };
+            };
+        };
+    };
     list_sessions_api_v1_me_sessions_get: {
         parameters: {
             query?: never;
@@ -3618,6 +3851,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevokedOut"];
+                };
+            };
+        };
+    };
+    start_totp_api_v1_me_totp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpEnrolmentOut"];
+                };
+            };
+        };
+    };
+    turn_off_totp_api_v1_me_totp_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    regenerate_recovery_codes_api_v1_me_totp_recovery_codes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesOut"];
+                };
+            };
+        };
+    };
+    confirm_totp_api_v1_me_totp_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpCodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3792,6 +4116,15 @@ export interface operations {
                     "application/json": components["schemas"]["AccountOut"];
                 };
             };
+            /** @description The account has an authenticator app: no session yet; send a code to the second step */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecondFactorAskedOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -3852,6 +4185,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PasskeyOptionsOut"];
+                };
+            };
+        };
+    };
+    sign_in_second_factor_api_v1_sign_in_second_factor_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecondFactorSignInIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

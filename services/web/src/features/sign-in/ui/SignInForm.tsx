@@ -1,12 +1,19 @@
 import {type FormEvent, useState} from 'react'
 import {useTranslation} from 'react-i18next'
 
-import {type Account, useSignIn} from '@/entities/account'
+import {type Account, type SecondFactorChallenge, useSignIn} from '@/entities/account'
 import {describeError} from '@/shared/api'
 import {Button, Field, FormActions, FormError, FormLayout, TextInput} from '@/shared/ui'
 
-/** `submitVariant` is `secondary` when a passkey is offered above it as the main way in. */
-export function SignInForm(props: {onSignedIn: (account: Account) => void; submitVariant?: 'primary' | 'secondary'}) {
+/**
+ * `submitVariant` is `secondary` when a passkey is offered above it as the main way in. An account with an
+ * authenticator app goes on to `onSecondFactor` rather than signing in.
+ */
+export function SignInForm(props: {
+  onSignedIn: (account: Account) => void
+  onSecondFactor: (challenge: SecondFactorChallenge) => void
+  submitVariant?: 'primary' | 'secondary'
+}) {
   const {t} = useTranslation()
   const signIn = useSignIn()
   const [username, setUsername] = useState('')
@@ -14,7 +21,15 @@ export function SignInForm(props: {onSignedIn: (account: Account) => void; submi
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    signIn.mutate({username: username.trim(), password}, {onSuccess: props.onSignedIn})
+    signIn.mutate(
+      {username: username.trim(), password},
+      {
+        onSuccess: (result) => {
+          if ('account' in result) props.onSignedIn(result.account)
+          else props.onSecondFactor(result.secondFactor)
+        },
+      },
+    )
   }
 
   return (

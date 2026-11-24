@@ -50,6 +50,7 @@ from penaria.features.support.identity.use_cases.members import (
     role_in,
 )
 from penaria.features.support.identity.use_cases.postman import Postman
+from penaria.features.support.identity.use_cases.second_factor import require_second_factor
 from penaria.features.support.identity.use_cases.sessions import start_session
 
 
@@ -110,6 +111,8 @@ class CreateInvitation:
             await require_member(tx, actor, home_id, now)
             role = role_in(await tx.roles.get_many({role_id}), role_id, home_id)
             inviter = await tx.users.get(current.user_id)
+            if role.is_owner:
+                await require_second_factor(tx, current.user_id)
         if inviter is None:
             raise RuntimeError(f"the user ({current.user_id}) of an open session does not exist")
         # Making an owner, or handing over the home, is as sensitive as it gets (sign-in.md, 5).

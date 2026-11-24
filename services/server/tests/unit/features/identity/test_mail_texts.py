@@ -19,6 +19,10 @@ VALUES = {
     MailKind.PASSKEY_ADDED: {"name": "Anna", "username": "anna", "passkey": "Phone"},
     MailKind.EMAIL_CHANGED: {"name": "Anna", "username": "anna", "email": "anna@example.org"},
     MailKind.EMAIL_REMOVED: {"name": "Anna", "username": "anna"},
+    MailKind.TOTP_ENABLED: {"name": "Anna", "username": "anna"},
+    MailKind.TOTP_DISABLED: {"name": "Anna", "username": "anna"},
+    MailKind.RECOVERY_CODE_USED: {"name": "Anna", "username": "anna", "left": "9"},
+    MailKind.RECOVERY_CODES_REGENERATED: {"name": "Anna", "username": "anna"},
 }
 LINKED = {MailKind.EMAIL_VERIFICATION, MailKind.PASSWORD_RESET, MailKind.INVITATION}
 
