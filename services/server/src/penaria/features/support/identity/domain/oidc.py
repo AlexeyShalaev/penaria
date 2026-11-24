@@ -7,7 +7,6 @@ account, never matched to one by email.
 
 import re
 import secrets
-import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -18,7 +17,12 @@ from servicewright import ErrorKind, ServiceError
 
 from penaria.features.shared.errors import ConflictError, NotFoundError
 from penaria.features.shared.ids import new_id
-from penaria.features.support.identity.domain.accounts import USERNAME_PATTERN, normalize_username
+from penaria.features.support.identity.domain.accounts import (
+    USERNAME_MAX_LENGTH,
+    USERNAME_MIN_LENGTH,
+    USERNAME_PATTERN,
+    normalize_username,
+)
 from penaria.features.support.identity.domain.models import NAME_MAX_LENGTH
 from penaria.features.support.identity.domain.sessions import hash_token, new_secret
 from penaria.features.support.identity.domain.throttle import TooManyAttemptsError
@@ -27,8 +31,6 @@ from penaria.features.support.identity.domain.throttle import TooManyAttemptsErr
 FLOW_LIFETIME = timedelta(minutes=10)
 # Starting needs no account, so an address may hold only this many flows that are neither used nor expired.
 OPEN_FLOWS_PER_ADDRESS = 10
-USERNAME_MAX_LENGTH = 32
-USERNAME_MIN_LENGTH = 3
 # Tried after the username the claims suggest is taken: "anna", "anna-2", ... "anna-99".
 USERNAME_SUFFIXES = 99
 FALLBACK_USERNAME = "user"
@@ -86,6 +88,8 @@ class Problem(StrEnum):
     ALREADY_LINKED = "already_linked"
     # The invitation can no longer be accepted, or gives access the account already has.
     INVITATION_UNUSABLE = "invitation_unusable"
+    # The account has an authenticator app: it signs in first, with the app's code, and then accepts.
+    SIGN_IN_FIRST = "sign_in_first"
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,17 +101,14 @@ class Claims:
     email_verified: bool = False
     name: str | None = None
     preferred_username: str | None = None
+    # When the person last signed in at the provider, in seconds since the epoch, if it says.
+    auth_time: int | None = None
 
 
 class OidcProvider(Protocol):
     @property
     def issuer(self) -> str:
         """The provider's issuer, as identities are keyed by it."""
-        ...
-
-    @property
-    def name(self) -> str:
-        """What the sign-in button calls it, such as "Authentik"."""
         ...
 
     async def authorization_url(self, *, state: str, nonce: str, code_verifier: str, reauthenticate: bool) -> str:
@@ -124,10 +125,22 @@ class OidcProvider(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ExternalSignIn:
-    """The operator's provider, and whether an identity nobody linked may make an account (off by default)."""
+    """The operator's provider, if there is one: what its button says, and whether an identity nobody linked may
+    make an account (off by default)."""
 
-    provider: OidcProvider
-    allow_sign_up: bool
+    provider: OidcProvider | None = None
+    name: str = ""
+    allow_sign_up: bool = False
+
+    def configured(self) -> OidcProvider:
+        if self.provider is None:
+            raise OidcOffError("this Penaria has no sign-in provider")
+        return self.provider
+
+    @property
+    def issuer(self) -> str | None:
+        """The issuer of the identities that sign in here now; those of an earlier issuer no longer do."""
+        return None if self.provider is None else self.provider.issuer
 
 
 @dataclass(slots=True)
@@ -166,8 +179,8 @@ class OidcFlow:
         user_id: UUID | None = None,
         session_id: UUID | None = None,
         invitation_hash: bytes | None = None,
-    ) -> tuple[OidcFlow, str, str]:
-        """A new flow, its state for the provider and the browser binding for the cookie."""
+    ) -> StartedFlow:
+        """A new flow, with its state for the provider and the browser binding for the cookie."""
         state, state_hash = new_secret()
         binding, browser_hash = new_secret()
         flow = cls(
@@ -185,17 +198,26 @@ class OidcFlow:
             session_id=session_id,
             invitation_hash=invitation_hash,
         )
-        return flow, state, binding
+        return StartedFlow(flow=flow, state=state, binding=binding)
 
     def started_in(self, binding: str | None) -> bool:
         return binding is not None and secrets.compare_digest(hash_token(binding), self.browser_hash)
 
 
 @dataclass(frozen=True, slots=True)
+class StartedFlow:
+    flow: OidcFlow
+    # For the provider, which brings it back to the callback.
+    state: str
+    # For the browser's cookie.
+    binding: str
+
+
+@dataclass(frozen=True, slots=True)
 class ExternalIdentity:
     """An account's identity at the provider: the issuer and the ``sub`` it never reuses."""
 
-    provider: str
+    issuer: str
     subject: str
     user_id: UUID
     created_at: datetime
@@ -244,7 +266,7 @@ def _username_base(claims: Claims) -> str:
 
 def _usernameish(text: str) -> str:
     """The text as a username: spaces as dots, other characters a username cannot have dropped."""
-    normalized = normalize_username(unicodedata.normalize("NFKC", text))
+    normalized = normalize_username(text)
     joined = re.sub(r"\s+", ".", normalized)
     kept = re.sub(r"[^\w.-]", "", joined).strip(".-_")
     return kept[:USERNAME_MAX_LENGTH] if len(kept) >= USERNAME_MIN_LENGTH else ""

@@ -806,7 +806,7 @@ class PostgresExternalIdentityRepository:
         self._session.add(
             ExternalIdentityDB(
                 id=identity.id,
-                provider=identity.provider,
+                issuer=identity.issuer,
                 subject=identity.subject,
                 user_id=identity.user_id,
                 email=identity.email,
@@ -814,12 +814,12 @@ class PostgresExternalIdentityRepository:
             )
         )
 
-    async def by_subject(self, provider: str, subject: str) -> tuple[ExternalIdentity, User] | None:
+    async def by_subject(self, issuer: str, subject: str) -> tuple[ExternalIdentity, User] | None:
         row = (
             await self._session.execute(
                 select(ExternalIdentityDB, UserDB)
                 .join(UserDB, UserDB.id == ExternalIdentityDB.user_id)
-                .where(ExternalIdentityDB.provider == provider, ExternalIdentityDB.subject == subject)
+                .where(ExternalIdentityDB.issuer == issuer, ExternalIdentityDB.subject == subject)
             )
         ).one_or_none()
         return None if row is None else (_external_identity(row[0]), _user(row[1]))
@@ -832,13 +832,12 @@ class PostgresExternalIdentityRepository:
         )
         return [_external_identity(row) for row in rows]
 
-    async def remove(self, user_id: UUID, identity_id: UUID) -> bool:
-        removed = await self._session.scalar(
-            delete(ExternalIdentityDB)
-            .where(ExternalIdentityDB.id == identity_id, ExternalIdentityDB.user_id == user_id)
-            .returning(ExternalIdentityDB.id)
+    async def remove(self, user_id: UUID, identity_id: UUID) -> None:
+        await self._session.execute(
+            delete(ExternalIdentityDB).where(
+                ExternalIdentityDB.id == identity_id, ExternalIdentityDB.user_id == user_id
+            )
         )
-        return removed is not None
 
 
 class PostgresOidcFlowRepository:
@@ -901,7 +900,7 @@ class PostgresOidcFlowRepository:
 def _external_identity(row: ExternalIdentityDB) -> ExternalIdentity:
     return ExternalIdentity(
         id=row.id,
-        provider=row.provider,
+        issuer=row.issuer,
         subject=row.subject,
         user_id=row.user_id,
         email=row.email,

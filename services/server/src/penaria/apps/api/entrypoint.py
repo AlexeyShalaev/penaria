@@ -16,6 +16,7 @@ from penaria import __version__
 from penaria.apps.api.container import build_container
 from penaria.apps.api.origin import origin_check
 from penaria.apps.api.settings import Settings
+from penaria.common.urls import is_loopback
 from penaria.features.core.registry.api.routes import router as registry_router
 from penaria.features.support.identity.api.account import router as account_router
 from penaria.features.support.identity.api.account import sign_in_router
@@ -50,7 +51,6 @@ ROUTERS = (
     install_router,
     registry_router,
 )
-LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "[::1]"})
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def build_spec() -> AppSpec[Settings, DishkaContainer]:
 
 
 def build_http(settings: Settings) -> FastApiEntrypoint:
-    if not settings.serves_https and settings.public_url.host not in LOOPBACK_HOSTS:
+    if not settings.serves_https and not is_loopback(settings.public_url.host):
         logger.warning(
             "PENARIA_PUBLIC_URL is plain HTTP: passwords and session cookies cross the network unencrypted; "
             "put Penaria behind HTTPS"

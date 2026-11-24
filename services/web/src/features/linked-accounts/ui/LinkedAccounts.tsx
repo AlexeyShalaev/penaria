@@ -38,12 +38,7 @@ export function LinkedAccounts(props: {provider: string}) {
             <>
               <p className={styles.text}>{t('linked.none', {name: props.provider})}</p>
               <div>
-                <Button
-                  icon={Link2}
-                  variant="secondary"
-                  disabled={link.isPending || link.isSuccess}
-                  onClick={startLink}
-                >
+                <Button icon={Link2} variant="secondary" disabled={link.isPending} onClick={startLink}>
                   {t('linked.link', {name: props.provider})}
                 </Button>
               </div>

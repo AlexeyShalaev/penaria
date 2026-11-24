@@ -36,11 +36,13 @@ export function ReauthenticateDialog({onConfirmed, onClose}: Props) {
   const [recovery, setRecovery] = useState(false)
   const asksCode = !!secondFactor.data?.totp_enabled
   const offerPasskey = passkeysSupported() && (passkeys.data?.length ?? 0) > 0
-  const busy = withPassword.isPending || withPasskey.isPending || withProvider.isPending || withProvider.isSuccess
+  const busy = withPassword.isPending || withPasskey.isPending || withProvider.isPending
   const failed = withPasskey.error ?? withPassword.error ?? withProvider.error
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
+    // Without a password, the form's one field is the code, which goes along to the provider.
+    if (!offerPassword) return confirmWithProvider()
     withPasskey.reset()
     withPassword.mutate({password, ...(asksCode ? secondFactorCode(code, recovery) : {})}, {onSuccess: onConfirmed})
   }

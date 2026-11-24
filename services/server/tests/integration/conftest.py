@@ -69,7 +69,18 @@ def operator_mail() -> dict[str, Any] | None:
 
 
 @pytest.fixture
-def settings(database_settings: DatabaseSettings, public_url: str, operator_mail: dict[str, Any] | None) -> Settings:
+def operator_oidc() -> dict[str, Any] | None:
+    """``PENARIA_AUTH__OIDC__*`` of the tests: none; a test overrides it to set a sign-in provider up."""
+    return None
+
+
+@pytest.fixture
+def settings(
+    database_settings: DatabaseSettings,
+    public_url: str,
+    operator_mail: dict[str, Any] | None,
+    operator_oidc: dict[str, Any] | None,
+) -> Settings:
     return Settings.model_validate(
         {
             "server": HttpServerSettings(),
@@ -77,6 +88,7 @@ def settings(database_settings: DatabaseSettings, public_url: str, operator_mail
             "public_url": public_url,
             "secret_key": "test-secret-key-of-at-least-32-characters",
             "mail": operator_mail,
+            "auth": {"oidc": operator_oidc},
         }
     )
 

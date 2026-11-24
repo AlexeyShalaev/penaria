@@ -25,6 +25,8 @@ def test_a_command_is_required() -> None:
 def test_the_command_line_accepts_the_api_processes_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PENARIA_MAIL__HOST", "smtp.example.org")
     monkeypatch.setenv("PENARIA_RETIRED_SECRET_KEYS", "an-old-key-of-at-least-32-characters")
+    monkeypatch.setenv("PENARIA_AUTH__OIDC__ISSUER", "https://auth.example.org")
+    monkeypatch.setenv("PENARIA_AUTH__OIDC__CLIENT_SECRET", "a-provider-secret")
 
     assert Settings().public_origin == "http://localhost:5173"
 

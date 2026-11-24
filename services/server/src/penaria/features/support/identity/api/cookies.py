@@ -11,6 +11,8 @@ SESSION_COOKIE = "penaria_session"
 # Binds a sign-in with the provider to the browser that started it; sent only to the callback.
 OIDC_COOKIE = "penaria_oidc"
 OIDC_COOKIE_PATH = "/api/v1/auth/oidc"
+# Where the provider sends the browser back: the redirect URI operators register with it.
+OIDC_CALLBACK_PATH = f"{OIDC_COOKIE_PATH}/callback"
 
 
 @dataclass(frozen=True, slots=True)

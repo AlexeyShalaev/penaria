@@ -9,8 +9,10 @@ from importlib.resources import files
 from penaria.features.shared.errors import ConflictError, InvalidError
 from penaria.features.support.identity.domain.models import LOCALES, NAME_MAX_LENGTH
 
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 32
 # Letters and digits of any script, dot, underscore and hyphen: something a person can type on a phone.
-USERNAME_PATTERN = re.compile(r"[\w.-]{3,32}")
+USERNAME_PATTERN = re.compile(rf"[\w.-]{{{USERNAME_MIN_LENGTH},{USERNAME_MAX_LENGTH}}}")
 # NIST SP 800-63B: at least 12 for a password that is the only factor; no composition rules.
 PASSWORD_MIN_LENGTH = 12
 # Long passphrases are welcome; the cap only keeps the hashing input bounded.

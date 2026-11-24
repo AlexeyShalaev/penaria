@@ -8,6 +8,7 @@ from sqlalchemy_foundation_kit import AsyncUnitOfWork
 from penaria.features.shared.actor import Actor
 from penaria.features.shared.journal import Event
 from penaria.features.support.identity.domain.mail import MailKind
+from penaria.features.support.identity.domain.oidc import ExternalSignIn
 from penaria.features.support.identity.domain.passkeys import (
     Ceremony,
     Challenge,
@@ -26,6 +27,7 @@ from penaria.features.support.identity.domain.repositories import IdentityTransa
 from penaria.features.support.identity.domain.sessions import CurrentSession
 from penaria.features.support.identity.use_cases.account import load_user
 from penaria.features.support.identity.use_cases.challenges import issue_challenge
+from penaria.features.support.identity.use_cases.oidc import signs_in_without_passkeys
 from penaria.features.support.identity.use_cases.postman import Postman
 
 
@@ -125,8 +127,9 @@ class RenamePasskey:
 
 
 class RemovePasskey:
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction]) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], external: ExternalSignIn) -> None:
         self._uow = uow
+        self._external = external
 
     async def execute(self, current: CurrentSession, passkey_id: UUID) -> None:
         """Forget a passkey; the account keeps at least one way to sign in."""
@@ -137,15 +140,10 @@ class RemovePasskey:
             passkeys = await tx.passkeys.for_user(current.user_id)
             if all(passkey.id != passkey_id for passkey in passkeys):
                 raise PasskeyNotFoundError(params={"passkey_id": str(passkey_id)})
-            if len(passkeys) == 1 and not await has_other_methods(tx, current.user_id):
+            if len(passkeys) == 1 and not await signs_in_without_passkeys(tx, self._external, current.user_id):
                 raise LastSignInMethodError("this passkey is the account's only way to sign in")
             await tx.passkeys.remove(current.user_id, passkey_id)
             await tx.journal.append([_event("account.passkey_removed", current, passkey_id=str(passkey_id))])
-
-
-async def has_other_methods(tx: IdentityTransaction, user_id: UUID) -> bool:
-    """Whether the account signs in some other way than its passkeys: a password, or the operator's provider."""
-    return await tx.passwords.get(user_id) is not None or bool(await tx.external_identities.for_user(user_id))
 
 
 def _event(event_type: str, current: CurrentSession, **payload: str) -> Event:

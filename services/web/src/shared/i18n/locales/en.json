@@ -752,6 +752,10 @@
       "invitation_unusable": {
         "title": "The invitation cannot be used",
         "text": "It was used, revoked or has expired, or it gives access you already have. Ask for a new one."
+      },
+      "sign_in_first": {
+        "title": "Sign in first",
+        "text": "Your account asks for a code from your authenticator app. Sign in with {{name}} and the code first, then open the invitation link again and accept it."
       }
     }
   },

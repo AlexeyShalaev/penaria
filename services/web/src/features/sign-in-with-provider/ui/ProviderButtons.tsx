@@ -20,7 +20,7 @@ export function ProviderSignInButton(props: {returnTo: string; variant?: 'primar
         icon={LogIn}
         variant={props.variant}
         className={styles.button}
-        disabled={start.isPending || start.isSuccess}
+        disabled={start.isPending}
         onClick={() => start.mutate({locale: i18n.language, return_to: props.returnTo})}
       >
         {t('provider.signIn', {name: provider.name})}
@@ -43,7 +43,7 @@ export function ProviderInvitationButton(props: {token: string}) {
         icon={LogIn}
         variant="secondary"
         className={styles.button}
-        disabled={start.isPending || start.isSuccess}
+        disabled={start.isPending}
         onClick={() => start.mutate({token: props.token, locale: i18n.language})}
       >
         {t('provider.join', {name: provider.name})}

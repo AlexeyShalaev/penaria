@@ -20,7 +20,8 @@ NOW = datetime(2026, 11, 24, 12, tzinfo=UTC)
 
 
 def started() -> tuple[OidcFlow, str, str]:
-    return OidcFlow.start(FlowPurpose.SIGN_IN, return_to="/", locale="en", address="ip:192.0.2.1", now=NOW)
+    flow = OidcFlow.start(FlowPurpose.SIGN_IN, return_to="/", locale="en", address="ip:192.0.2.1", now=NOW)
+    return flow.flow, flow.state, flow.binding
 
 
 def test_a_flow_keeps_only_hashes_of_its_state_and_browser_binding_and_lasts_ten_minutes() -> None:

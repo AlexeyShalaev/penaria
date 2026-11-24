@@ -10,5 +10,7 @@ def test_migrate_accepts_every_variable_of_the_api_process(monkeypatch: pytest.M
     monkeypatch.setenv("PENARIA_MAIL__FROM_ADDRESS", "home@example.org")
     monkeypatch.setenv("PENARIA_RETIRED_SECRET_KEYS", "an-old-key-of-at-least-32-characters")
     monkeypatch.setenv("PENARIA_SERVER__UVICORN__FORWARDED_ALLOW_IPS", "10.0.0.1")
+    monkeypatch.setenv("PENARIA_AUTH__OIDC__ISSUER", "https://auth.example.org")
+    monkeypatch.setenv("PENARIA_AUTH__OIDC__CLIENT_SECRET", "a-provider-secret")
 
     assert Settings().database.connection.database == "unit"

@@ -4,7 +4,6 @@ import {api, type Schemas, unwrap} from '@/shared/api'
 
 import type {SecondFactorCode} from './account'
 
-export type SignInMethods = Schemas['SignInMethodsOut']
 export type ExternalIdentity = Schemas['ExternalIdentityOut']
 
 const configKey = ['auth-config'] as const

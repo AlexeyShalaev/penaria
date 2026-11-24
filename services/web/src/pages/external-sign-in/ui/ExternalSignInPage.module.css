@@ -21,11 +21,6 @@
   color: var(--text-muted);
 }
 
-.back {
-  margin-top: var(--sp-4);
-  font-size: var(--fs-sm);
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;

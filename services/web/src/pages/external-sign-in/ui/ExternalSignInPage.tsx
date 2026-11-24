@@ -5,24 +5,8 @@ import {Link, useSearchParams} from 'react-router'
 import {useAuthConfig} from '@/entities/account'
 import {Card, IconTile, PageTitle} from '@/shared/ui'
 
+import {problemOf} from '../model/problems'
 import styles from './ExternalSignInPage.module.css'
-
-const PROBLEMS = [
-  'expired',
-  'failed',
-  'invitation_required',
-  'identity_taken',
-  'wrong_account',
-  'account_disabled',
-  'already_linked',
-  'invitation_unusable',
-] as const
-
-type Problem = (typeof PROBLEMS)[number]
-
-function problemOf(value: string | null): Problem {
-  return PROBLEMS.find((problem) => problem === value) ?? 'failed'
-}
 
 /** Where the server sends the browser when a sign-in with the operator's provider did not go through, and why. */
 export function ExternalSignInPage() {
