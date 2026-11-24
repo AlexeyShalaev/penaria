@@ -1,6 +1,6 @@
 # Sign-in
 
-- **Status:** proposed, waiting for the author's review.
+- **Status:** accepted on 2026-11-24, with outgoing email configurable from the interface (section 9).
 - **Date:** 2026-11-24.
 - **Scope:** how people, guests and devices prove who they are to a Penaria install:
   - the first start of an install;
@@ -18,7 +18,7 @@ The decisions follow v0.3:
 - guest links expire and can be revoked in one click;
 - an operator's OIDC provider is optional.
 
-Decisions beyond v0.3 are marked **Proposed** and listed in [Open questions](#11-open-questions).
+Decisions beyond v0.3 are marked **Decision** and listed in [Decisions](#11-decisions).
 
 Not covered:
 - **Hubs.** They pair with a one-time code and then use mTLS; this belongs to the hub design.
@@ -39,7 +39,7 @@ A registry is an inventory of valuables with an address, and the smart-home part
 
 ## 2. The first start
 
-A fresh install has no users. **Proposed: the server prints a one-time setup token to its log on first start. The setup screen asks for it before creating the owner account.**
+A fresh install has no users. **Decision: the server prints a one-time setup token to its log on first start. The setup screen asks for it before creating the owner account.**
 
 A self-hosted install is often reachable from a network before its owner opens it. Letting the first visitor become the owner, as some home products do, hands the house to whoever comes first. A token in the log proves access to the machine. It costs one copy and paste, and the Compose quickstart prints the command to read it.
 
@@ -62,15 +62,17 @@ The token is single-use. Restarting the server before setup prints a new one and
 | `locale` | The interface language |
 | `disabled_at` | An admin of the install can disable an account. Every session ends at once |
 
-**Proposed: a username, with email optional.** Many self-hosted installs have no SMTP, and nothing should depend on one. Email adds recovery and notifications when SMTP is configured.
+**One account, many homes.** A person has one account however many homes they belong to: their flat, the country house, their parents' house where they are a guest of the family, a friend's flat for the weekend. Each home membership is a grant (core-model 11.2); sign-in never asks which home. The interface remembers the last home and switches between them in one tap. A home's list of people shows accounts, so the same person in two homes is recognisably the same.
 
-**Proposed: the install has its own admin role, separate from home roles.** An install may host several households. Who may disable accounts, see every home's size or configure OIDC is a property of the install, not of a home. The setup account becomes the install admin and can make others admins.
+**Decision: a username, with email optional.** Many self-hosted installs have no SMTP, and nothing should depend on one. Email adds recovery and notifications when SMTP is configured.
+
+**Decision: the install has its own admin role, separate from home roles.** An install may host several households. Who may disable accounts, see every home's size or configure OIDC is a property of the install, not of a home. The setup account becomes the install admin and can make others admins.
 
 ## 4. Sign-in methods
 
 ### 4.1 Passkeys
 
-Passkeys are WebAuthn credentials, built into phones and browsers. **Proposed: passkeys are the first method the interface offers.** They cannot be phished, guessed or reused across sites, and family members already have them on their phones.
+Passkeys are WebAuthn credentials, built into phones and browsers. **Decision: passkeys are the first method the interface offers.** They cannot be phished, guessed or reused across sites, and family members already have them on their phones.
 
 - A user may register several passkeys and name them, for example "Alexey's phone".
 - The relying party id is the install's host name, taken from `PENARIA_PUBLIC_URL`.
@@ -87,7 +89,7 @@ For browsers and people without passkeys:
 
 TOTP, an authenticator app, with ten single-use recovery codes. Passkeys need no second factor.
 
-**Proposed: required for owners and install admins who sign in with a password, and optional for everyone else.**
+**Decision: required for owners and install admins who sign in with a password, and optional for everyone else.**
 - An owner who has only a password is asked to add TOTP or a passkey right after sign-in.
 - An owner cannot act on owner-level commands until they do.
 
@@ -96,7 +98,7 @@ TOTP, an authenticator app, with ten single-use recovery codes. Passkeys need no
 When the operator configures it (`PENARIA_AUTH__OIDC__*`: issuer, client id, secret), the sign-in screen offers "Sign in with <provider>". Examples are Authentik, Keycloak or a Google Workspace.
 
 - An identity links to an account by the provider's `sub`, never by email alone.
-- **Proposed: a first sign-in through OIDC creates an account only if the operator allows it** (`..._ALLOW_SIGN_UP`, off by default). Otherwise the person needs an invitation first, and linking happens on acceptance.
+- **Decision: a first sign-in through OIDC creates an account only if the operator allows it** (`..._ALLOW_SIGN_UP`, off by default). Otherwise the person needs an invitation first, and linking happens on acceptance.
 - Library: `authlib`.
 
 The same table of linked identities later holds Telegram accounts, linked from the bot.
@@ -106,7 +108,7 @@ The same table of linked identities later holds Telegram accounts, linked from t
 A browser signs in once and holds a session.
 
 - **Storage.** The session is a random 256-bit token in a cookie named `penaria_session`, set `HttpOnly`, `Secure` (except on `localhost`), `SameSite=Lax` and `Path=/`. The server stores only a SHA-256 hash of the token, with the user, the time created, the time last seen, the user agent and the IP address.
-- **Lifetime.** **Proposed:** a session ends after 30 days without use, and in any case after 180 days.
+- **Lifetime.** **Decision:** a session ends after 30 days without use, and in any case after 180 days.
 - **Sensitive commands need a recent sign-in, within 10 minutes:** adding a sign-in method, transferring ownership, changing roles. A session older than that asks for the passkey or password again.
 - **Revocation.** The account page lists every session: device, place and last use. Each one can be ended. Signing out ends the current one, and disabling the account ends them all.
 - **CSRF.** The server refuses any request that changes something if its `Origin` does not match `PENARIA_PUBLIC_URL`. The `SameSite=Lax` cookie does the rest. No CSRF tokens are needed, because the API takes only JSON.
@@ -126,7 +128,7 @@ An admin of a home, or anyone with `members.manage`, creates an invitation. It c
 It is shared as a link or a QR code holding a secret token. Only a hash of the token is stored.
 
 - **Accepting.** Opening the link asks the person to sign in, or to create an account with a username and their first method. The grant is then created.
-- **Single use.** **Proposed:** an invitation can be used once. A second family member needs a second link.
+- **Single use.** **Decision:** an invitation can be used once. A second family member needs a second link.
 - **Ownership.** The owner invitation of core-model section 3 is this same invitation with the role `owner` and the "leave when accepted" mark.
 - **Revocation.** An invitation can be revoked until accepted. Accepting one is journalled (`grant.created`, with the invitation id).
 
@@ -136,7 +138,7 @@ It is shared as a link or a QR code holding a secret token. Only a hash of the t
 
 - Opening the link exchanges its token for a guest session, a cookie as in section 5. The guest session ends when the grant expires or is revoked.
 - Revoking the grant ends every guest session made from it, in one click.
-- **Proposed: the link can be reused until it expires.** A QR code on the fridge should work for every guest of the weekend.
+- **Decision: the link can be reused until it expires.** A QR code on the fridge should work for every guest of the weekend.
 - Anything else a guest opens shows a screen that says so.
 
 ### 6.3 Device and integration tokens
@@ -166,7 +168,27 @@ A smart mirror or a script is a `device` principal, with grants like anyone else
 |---|---|
 | `PENARIA_PUBLIC_URL` | The address people open, such as `https://home.example.org`. Required. Sets the passkey relying party, the `Origin` check and the links in invitations |
 | `PENARIA_AUTH__OIDC__ISSUER`, `..._CLIENT_ID`, `..._CLIENT_SECRET`, `..._ALLOW_SIGN_UP` | Optional OIDC |
-| `PENARIA_SMTP__*` | Optional email (its own design, with notifications) |
+| `PENARIA_MAIL__*` | Optional outgoing email; when set, it locks the interface's mail settings (section 9.1) |
+| `PENARIA_SECRET_KEY` | Encrypts stored secrets: the SMTP password, TOTP secrets, queued mail. Required; the quickstart generates it |
+
+### 9.1 Outgoing email
+
+**Decision: the install admin connects a mailbox from the interface**, as HSE Doc Studio does. Environment variables remain for operators who manage configuration as code.
+
+- **One mailbox per install.** It is used for every message the install sends: sign-in and reset links, invitations, and later notifications. It sends only, over SMTP.
+- **Settings.**
+  - The fields are: server and port; security, which is STARTTLS on 587, TLS on 465, or none; the login; the password; the sender's address and name.
+  - Changing the security moves the default port.
+  - Settings live in an `identity_install_settings` table. The password is encrypted with `PENARIA_SECRET_KEY` and is write-only: the interface shows only "password set", and an empty field leaves it unchanged.
+  - Changes take effect without a restart.
+  - Every change is journalled, and the password itself never is.
+- **The environment wins as a whole.** When `PENARIA_MAIL__HOST` is set, every mail setting comes from the environment and the interface shows the fields locked. Half of the settings from each place would make a connection nobody configured.
+- **Test email.** "Send a test email" uses the saved settings and goes to the admin's own address unless another one is typed. It shows the server's error verbatim, with the credentials scrubbed. A connection probe feeds the install's status page.
+- **Delivery.**
+  - Sending uses `aiosmtplib`; messages are text plus HTML, in the recipient's language.
+  - Temporary failures are retried 5 times: after 1, 5, 15 and 30 minutes. The queue is a PostgreSQL table whose messages are encrypted at rest.
+  - A mail log lets the admin see each attempt and resend.
+- **Without a mailbox,** links that would be emailed (verification, reset, invitation) are shown on screen to pass on by hand, as section 8 describes.
 
 ## 10. Storage
 
@@ -197,9 +219,11 @@ A guest link's secret is stored as a token for its `link` principal.
 
 The TOTP secret is encrypted with a key derived from `PENARIA_SECRET_KEY`, a new required variable. The quickstart generates it.
 
-## 11. Open questions
+## 11. Decisions
 
-| # | Question | Recommendation |
+The author accepted every decision below on 2026-11-24 and added outgoing email from the interface (9.1).
+
+| # | Decision | Answer |
 |---|---|---|
 | 1 | A setup token from the log, rather than "first visitor becomes owner" (section 2) | Yes |
 | 2 | A username, with email optional (section 3) | Yes: many installs have no SMTP |
