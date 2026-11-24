@@ -3,7 +3,13 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from penaria.features.shared.ids import new_id
-from penaria.features.support.identity.domain.sessions import Client, Session, hash_token
+from penaria.features.support.identity.domain.sessions import (
+    Client,
+    CurrentSession,
+    RecentSignInRequiredError,
+    Session,
+    hash_token,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -49,3 +55,14 @@ def test_last_use_is_written_at_most_every_five_minutes() -> None:
 
     assert not session.needs_touch(STARTED + timedelta(minutes=4, seconds=59))
     assert session.needs_touch(STARTED + timedelta(minutes=5))
+
+
+def test_a_sign_in_is_recent_for_ten_minutes() -> None:
+    current = CurrentSession(id=new_id(), user_id=new_id(), authenticated_at=STARTED)
+
+    current.require_recent_sign_in(STARTED + timedelta(minutes=10))
+    with pytest.raises(RecentSignInRequiredError) as raised:
+        current.require_recent_sign_in(STARTED + timedelta(minutes=10, seconds=1))
+
+    assert raised.value.code == "recent_sign_in_required"
+    assert raised.value.params == {"max_age_seconds": 600}

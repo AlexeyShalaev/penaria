@@ -31,10 +31,12 @@ from penaria.features.core.registry.use_cases.queries import EntityHistory, GetE
 from penaria.features.shared.access import AccessPolicy
 from penaria.features.shared.actor import Actor
 from penaria.features.support.identity.api.cookies import SESSION_COOKIE, SessionCookie
+from penaria.features.support.identity.domain.passkeys import RelyingParty
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import CurrentSession
 from penaria.features.support.identity.infra.argon2 import Argon2PasswordHasher
+from penaria.features.support.identity.infra.webauthn import WebAuthnRelyingParty
 from penaria.features.support.identity.use_cases.access import GrantAccessPolicy
 from penaria.features.support.identity.use_cases.account import (
     ChangePassword,
@@ -45,7 +47,25 @@ from penaria.features.support.identity.use_cases.account import (
     UpdateAccount,
 )
 from penaria.features.support.identity.use_cases.homes import CreateHome, GetHome, ListHomes
-from penaria.features.support.identity.use_cases.sessions import Authenticate, SignIn, SignOut
+from penaria.features.support.identity.use_cases.passkeys import (
+    AddPasskey,
+    ListPasskeys,
+    RemovePasskey,
+    RenamePasskey,
+    StartPasskeyRegistration,
+)
+from penaria.features.support.identity.use_cases.reauthentication import (
+    ReauthenticateWithPasskey,
+    ReauthenticateWithPassword,
+    StartPasskeyReauthentication,
+)
+from penaria.features.support.identity.use_cases.sessions import (
+    Authenticate,
+    SignIn,
+    SignInWithPasskey,
+    SignOut,
+    StartPasskeySignIn,
+)
 from penaria.features.support.identity.use_cases.setup import CompleteSetup, IssueSetupToken, NeedsSetup
 from penaria.integrations.postgres.transaction import PenariaTransaction
 
@@ -71,6 +91,10 @@ class SettingsProvider(Provider):
     @provide
     def session_cookie(self) -> SessionCookie:
         return SessionCookie(secure=self._settings.serves_https)
+
+    @provide
+    def relying_party(self) -> RelyingParty:
+        return WebAuthnRelyingParty(rp_id=self._settings.passkey_rp_id, origin=self._settings.public_origin)
 
 
 class UnitOfWorkProvider(Provider):
@@ -102,7 +126,17 @@ class UseCaseProvider(Provider):
         CompleteSetup,
         Authenticate,
         SignIn,
+        StartPasskeySignIn,
+        SignInWithPasskey,
         SignOut,
+        ReauthenticateWithPassword,
+        StartPasskeyReauthentication,
+        ReauthenticateWithPasskey,
+        ListPasskeys,
+        StartPasskeyRegistration,
+        AddPasskey,
+        RenamePasskey,
+        RemovePasskey,
         GetAccount,
         UpdateAccount,
         ChangePassword,

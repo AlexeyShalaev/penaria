@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from uuid import UUID
 
+from penaria.features.shared.errors import ForbiddenError
 from penaria.features.shared.ids import new_id
 
 IDLE_TIMEOUT = timedelta(days=30)
@@ -13,6 +14,12 @@ ABSOLUTE_LIFETIME = timedelta(days=180)
 # Seeing a session again within this time does not write; the idle timeout is far longer.
 LAST_SEEN_PRECISION = timedelta(minutes=5)
 TOKEN_BYTES = 32
+# Sensitive commands, such as adding a sign-in method, need the password or a passkey this recently.
+RECENT_SIGN_IN = timedelta(minutes=10)
+
+
+class RecentSignInRequiredError(ForbiddenError):
+    code = "recent_sign_in_required"
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +72,16 @@ class CurrentSession:
 
     id: UUID
     user_id: UUID
+    # When its person last proved who they are in it: signing in, or confirming it is them again.
+    authenticated_at: datetime
+
+    def require_recent_sign_in(self, now: datetime) -> None:
+        """Refuse a sensitive command in a session whose person has not proved who they are recently."""
+        if now - self.authenticated_at > RECENT_SIGN_IN:
+            raise RecentSignInRequiredError(
+                "confirm it is you first: sign in again with your password or a passkey",
+                params={"max_age_seconds": int(RECENT_SIGN_IN.total_seconds())},
+            )
 
 
 def hash_token(token: str) -> bytes:

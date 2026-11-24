@@ -9,12 +9,15 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
+from penaria.features.support.identity.domain.passkeys import Ceremony, Challenge, Passkey
 from penaria.features.support.identity.domain.permissions import Preset
 from penaria.features.support.identity.domain.sessions import ABSOLUTE_LIFETIME, IDLE_TIMEOUT, Client, Session
 from penaria.features.support.identity.domain.throttle import Failures
 from penaria.features.support.identity.infra.orm import (
     GrantDB,
     HomeDB,
+    PasskeyChallengeDB,
+    PasskeyDB,
     PasswordDB,
     RoleDB,
     SessionDB,
@@ -132,6 +135,111 @@ class PostgresSessionRepository:
             .returning(SessionDB.id)
         )
         return list(revoked)
+
+    async def reauthenticate(self, session_id: UUID, now: datetime) -> None:
+        await self._session.execute(update(SessionDB).where(SessionDB.id == session_id).values(authenticated_at=now))
+
+
+class PostgresPasskeyRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, passkey: Passkey) -> None:
+        self._session.add(
+            PasskeyDB(
+                id=passkey.id,
+                user_id=passkey.user_id,
+                credential_id=passkey.credential_id,
+                public_key=passkey.public_key,
+                sign_count=passkey.sign_count,
+                name=passkey.name,
+                transports=passkey.transports,
+                created_at=passkey.created_at,
+                last_used_at=passkey.last_used_at,
+            )
+        )
+
+    async def for_user(self, user_id: UUID) -> list[Passkey]:
+        rows = await self._session.scalars(
+            select(PasskeyDB).where(PasskeyDB.user_id == user_id).order_by(PasskeyDB.created_at, PasskeyDB.id)
+        )
+        return [_passkey(row) for row in rows]
+
+    async def get(self, user_id: UUID, passkey_id: UUID) -> Passkey | None:
+        row = await self._session.scalar(
+            select(PasskeyDB).where(PasskeyDB.id == passkey_id, PasskeyDB.user_id == user_id)
+        )
+        return None if row is None else _passkey(row)
+
+    async def by_credential_id(self, credential_id: bytes) -> tuple[Passkey, User] | None:
+        row = (
+            await self._session.execute(
+                select(PasskeyDB, UserDB)
+                .join(UserDB, UserDB.id == PasskeyDB.user_id)
+                .where(PasskeyDB.credential_id == credential_id)
+            )
+        ).one_or_none()
+        return None if row is None else (_passkey(row[0]), _user(row[1]))
+
+    async def rename(self, passkey_id: UUID, name: str) -> None:
+        await self._session.execute(update(PasskeyDB).where(PasskeyDB.id == passkey_id).values(name=name))
+
+    async def record_use(self, passkey_id: UUID, seen_sign_count: int, sign_count: int, now: datetime) -> bool:
+        updated = await self._session.scalar(
+            update(PasskeyDB)
+            .where(PasskeyDB.id == passkey_id, PasskeyDB.sign_count == seen_sign_count)
+            .values(sign_count=sign_count, last_used_at=now)
+            .returning(PasskeyDB.id)
+        )
+        return updated is not None
+
+    async def remove(self, user_id: UUID, passkey_id: UUID) -> bool:
+        removed = await self._session.scalar(
+            delete(PasskeyDB).where(PasskeyDB.id == passkey_id, PasskeyDB.user_id == user_id).returning(PasskeyDB.id)
+        )
+        return removed is not None
+
+
+class PostgresChallengeRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, challenge: Challenge) -> None:
+        self._session.add(
+            PasskeyChallengeDB(
+                id=challenge.id,
+                ceremony=challenge.ceremony.value,
+                challenge=challenge.value,
+                session_id=challenge.session_id,
+                expires_at=challenge.expires_at,
+            )
+        )
+
+    async def take(
+        self, challenge_id: UUID, ceremony: Ceremony, session_id: UUID | None, now: datetime
+    ) -> Challenge | None:
+        row = (
+            await self._session.execute(
+                delete(PasskeyChallengeDB)
+                .where(
+                    PasskeyChallengeDB.id == challenge_id,
+                    PasskeyChallengeDB.ceremony == ceremony.value,
+                    PasskeyChallengeDB.session_id.is_(None)
+                    if session_id is None
+                    else PasskeyChallengeDB.session_id == session_id,
+                    PasskeyChallengeDB.expires_at > now,
+                )
+                .returning(PasskeyChallengeDB.challenge, PasskeyChallengeDB.expires_at)
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        return Challenge(
+            id=challenge_id, ceremony=ceremony, value=row.challenge, session_id=session_id, expires_at=row.expires_at
+        )
+
+    async def forget_expired(self, now: datetime) -> None:
+        await self._session.execute(delete(PasskeyChallengeDB).where(PasskeyChallengeDB.expires_at <= now))
 
 
 class PostgresSetupTokenRepository:
@@ -334,6 +442,20 @@ def _session(row: SessionDB) -> Session:
         authenticated_at=row.authenticated_at,
         client=Client(user_agent=row.user_agent, ip=None if row.ip is None else str(row.ip)),
         revoked_at=row.revoked_at,
+    )
+
+
+def _passkey(row: PasskeyDB) -> Passkey:
+    return Passkey(
+        id=row.id,
+        user_id=row.user_id,
+        credential_id=row.credential_id,
+        public_key=row.public_key,
+        sign_count=row.sign_count,
+        name=row.name,
+        transports=list(row.transports),
+        created_at=row.created_at,
+        last_used_at=row.last_used_at,
     )
 
 

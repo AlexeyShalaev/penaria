@@ -5,9 +5,11 @@ from sqlalchemy_foundation_kit import AsyncSQLAlchemyUowTransaction
 
 from penaria.features.core.registry.infra.repository import PostgresEntityRepository
 from penaria.features.support.identity.infra.repositories import (
+    PostgresChallengeRepository,
     PostgresFailureRepository,
     PostgresGrantRepository,
     PostgresHomeRepository,
+    PostgresPasskeyRepository,
     PostgresPasswordRepository,
     PostgresRoleRepository,
     PostgresSessionRepository,
@@ -23,6 +25,8 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
         self._users = PostgresUserRepository(session)
         self._passwords = PostgresPasswordRepository(session)
         self._sessions = PostgresSessionRepository(session)
+        self._passkeys = PostgresPasskeyRepository(session)
+        self._challenges = PostgresChallengeRepository(session)
         self._setup_tokens = PostgresSetupTokenRepository(session)
         self._failures = PostgresFailureRepository(session)
         self._homes = PostgresHomeRepository(session)
@@ -42,6 +46,14 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
     @property
     def sessions(self) -> PostgresSessionRepository:
         return self._sessions
+
+    @property
+    def passkeys(self) -> PostgresPasskeyRepository:
+        return self._passkeys
+
+    @property
+    def challenges(self) -> PostgresChallengeRepository:
+        return self._challenges
 
     @property
     def setup_tokens(self) -> PostgresSetupTokenRepository:

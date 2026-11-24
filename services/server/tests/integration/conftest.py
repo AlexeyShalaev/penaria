@@ -21,7 +21,10 @@ from penaria.features.support.identity.use_cases.setup import IssueSetupToken
 from penaria.migrations.runner import build_config, run_with_connection
 
 # Every table that holds data; CASCADE reaches the rest.
-DATA_TABLES = "identity_users, identity_homes, journal_events, identity_setup_tokens, identity_sign_in_failures"
+DATA_TABLES = (
+    "identity_users, identity_homes, journal_events, identity_setup_tokens, identity_sign_in_failures, "
+    "identity_passkey_challenges"
+)
 PUBLIC_URL = "http://test"
 OWNER = {"username": "owner", "display_name": "Owner", "password": "correct horse battery", "locale": "en"}
 

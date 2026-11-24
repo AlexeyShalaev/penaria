@@ -65,7 +65,9 @@ async def test_a_change_checked_against_a_password_changed_meanwhile_is_refused(
     uow = await container.container.get(AsyncSQLAlchemyUnitOfWork[PenariaTransaction])
     hasher = ChangingMidway(await container.container.get(PasswordHasher), uow)
     [session] = (await api.get("/me/sessions")).json()
-    current = CurrentSession(id=UUID(session["id"]), user_id=UUID((await api.get("/me")).json()["id"]))
+    current = CurrentSession(
+        id=UUID(session["id"]), user_id=UUID((await api.get("/me")).json()["id"]), authenticated_at=datetime.now(UTC)
+    )
 
     with pytest.raises(WrongPasswordError):
         await ChangePassword(uow, hasher).execute(current, current_password=OWNER["password"], new_password=NEW)
