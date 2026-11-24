@@ -54,11 +54,13 @@ Penaria reads only bearer tokens that start with `pnr_` and leaves any other `Au
 
 ```nginx
 map $http_authorization $penaria_auth {
-    ~^Bearer\s+pnr_  off;
-    default          "Penaria";
+    ~*^bearer\s+pnr_  off;
+    default           "Penaria";
 }
 auth_basic $penaria_auth;
 ```
+
+The proxy cannot check the token, so any request that carries such a header passes it, whatever page it asks for: Penaria's own sign-in and its limits are then the only guard of the whole site, as without the proxy.
 
 A person who makes a device must hold the access to give its role without an end: a member whose access ends cannot add one.
 

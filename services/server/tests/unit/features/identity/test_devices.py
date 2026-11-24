@@ -121,20 +121,22 @@ def test_a_use_after_a_quiet_day_is_journalled() -> None:
     assert device.needs_journal(ADDRESS, NOW + timedelta(days=1))
 
 
-def test_a_use_from_another_address_is_journalled_when_it_is_recorded() -> None:
+def test_a_use_from_another_address_is_recorded_and_journalled_at_once() -> None:
     device = used(made()[0], NOW)
 
-    later = NOW + timedelta(minutes=5)
-    assert (device.needs_touch(later), device.needs_journal("198.51.100.7", later)) == (True, True)
+    later = NOW + timedelta(seconds=30)
+    assert (device.is_move("198.51.100.7", later), device.needs_journal("198.51.100.7", later)) == (True, True)
 
 
-def test_an_address_that_alternates_between_records_is_not_journalled_on_each_request() -> None:
-    device = used(made()[0], NOW)
+def test_an_address_that_alternates_is_journalled_at_most_every_five_minutes() -> None:
+    device = used(made()[0], NOW, ip="198.51.100.7")
+    device = replace(device, token=replace(device.token, last_moved_at=NOW))
 
-    assert not device.needs_journal("198.51.100.7", NOW + timedelta(seconds=5))
+    assert not device.needs_journal(ADDRESS, NOW + timedelta(minutes=4))
+    assert device.needs_journal(ADDRESS, NOW + timedelta(minutes=5))
 
 
 def test_another_address_in_the_same_ipv6_block_is_the_same_place() -> None:
     device = used(made()[0], NOW, ip="2001:db8::1")
 
-    assert not device.needs_journal("2001:db8::abcd", NOW + timedelta(minutes=5))
+    assert not device.needs_journal("2001:db8::abcd", NOW + timedelta(seconds=30))

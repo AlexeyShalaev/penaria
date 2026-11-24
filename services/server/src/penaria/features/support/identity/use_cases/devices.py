@@ -161,6 +161,8 @@ async def _use(tx: IdentityTransaction, device: Device, client: Client, now: dat
     if device.needs_journal(client.ip, now):
         payload = {"device_id": str(device.id), "ip": client.ip}
         await tx.journal.append([Event("device.used", device.grant.home_id, Actor.device(device.id), payload)])
-    if device.needs_touch(now):
+    if device.is_move(client.ip, now):
+        await tx.tokens.moved(device.token.id, now, ip=client.ip)
+    elif device.needs_touch(now):
         await tx.tokens.used(device.token.id, now, ip=client.ip)
     return DeviceCaller(device_id=device.id)

@@ -246,6 +246,7 @@ class TokenDB(Base):
     created_at: Mapped[datetime.datetime]
     last_used_at: Mapped[datetime.datetime | None]
     last_used_ip: Mapped[str | None] = mapped_column(INET)
+    last_moved_at: Mapped[datetime.datetime | None]
     revoked_at: Mapped[datetime.datetime | None]
 
 

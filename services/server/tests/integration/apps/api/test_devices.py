@@ -441,9 +441,9 @@ async def test_making_using_and_revoking_a_device_is_journalled_without_a_line_p
 
     for _ in range(3):
         await ok(await mirror.get("/homes"))
-    # Another address minutes later is journalled when the use is next recorded, not on every request.
+    # Another address is journalled at once; going back and forth again within minutes is not.
     await ok(await moved.get("/homes"))
-    await age_last_use(container, timedelta(minutes=6))
+    await ok(await mirror.get("/homes"))
     await ok(await moved.get("/homes"))
     await age_last_use(container, timedelta(days=1))
     await ok(await moved.get("/homes"))

@@ -316,6 +316,10 @@ class TokenRepository(Protocol):
         """Keep when the token was last used, and from which address when ``ip`` is given."""
         ...
 
+    async def moved(self, token_id: UUID, now: datetime, *, ip: str | None) -> None:
+        """Keep a use from another address than the last: as ``used``, and when it moved."""
+        ...
+
     async def revoke_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> None: ...
 
     async def links_in(self, home_id: UUID, now: datetime) -> list[GuestLink]:

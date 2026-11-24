@@ -319,6 +319,8 @@ class Token:
     created_at: datetime
     last_used_at: datetime | None = None
     last_used_ip: str | None = None
+    # When a use from another address than the last was last recorded.
+    last_moved_at: datetime | None = None
     revoked_at: datetime | None = None
     id: UUID = field(default_factory=new_id)
 

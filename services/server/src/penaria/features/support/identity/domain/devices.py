@@ -27,6 +27,9 @@ TOKEN_PATTERN = re.compile(rf"{TOKEN_PREFIX}[0-9A-Za-z]{{{TOKEN_LENGTH}}}")
 # A device's use is journalled when it is the first, comes after this long without use, or comes from
 # another address; the uses in between only move its "last used".
 USE_JOURNALLED_AFTER = timedelta(days=1)
+# Moves are journalled at once, but at most this often, so a device whose address alternates (IPv4 and
+# IPv6, a pool of exits) adds a line every few minutes rather than one per request.
+MOVES_JOURNALLED_EVERY = timedelta(minutes=5)
 
 
 class InvalidTokenError(UnauthenticatedError):
@@ -114,13 +117,17 @@ class Device:
         return last is None or now - last >= LAST_SEEN_PRECISION
 
     def needs_journal(self, ip: str | None, now: datetime) -> bool:
-        """Whether this use goes to the journal: the first, the first after a quiet day, or one from another
-        address. A move is noticed only when the use is recorded, so a device whose address alternates
-        (IPv4 and IPv6, a pool of exits) journals at most once per record, not once per request."""
+        """Whether this use goes to the journal: the first, the first after a quiet day, or a move."""
         last = self.token.last_used_at
-        if last is None or now - last >= USE_JOURNALLED_AFTER:
-            return True
-        return self.needs_touch(now) and self._moved(ip)
+        return last is None or now - last >= USE_JOURNALLED_AFTER or self.is_move(ip, now)
+
+    def is_move(self, ip: str | None, now: datetime) -> bool:
+        """Whether this use comes from another address than the last one, and is the first such for a while:
+        it is journalled and recorded at once, so a leaked token used elsewhere leaves a trace."""
+        if self.token.last_used_at is None or not self._moved(ip):
+            return False
+        moved = self.token.last_moved_at
+        return moved is None or now - moved >= MOVES_JOURNALLED_EVERY
 
     def _moved(self, ip: str | None) -> bool:
         # Compared as counter keys, so a phone's changing IPv6 address within its /64 is the same place.

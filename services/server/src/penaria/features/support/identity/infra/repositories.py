@@ -723,6 +723,7 @@ class PostgresTokenRepository:
                 created_at=token.created_at,
                 last_used_at=token.last_used_at,
                 last_used_ip=token.last_used_ip,
+                last_moved_at=token.last_moved_at,
                 revoked_at=token.revoked_at,
             )
         )
@@ -740,6 +741,11 @@ class PostgresTokenRepository:
     async def used(self, token_id: UUID, now: datetime, *, ip: str | None) -> None:
         await self._session.execute(
             update(TokenDB).where(TokenDB.id == token_id).values(last_used_at=now, last_used_ip=ip)
+        )
+
+    async def moved(self, token_id: UUID, now: datetime, *, ip: str | None) -> None:
+        await self._session.execute(
+            update(TokenDB).where(TokenDB.id == token_id).values(last_used_at=now, last_used_ip=ip, last_moved_at=now)
         )
 
     async def revoke_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> None:
@@ -918,6 +924,7 @@ def _token(row: TokenDB) -> Token:
         created_at=row.created_at,
         last_used_at=row.last_used_at,
         last_used_ip=None if row.last_used_ip is None else str(row.last_used_ip),
+        last_moved_at=row.last_moved_at,
         revoked_at=row.revoked_at,
     )
 
