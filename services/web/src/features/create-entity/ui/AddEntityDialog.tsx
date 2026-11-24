@@ -4,6 +4,7 @@ import {useTranslation} from 'react-i18next'
 import {
   childKinds,
   type EntityDetail,
+  isCountable,
   KIND_ICON,
   type Kind,
   NameFields,
@@ -39,8 +40,8 @@ export function AddEntityDialog({homeId, parent: initialParent, canChangePlace, 
   const kinds = childKinds(parent?.kind ?? null)
   const [chosenKind, setChosenKind] = useState<Kind | undefined>(kinds[0])
   const kind = chosenKind && kinds.includes(chosenKind) ? chosenKind : kinds[0]
-  // Only things are counted; the fields are left out, and so are their values, for anything else.
-  const countable = kind === 'item'
+  // A hidden field sends nothing, even if it was filled in for another kind before.
+  const countable = kind !== undefined && isCountable(kind)
   const [name, setName] = useState('')
   const [aliases, setAliases] = useState('')
   const [quantity, setQuantity] = useState('')

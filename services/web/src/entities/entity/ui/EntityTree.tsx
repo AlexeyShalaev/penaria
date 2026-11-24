@@ -6,7 +6,7 @@ import {Link} from 'react-router'
 import {Badge, IconTile, QueryState} from '@/shared/ui'
 
 import {type EntitySummary, useChildren} from '../api/entities'
-import {KIND_ICON, PRIVACY_ICON, STRUCTURAL_KINDS} from '../model/kinds'
+import {childKinds, KIND_ICON, PRIVACY_ICON, STRUCTURAL_KINDS} from '../model/kinds'
 import styles from './EntityTree.module.css'
 
 type TreeSelection = {
@@ -39,6 +39,7 @@ export function EntityTree(props: Props) {
 }
 
 function Level(props: Props & {parentId: string | null; depth: number}) {
+  const {t} = useTranslation()
   const children = useChildren(props.homeId, props.parentId, props.includeArchived)
   return (
     <QueryState
@@ -51,7 +52,14 @@ function Level(props: Props & {parentId: string | null; depth: number}) {
     >
       {(entities) => {
         const visible = entities.filter((entity) => entity.id !== props.hiddenId)
-        if (visible.length === 0 && props.depth === 0 && props.empty) return <li>{props.empty}</li>
+        if (visible.length === 0 && props.depth === 0) return props.empty && <li>{props.empty}</li>
+        if (visible.length === 0) {
+          return (
+            <li className={styles.note} style={{'--depth': props.depth} as CSSProperties}>
+              <p className={styles.nothing}>{t('entity.nothingInside')}</p>
+            </li>
+          )
+        }
         return visible.map((entity) => <Row key={entity.id} {...props} entity={entity} />)
       }}
     </QueryState>
@@ -63,8 +71,8 @@ function Row(props: Props & {entity: EntitySummary; depth: number}) {
   const {entity, depth, select} = props
   const open = props.expanded.has(entity.id)
   const selected = select?.selectedId === entity.id
-  // The count leaves archived entities out, so with them shown any place may have something inside.
-  const expandable = entity.children > 0 || !!props.includeArchived
+  // The count leaves archived entities out, so with them shown any place that can hold something may.
+  const expandable = entity.children > 0 || (!!props.includeArchived && childKinds(entity.kind).length > 0)
   const PrivacyIcon = PRIVACY_ICON[entity.privacy]
   const content = (
     <>

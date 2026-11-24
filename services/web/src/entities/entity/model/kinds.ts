@@ -68,3 +68,8 @@ export const PRIVACY_ICON: Record<Privacy, LucideIcon | null> = {
   guest_visible: Users,
   private: Lock,
 }
+
+/** Whether the forms ask how many there are: only things are counted. */
+export function isCountable(kind: Kind): boolean {
+  return kind === 'item'
+}

@@ -4,6 +4,7 @@ import {useTranslation} from 'react-i18next'
 import {
   type EntityChanges,
   type EntityDetail,
+  isCountable,
   NameFields,
   type Privacy,
   PrivacyField,
@@ -75,7 +76,10 @@ function EditForm(props: {
     <form onSubmit={submit}>
       <FormLayout>
         <NameFields name={{value: name, onChange: setName}} aliases={{value: aliases, onChange: setAliases}} />
-        <QuantityFields quantity={{value: quantity, onChange: setQuantity}} unit={{value: unit, onChange: setUnit}} />
+        {/* A quantity set before (through the API, say) stays editable, so it can be cleared. */}
+        {(isCountable(entity.kind) || entity.quantity !== null || entity.unit !== null) && (
+          <QuantityFields quantity={{value: quantity, onChange: setQuantity}} unit={{value: unit, onChange: setUnit}} />
+        )}
         <Field label={t('fields.status')}>
           <Select value={status} onChange={(event) => setStatus(event.target.value as Status)}>
             {STATUSES.map((option) => (

@@ -18,6 +18,7 @@ export {
   type ArchiveReason,
   canSitIn,
   childKinds,
+  isCountable,
   KIND_ICON,
   type Kind,
   type Place,

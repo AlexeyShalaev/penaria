@@ -113,6 +113,7 @@ describe('PlacesPage', () => {
       ...TREE,
       [`${ENTITIES}?include_archived=true`]: [FLAT],
       [`${ENTITIES}?parent_id=flat&include_archived=true`]: [{...KITCHEN, children: 0}, STORAGE],
+      [`${ENTITIES}?parent_id=kitchen&include_archived=true`]: [],
       [`${ENTITIES}?parent_id=storage&include_archived=true`]: [kettle],
     })
     renderPlaces()
@@ -122,6 +123,7 @@ describe('PlacesPage', () => {
     fireEvent.click(await screen.findByRole('button', {name: 'Show what is inside Storage room'}))
 
     expect(await screen.findByRole('link', {name: /Old kettle/})).toHaveTextContent('Archived')
-    expect(screen.getByRole('button', {name: 'Show what is inside Kitchen'})).toBeVisible()
+    fireEvent.click(screen.getByRole('button', {name: 'Show what is inside Kitchen'}))
+    expect(await screen.findByText('Nothing inside yet.')).toBeVisible()
   })
 })

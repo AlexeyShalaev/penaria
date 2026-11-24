@@ -138,3 +138,9 @@
   padding: var(--sp-1) var(--sp-3) var(--sp-1) calc(var(--sp-8) + var(--depth, 0) * 22px);
   border-top: 1px solid var(--border);
 }
+
+.nothing {
+  padding: var(--sp-3) 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
