@@ -21,6 +21,7 @@ from penaria.features.support.identity.domain.passkeys import (
     Passkey,
     PasskeyOptions,
     RelyingParty,
+    check_open_sign_ins,
     user_handle,
 )
 from penaria.features.support.identity.domain.passwords import PasswordHasher
@@ -108,8 +109,12 @@ class StartPasskeySignIn:
     async def execute(self, client: Client) -> PasskeyOptions:
         """The options for ``navigator.credentials.get`` that let the person pick any passkey."""
         now = datetime.now(UTC)
-        challenge = Challenge.for_sign_in(address_key(client.ip), now)
+        address = address_key(client.ip)
+        challenge = Challenge.for_sign_in(address, now)
         async with self._uow.transaction() as tx:
+            # A request with no address (through a Unix socket) has nothing to count it by.
+            if address is not None:
+                check_open_sign_ins(await tx.challenges.open_sign_ins(address, now), now)
             await issue_challenge(tx, challenge, now)
         return PasskeyOptions(challenge.id, self._relying_party.authentication_options(challenge, []))
 

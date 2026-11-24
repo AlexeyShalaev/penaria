@@ -126,17 +126,15 @@ async def test_a_sign_in_that_ages_during_the_ceremony_still_adds(
     assert response.status_code == 201
 
 
-async def test_a_challenge_of_another_ceremony_adds_nothing(api: httpx.AsyncClient, phone: Authenticator) -> None:
-    sign_in = (await api.post("/sign-in/passkey/options")).json()
-    registration = (await api.post("/me/passkeys/options")).json()
+async def test_a_challenge_of_another_ceremony_adds_nothing(
+    api: httpx.AsyncClient, with_passkey: dict[str, Any], phone: Authenticator
+) -> None:
+    confirming = (await api.post("/me/reauthenticate/passkey/options")).json()
+    registration = (await api.post("/me/passkeys/options")).json()["options"]
+    credential = Authenticator(PUBLIC_URL).create({**registration, "challenge": confirming["options"]["challenge"]})
 
     response = await api.post(
-        "/me/passkeys",
-        json={
-            "challenge_id": sign_in["challenge_id"],
-            "credential": phone.create(registration["options"]),
-            "name": "P",
-        },
+        "/me/passkeys", json={"challenge_id": confirming["challenge_id"], "credential": credential, "name": "P"}
     )
 
     assert response.status_code == 400
@@ -201,6 +199,7 @@ async def test_a_passkey_needs_a_name(api: httpx.AsyncClient, phone: Authenticat
 
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_passkey_name"
+    assert response.json()["params"] == {"max_length": 100}
 
 
 async def test_expired_challenges_are_forgotten(api: httpx.AsyncClient, container: DishkaContainer) -> None:
@@ -335,6 +334,20 @@ async def test_an_address_may_hold_only_ten_unfinished_sign_ins(
     assert refused.json()["code"] == "too_many_attempts"
     assert refused.json()["params"]["retry_after_seconds"] in range(1, 301)
     assert (await sign_in_with(from_address(new_client, app, "198.51.100.1"), phone)).status_code == 200
+
+
+async def test_expired_sign_ins_no_longer_count_against_the_address(
+    new_client: NewClient, app: FastAPI, container: DishkaContainer
+) -> None:
+    script = from_address(new_client, app, "192.0.2.1")
+    for _ in range(10):
+        await script.post("/sign-in/passkey/options")
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(update(PasskeyChallengeDB).values(expires_at=datetime.now(UTC)))
+
+    response = await script.post("/sign-in/passkey/options")
+
+    assert response.status_code == 200
 
 
 async def test_a_known_passkey_that_names_another_account_does_not_sign_in(
