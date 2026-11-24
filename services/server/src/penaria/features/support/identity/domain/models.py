@@ -106,5 +106,10 @@ class Grant:
     scope_entity_id: UUID | None = None
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
+    # Who gave it: None for the grant a home's creator starts with.
+    granted_by: UUID | None = None
     id: UUID = field(default_factory=new_id)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def is_active(self, now: datetime) -> bool:
+        return self.revoked_at is None and (self.expires_at is None or now < self.expires_at)

@@ -6,7 +6,7 @@ from enum import StrEnum
 from functools import cache
 from importlib.resources import files
 
-from penaria.features.shared.errors import InvalidError
+from penaria.features.shared.errors import ConflictError, InvalidError
 from penaria.features.support.identity.domain.models import LOCALES, NAME_MAX_LENGTH
 
 # Letters and digits of any script, dot, underscore and hyphen: something a person can type on a phone.
@@ -19,6 +19,10 @@ PASSWORD_MAX_LENGTH = 256
 
 class InvalidAccountError(InvalidError):
     code = "invalid_account"
+
+
+class UsernameTakenError(ConflictError):
+    code = "username_taken"
 
 
 class WeakPasswordError(InvalidError):

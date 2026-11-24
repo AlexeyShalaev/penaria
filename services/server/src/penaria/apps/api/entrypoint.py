@@ -21,6 +21,8 @@ from penaria.features.support.identity.api.account import router as account_rout
 from penaria.features.support.identity.api.account import sign_in_router
 from penaria.features.support.identity.api.passkeys import router as passkeys_router
 from penaria.features.support.identity.api.passkeys import sign_in_router as passkey_sign_in_router
+from penaria.features.support.identity.api.people import guest_router, public_router
+from penaria.features.support.identity.api.people import router as people_router
 from penaria.features.support.identity.api.routes import router as identity_router
 from penaria.features.support.identity.use_cases.setup import IssueSetupToken
 
@@ -31,6 +33,9 @@ ROUTERS = (
     account_router,
     passkeys_router,
     identity_router,
+    people_router,
+    public_router,
+    guest_router,
     registry_router,
 )
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "[::1]"})

@@ -1,6 +1,6 @@
 """What the registry use cases need from storage."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -20,6 +20,10 @@ class ChildrenFilter:
 
 class EntityRepository(Protocol):
     async def get(self, entity_id: UUID, *, for_update: bool = False) -> Entity | None: ...
+
+    async def get_many(self, entity_ids: Collection[UUID]) -> dict[UUID, Entity]:
+        """The entities with these ids, by id."""
+        ...
 
     async def ancestors(self, entity: Entity) -> list[Entity]:
         """The entities above ``entity``, from the root down."""

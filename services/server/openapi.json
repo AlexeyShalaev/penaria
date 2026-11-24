@@ -246,6 +246,42 @@
         "title": "AuthenticationCredentialIn",
         "type": "object"
       },
+      "CreatedGuestLinkOut": {
+        "properties": {
+          "link": {
+            "$ref": "#/components/schemas/GuestLinkOut"
+          },
+          "url": {
+            "description": "The link to pass on or print as a QR code; shown only now",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "link",
+          "url"
+        ],
+        "title": "CreatedGuestLinkOut",
+        "type": "object"
+      },
+      "CreatedInvitationOut": {
+        "properties": {
+          "invitation": {
+            "$ref": "#/components/schemas/InvitationOut"
+          },
+          "url": {
+            "description": "The link to pass on; shown only now",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "invitation",
+          "url"
+        ],
+        "title": "CreatedInvitationOut",
+        "type": "object"
+      },
       "EntityDetailOut": {
         "properties": {
           "aliases": {
@@ -730,6 +766,274 @@
         "title": "Freshness",
         "type": "string"
       },
+      "GrantOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "granted_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleOut"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null for the whole home"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "scope",
+          "expires_at",
+          "created_at",
+          "granted_by"
+        ],
+        "title": "GrantOut",
+        "type": "object"
+      },
+      "GrantPatch": {
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null for no end",
+            "title": "Expires At"
+          },
+          "role_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Id"
+          },
+          "scope_entity_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null for the whole home",
+            "title": "Scope Entity Id"
+          }
+        },
+        "title": "GrantPatch",
+        "type": "object"
+      },
+      "GuestLinkIn": {
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The role's default when omitted",
+            "title": "Expires At"
+          },
+          "name": {
+            "examples": [
+              "Weekend guests"
+            ],
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "role_id": {
+            "description": "A role with guest view, such as the guest preset",
+            "format": "uuid",
+            "title": "Role Id",
+            "type": "string"
+          },
+          "scope_entity_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omit for the whole home",
+            "title": "Scope Entity Id"
+          }
+        },
+        "required": [
+          "name",
+          "role_id"
+        ],
+        "title": "GuestLinkIn",
+        "type": "object"
+      },
+      "GuestLinkOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "grant_id": {
+            "description": "Revoke it to end the link and every guest's visit",
+            "format": "uuid",
+            "title": "Grant Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleOut"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "grant_id",
+          "name",
+          "role",
+          "scope",
+          "expires_at",
+          "created_at",
+          "last_used_at",
+          "created_by"
+        ],
+        "title": "GuestLinkOut",
+        "type": "object"
+      },
+      "GuestOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "home": {
+            "$ref": "#/components/schemas/HomeRefOut"
+          },
+          "name": {
+            "description": "The guest link's name",
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the visit's things start; null for the whole home"
+          }
+        },
+        "required": [
+          "home",
+          "name",
+          "expires_at",
+          "scope"
+        ],
+        "title": "GuestOut",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -818,6 +1122,204 @@
         "title": "HomeOut",
         "type": "object"
       },
+      "HomeRefOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "HomeRefOut",
+        "type": "object"
+      },
+      "InvitationIn": {
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the link stops working; 7 days by default",
+            "title": "Expires At"
+          },
+          "grant_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the access ends; the role's default when it requires an end",
+            "title": "Grant Expires At"
+          },
+          "leave_when_accepted": {
+            "default": false,
+            "description": "Transfer ownership: an owner invitation only",
+            "title": "Leave When Accepted",
+            "type": "boolean"
+          },
+          "role_id": {
+            "format": "uuid",
+            "title": "Role Id",
+            "type": "string"
+          },
+          "scope_entity_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omit for the whole home",
+            "title": "Scope Entity Id"
+          }
+        },
+        "required": [
+          "role_id"
+        ],
+        "title": "InvitationIn",
+        "type": "object"
+      },
+      "InvitationOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/PersonOut"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "grant_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "leave_when_accepted": {
+            "title": "Leave When Accepted",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleOut"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "scope",
+          "expires_at",
+          "grant_expires_at",
+          "leave_when_accepted",
+          "created_at",
+          "created_by"
+        ],
+        "title": "InvitationOut",
+        "type": "object"
+      },
+      "InvitationPreviewOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "grant_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Expires At"
+          },
+          "home": {
+            "$ref": "#/components/schemas/HomeRefOut"
+          },
+          "inviter": {
+            "description": "The display name of whoever invited",
+            "title": "Inviter",
+            "type": "string"
+          },
+          "leave_when_accepted": {
+            "title": "Leave When Accepted",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/RoleOut"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "home",
+          "inviter",
+          "role",
+          "scope",
+          "expires_at",
+          "grant_expires_at",
+          "leave_when_accepted"
+        ],
+        "title": "InvitationPreviewOut",
+        "type": "object"
+      },
       "Kind": {
         "enum": [
           "property",
@@ -848,6 +1350,31 @@
         "title": "LivenessResponse",
         "type": "object"
       },
+      "MemberOut": {
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/GrantOut"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "person": {
+            "$ref": "#/components/schemas/PersonOut"
+          },
+          "you": {
+            "title": "You",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "person",
+          "you",
+          "grants"
+        ],
+        "title": "MemberOut",
+        "type": "object"
+      },
       "MoveIn": {
         "properties": {
           "parent_id": {
@@ -865,6 +1392,66 @@
           "version"
         ],
         "title": "MoveIn",
+        "type": "object"
+      },
+      "NewAccountIn": {
+        "properties": {
+          "display_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "locale": {
+            "examples": [
+              "en"
+            ],
+            "title": "Locale",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "username",
+          "display_name",
+          "password",
+          "locale"
+        ],
+        "title": "NewAccountIn",
+        "type": "object"
+      },
+      "NewAccountOut": {
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/AccountOut"
+          },
+          "home": {
+            "$ref": "#/components/schemas/HomeRefOut"
+          }
+        },
+        "required": [
+          "account",
+          "home"
+        ],
+        "title": "NewAccountOut",
         "type": "object"
       },
       "PasskeyIn": {
@@ -1026,6 +1613,37 @@
         "title": "PasswordChangeIn",
         "type": "object"
       },
+      "PersonOut": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "display_name"
+        ],
+        "title": "PersonOut",
+        "type": "object"
+      },
       "PlaceOut": {
         "properties": {
           "id": {
@@ -1048,6 +1666,40 @@
         ],
         "title": "PlaceOut",
         "type": "object"
+      },
+      "PlaceRefOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "names": {
+            "description": "The names from the top of the home down to the place itself",
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "names"
+        ],
+        "title": "PlaceRefOut",
+        "type": "object"
+      },
+      "Preset": {
+        "enum": [
+          "owner",
+          "admin",
+          "family",
+          "guest",
+          "contractor"
+        ],
+        "title": "Preset",
+        "type": "string"
       },
       "Privacy": {
         "enum": [
@@ -1119,6 +1771,83 @@
           "revoked"
         ],
         "title": "RevokedOut",
+        "type": "object"
+      },
+      "RoleOut": {
+        "properties": {
+          "all_permissions": {
+            "title": "All Permissions",
+            "type": "boolean"
+          },
+          "default_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How long its grants last unless the giver says",
+            "title": "Default Duration Seconds"
+          },
+          "expiry_required": {
+            "description": "Every grant of it must end",
+            "title": "Expiry Required",
+            "type": "boolean"
+          },
+          "guest_view": {
+            "description": "Sees only guest-visible things and the places on the way to them",
+            "title": "Guest View",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name someone gave it; a preset's is null until renamed",
+            "title": "Name"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Preset"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The preset it started as; its name is then translated"
+          }
+        },
+        "required": [
+          "id",
+          "preset",
+          "name",
+          "all_permissions",
+          "permissions",
+          "guest_view",
+          "expiry_required",
+          "default_duration_seconds"
+        ],
+        "title": "RoleOut",
         "type": "object"
       },
       "SessionOut": {
@@ -1267,6 +1996,21 @@
         ],
         "title": "Status",
         "type": "string"
+      },
+      "TokenIn": {
+        "properties": {
+          "token": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "TokenIn",
+        "type": "object"
       },
       "ValidationError": {
         "properties": {
@@ -1684,6 +2428,70 @@
         ]
       }
     },
+    "/api/v1/guest": {
+      "get": {
+        "description": "The visit of the request's guest session.",
+        "operationId": "guest_api_v1_guest_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Guest",
+        "tags": [
+          "guests"
+        ]
+      }
+    },
+    "/api/v1/guest-sessions": {
+      "post": {
+        "description": "Exchange a guest link's token for a guest session's cookie.",
+        "operationId": "open_guest_link_api_v1_guest_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open Guest Link",
+        "tags": [
+          "invitations"
+        ]
+      }
+    },
     "/api/v1/homes": {
       "get": {
         "operationId": "list_homes_api_v1_homes_get",
@@ -1915,6 +2723,607 @@
         "summary": "Create Entity",
         "tags": [
           "entities"
+        ]
+      }
+    },
+    "/api/v1/homes/{home_id}/grants/{grant_id}": {
+      "delete": {
+        "description": "Take back a member's access, or end a guest link with every visit made with it.",
+        "operationId": "revoke_grant_api_v1_homes__home_id__grants__grant_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Grant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Grant",
+        "tags": [
+          "people"
+        ]
+      },
+      "patch": {
+        "description": "Change a member's role, place or end of access; needs a recent sign-in.",
+        "operationId": "change_grant_api_v1_homes__home_id__grants__grant_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Grant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change Grant",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/homes/{home_id}/guest-links": {
+      "get": {
+        "operationId": "list_guest_links_api_v1_homes__home_id__guest_links_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GuestLinkOut"
+                  },
+                  "title": "Response List Guest Links Api V1 Homes  Home Id  Guest Links Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Guest Links",
+        "tags": [
+          "people"
+        ]
+      },
+      "post": {
+        "operationId": "create_guest_link_api_v1_homes__home_id__guest_links_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestLinkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedGuestLinkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Guest Link",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/homes/{home_id}/invitations": {
+      "get": {
+        "operationId": "list_invitations_api_v1_homes__home_id__invitations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InvitationOut"
+                  },
+                  "title": "Response List Invitations Api V1 Homes  Home Id  Invitations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Invitations",
+        "tags": [
+          "people"
+        ]
+      },
+      "post": {
+        "operationId": "create_invitation_api_v1_homes__home_id__invitations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedInvitationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Invitation",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/homes/{home_id}/invitations/{invitation_id}": {
+      "delete": {
+        "operationId": "revoke_invitation_api_v1_homes__home_id__invitations__invitation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "invitation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Invitation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Invitation",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/homes/{home_id}/members": {
+      "get": {
+        "operationId": "list_members_api_v1_homes__home_id__members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemberOut"
+                  },
+                  "title": "Response List Members Api V1 Homes  Home Id  Members Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Members",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/homes/{home_id}/roles": {
+      "get": {
+        "operationId": "list_roles_api_v1_homes__home_id__roles_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RoleOut"
+                  },
+                  "title": "Response List Roles Api V1 Homes  Home Id  Roles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Roles",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/homes/{home_id}:leave": {
+      "post": {
+        "description": "Give up your own access to the home; the last owner cannot.",
+        "operationId": "leave_home_api_v1_homes__home_id__leave_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leave Home",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/invitations:accept": {
+      "post": {
+        "description": "Accept an invitation with the signed-in account.",
+        "operationId": "accept_invitation_api_v1_invitations_accept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeRefOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Invitation",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/api/v1/invitations:accept-new-account": {
+      "post": {
+        "description": "Make an account through an invitation and accept it; the new account is signed in.",
+        "operationId": "accept_invitation_with_new_account_api_v1_invitations_accept_new_account_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewAccountIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewAccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept Invitation With New Account",
+        "tags": [
+          "invitations"
+        ]
+      }
+    },
+    "/api/v1/invitations:preview": {
+      "post": {
+        "description": "What an invitation's link offers, for its landing page; it changes nothing.",
+        "operationId": "preview_invitation_api_v1_invitations_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Invitation",
+        "tags": [
+          "invitations"
         ]
       }
     },

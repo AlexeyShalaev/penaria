@@ -107,6 +107,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/guest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Guest
+         * @description The visit of the request's guest session.
+         */
+        get: operations["guest_api_v1_guest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/guest-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Guest Link
+         * @description Exchange a guest link's token for a guest session's cookie.
+         */
+        post: operations["open_guest_link_api_v1_guest_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/homes": {
         parameters: {
             query?: never;
@@ -154,6 +194,197 @@ export interface paths {
         put?: never;
         /** Create Entity */
         post: operations["create_entity_api_v1_homes__home_id__entities_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/homes/{home_id}/grants/{grant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Grant
+         * @description Take back a member's access, or end a guest link with every visit made with it.
+         */
+        delete: operations["revoke_grant_api_v1_homes__home_id__grants__grant_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change Grant
+         * @description Change a member's role, place or end of access; needs a recent sign-in.
+         */
+        patch: operations["change_grant_api_v1_homes__home_id__grants__grant_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/homes/{home_id}/guest-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Guest Links */
+        get: operations["list_guest_links_api_v1_homes__home_id__guest_links_get"];
+        put?: never;
+        /** Create Guest Link */
+        post: operations["create_guest_link_api_v1_homes__home_id__guest_links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/homes/{home_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Invitations */
+        get: operations["list_invitations_api_v1_homes__home_id__invitations_get"];
+        put?: never;
+        /** Create Invitation */
+        post: operations["create_invitation_api_v1_homes__home_id__invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/homes/{home_id}/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Invitation */
+        delete: operations["revoke_invitation_api_v1_homes__home_id__invitations__invitation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/homes/{home_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Members */
+        get: operations["list_members_api_v1_homes__home_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/homes/{home_id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Roles */
+        get: operations["list_roles_api_v1_homes__home_id__roles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/homes/{home_id}:leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Leave Home
+         * @description Give up your own access to the home; the last owner cannot.
+         */
+        post: operations["leave_home_api_v1_homes__home_id__leave_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations:accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Invitation
+         * @description Accept an invitation with the signed-in account.
+         */
+        post: operations["accept_invitation_api_v1_invitations_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations:accept-new-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Invitation With New Account
+         * @description Make an account through an invitation and accept it; the new account is signed in.
+         */
+        post: operations["accept_invitation_with_new_account_api_v1_invitations_accept_new_account_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Invitation
+         * @description What an invitation's link offers, for its landing page; it changes nothing.
+         */
+        post: operations["preview_invitation_api_v1_invitations_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -594,6 +825,24 @@ export interface components {
              */
             type: "public-key";
         };
+        /** CreatedGuestLinkOut */
+        CreatedGuestLinkOut: {
+            link: components["schemas"]["GuestLinkOut"];
+            /**
+             * Url
+             * @description The link to pass on or print as a QR code; shown only now
+             */
+            url: string;
+        };
+        /** CreatedInvitationOut */
+        CreatedInvitationOut: {
+            invitation: components["schemas"]["InvitationOut"];
+            /**
+             * Url
+             * @description The link to pass on; shown only now
+             */
+            url: string;
+        };
         /** EntityDetailOut */
         EntityDetailOut: {
             /** Aliases */
@@ -738,6 +987,111 @@ export interface components {
          * @enum {string}
          */
         Freshness: "fresh" | "stale" | "doubtful";
+        /** GrantOut */
+        GrantOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Expires At */
+            expires_at: string | null;
+            granted_by: components["schemas"]["PersonOut"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            role: components["schemas"]["RoleOut"];
+            /** @description null for the whole home */
+            scope: components["schemas"]["PlaceRefOut"] | null;
+        };
+        /** GrantPatch */
+        GrantPatch: {
+            /**
+             * Expires At
+             * @description null for no end
+             */
+            expires_at?: string | null;
+            /** Role Id */
+            role_id?: string | null;
+            /**
+             * Scope Entity Id
+             * @description null for the whole home
+             */
+            scope_entity_id?: string | null;
+        };
+        /** GuestLinkIn */
+        GuestLinkIn: {
+            /**
+             * Expires At
+             * @description The role's default when omitted
+             */
+            expires_at?: string | null;
+            /**
+             * Name
+             * @example Weekend guests
+             */
+            name: string;
+            /**
+             * Role Id
+             * Format: uuid
+             * @description A role with guest view, such as the guest preset
+             */
+            role_id: string;
+            /**
+             * Scope Entity Id
+             * @description Omit for the whole home
+             */
+            scope_entity_id?: string | null;
+        };
+        /** GuestLinkOut */
+        GuestLinkOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            created_by: components["schemas"]["PersonOut"] | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Grant Id
+             * Format: uuid
+             * @description Revoke it to end the link and every guest's visit
+             */
+            grant_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            role: components["schemas"]["RoleOut"];
+            scope: components["schemas"]["PlaceRefOut"] | null;
+        };
+        /** GuestOut */
+        GuestOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            home: components["schemas"]["HomeRefOut"];
+            /**
+             * Name
+             * @description The guest link's name
+             */
+            name: string;
+            /** @description Where the visit's things start; null for the whole home */
+            scope: components["schemas"]["PlaceRefOut"] | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -775,6 +1129,90 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** HomeRefOut */
+        HomeRefOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** InvitationIn */
+        InvitationIn: {
+            /**
+             * Expires At
+             * @description When the link stops working; 7 days by default
+             */
+            expires_at?: string | null;
+            /**
+             * Grant Expires At
+             * @description When the access ends; the role's default when it requires an end
+             */
+            grant_expires_at?: string | null;
+            /**
+             * Leave When Accepted
+             * @description Transfer ownership: an owner invitation only
+             * @default false
+             */
+            leave_when_accepted: boolean;
+            /**
+             * Role Id
+             * Format: uuid
+             */
+            role_id: string;
+            /**
+             * Scope Entity Id
+             * @description Omit for the whole home
+             */
+            scope_entity_id?: string | null;
+        };
+        /** InvitationOut */
+        InvitationOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            created_by: components["schemas"]["PersonOut"];
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Grant Expires At */
+            grant_expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Leave When Accepted */
+            leave_when_accepted: boolean;
+            role: components["schemas"]["RoleOut"];
+            scope: components["schemas"]["PlaceRefOut"] | null;
+        };
+        /** InvitationPreviewOut */
+        InvitationPreviewOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Grant Expires At */
+            grant_expires_at: string | null;
+            home: components["schemas"]["HomeRefOut"];
+            /**
+             * Inviter
+             * @description The display name of whoever invited
+             */
+            inviter: string;
+            /** Leave When Accepted */
+            leave_when_accepted: boolean;
+            role: components["schemas"]["RoleOut"];
+            scope: components["schemas"]["PlaceRefOut"] | null;
+        };
         /**
          * Kind
          * @enum {string}
@@ -791,6 +1229,14 @@ export interface components {
              */
             status: "ok";
         };
+        /** MemberOut */
+        MemberOut: {
+            /** Grants */
+            grants: components["schemas"]["GrantOut"][];
+            person: components["schemas"]["PersonOut"];
+            /** You */
+            you: boolean;
+        };
         /** MoveIn */
         MoveIn: {
             /**
@@ -800,6 +1246,27 @@ export interface components {
             parent_id: string;
             /** Version */
             version: number;
+        };
+        /** NewAccountIn */
+        NewAccountIn: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * Locale
+             * @example en
+             */
+            locale: string;
+            /** Password */
+            password: string;
+            /** Token */
+            token: string;
+            /** Username */
+            username: string;
+        };
+        /** NewAccountOut */
+        NewAccountOut: {
+            account: components["schemas"]["AccountOut"];
+            home: components["schemas"]["HomeRefOut"];
         };
         /** PasskeyIn */
         PasskeyIn: {
@@ -878,6 +1345,18 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /** PersonOut */
+        PersonOut: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Username */
+            username: string | null;
+        };
         /** PlaceOut */
         PlaceOut: {
             /**
@@ -889,6 +1368,24 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** PlaceRefOut */
+        PlaceRefOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Names
+             * @description The names from the top of the home down to the place itself
+             */
+            names: string[];
+        };
+        /**
+         * Preset
+         * @enum {string}
+         */
+        Preset: "owner" | "admin" | "family" | "guest" | "contractor";
         /**
          * Privacy
          * @enum {string}
@@ -925,6 +1422,40 @@ export interface components {
         RevokedOut: {
             /** Revoked */
             revoked: number;
+        };
+        /** RoleOut */
+        RoleOut: {
+            /** All Permissions */
+            all_permissions: boolean;
+            /**
+             * Default Duration Seconds
+             * @description How long its grants last unless the giver says
+             */
+            default_duration_seconds: number | null;
+            /**
+             * Expiry Required
+             * @description Every grant of it must end
+             */
+            expiry_required: boolean;
+            /**
+             * Guest View
+             * @description Sees only guest-visible things and the places on the way to them
+             */
+            guest_view: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Name
+             * @description The name someone gave it; a preset's is null until renamed
+             */
+            name: string | null;
+            /** Permissions */
+            permissions: string[];
+            /** @description The preset it started as; its name is then translated */
+            preset: components["schemas"]["Preset"] | null;
         };
         /** SessionOut */
         SessionOut: {
@@ -992,6 +1523,11 @@ export interface components {
          * @enum {string}
          */
         Status: "present" | "missing" | "lent" | "in_repair";
+        /** TokenIn */
+        TokenIn: {
+            /** Token */
+            token: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -1254,6 +1790,59 @@ export interface operations {
             };
         };
     };
+    guest_api_v1_guest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestOut"];
+                };
+            };
+        };
+    };
+    open_guest_link_api_v1_guest_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_homes_api_v1_homes_get: {
         parameters: {
             query?: never;
@@ -1395,6 +1984,422 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntityDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_grant_api_v1_homes__home_id__grants__grant_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+                grant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_grant_api_v1_homes__home_id__grants__grant_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+                grant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_guest_links_api_v1_homes__home_id__guest_links_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestLinkOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_guest_link_api_v1_homes__home_id__guest_links_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuestLinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedGuestLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_invitations_api_v1_homes__home_id__invitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_invitation_api_v1_homes__home_id__invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvitationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedInvitationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invitation_api_v1_homes__home_id__invitations__invitation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_members_api_v1_homes__home_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_roles_api_v1_homes__home_id__roles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    leave_home_api_v1_homes__home_id__leave_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_invitation_api_v1_invitations_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeRefOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_invitation_with_new_account_api_v1_invitations_accept_new_account_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewAccountIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewAccountOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_invitation_api_v1_invitations_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreviewOut"];
                 };
             };
             /** @description Validation Error */

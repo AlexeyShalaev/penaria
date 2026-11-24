@@ -1,4 +1,7 @@
-"""Browser sessions: a random token in a cookie, of which the server keeps only a hash (sign-in.md, 5)."""
+"""Browser sessions: a random token in a cookie, of which the server keeps only a hash (sign-in.md, 5).
+
+A session belongs to an account, or to a guest link's grant: a guest needs no account (sign-in.md, 6.2).
+"""
 
 import hashlib
 import secrets
@@ -6,7 +9,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from penaria.features.shared.errors import ForbiddenError
+from penaria.features.shared.actor import Actor
+from penaria.features.shared.errors import ForbiddenError, UnauthenticatedError
 from penaria.features.shared.ids import new_id
 
 IDLE_TIMEOUT = timedelta(days=30)
@@ -32,22 +36,39 @@ class Client:
 
 @dataclass(slots=True)
 class Session:
-    user_id: UUID
+    # Exactly one of the two: the account's, or a guest link's grant.
+    user_id: UUID | None
     token_hash: bytes
     created_at: datetime
     last_seen_at: datetime
     authenticated_at: datetime
     client: Client
+    grant_id: UUID | None = None
     revoked_at: datetime | None = None
     id: UUID = field(default_factory=new_id)
 
     @classmethod
     def start(cls, user_id: UUID, client: Client, now: datetime) -> tuple[Session, str]:
-        """A new session and the token for its cookie; only the token's hash is kept."""
-        token = secrets.token_urlsafe(TOKEN_BYTES)
+        """A new session of an account and the token for its cookie; only the token's hash is kept."""
+        token, token_hash = new_secret()
         session = cls(
             user_id=user_id,
-            token_hash=hash_token(token),
+            token_hash=token_hash,
+            created_at=now,
+            last_seen_at=now,
+            authenticated_at=now,
+            client=client,
+        )
+        return session, token
+
+    @classmethod
+    def start_guest(cls, grant_id: UUID, client: Client, now: datetime) -> tuple[Session, str]:
+        """A new session of a guest link's grant and the token for its cookie."""
+        token, token_hash = new_secret()
+        session = cls(
+            user_id=None,
+            grant_id=grant_id,
+            token_hash=token_hash,
             created_at=now,
             last_seen_at=now,
             authenticated_at=now,
@@ -79,6 +100,46 @@ class CurrentSession:
         """Refuse a sensitive command in a session whose person has not proved who they are recently."""
         if now - self.authenticated_at > RECENT_SIGN_IN:
             raise RecentSignInRequiredError("confirm it is you first: sign in again with your password or a passkey")
+
+
+@dataclass(frozen=True, slots=True)
+class GuestSession:
+    """A session opened with a guest link: it acts as the link, within the link's grant."""
+
+    id: UUID
+    grant_id: UUID
+    link_id: UUID
+    home_id: UUID
+    expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class RequestSession:
+    """The session behind a request: an account's or a guest's."""
+
+    session: CurrentSession | GuestSession
+
+    def account(self) -> CurrentSession:
+        """The account's session; a guest's answers as no session, since a guest link opens no account."""
+        if isinstance(self.session, GuestSession):
+            raise UnauthenticatedError("a guest link opens no account: sign in")
+        return self.session
+
+    def guest(self) -> GuestSession:
+        if isinstance(self.session, CurrentSession):
+            raise UnauthenticatedError("this is not a guest's session: open the guest link")
+        return self.session
+
+    def actor(self) -> Actor:
+        if isinstance(self.session, GuestSession):
+            return Actor.link(self.session.link_id)
+        return Actor.user(self.session.user_id)
+
+
+def new_secret() -> tuple[str, bytes]:
+    """A random token to hand out, for a cookie or a link, and the hash to keep of it."""
+    token = secrets.token_urlsafe(TOKEN_BYTES)
+    return token, hash_token(token)
 
 
 def hash_token(token: str) -> bytes:

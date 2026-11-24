@@ -1,6 +1,6 @@
 """The PostgreSQL repository of entities."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from uuid import UUID
 
 from sqlalchemy import exists, func, select, text
@@ -32,6 +32,12 @@ class PostgresEntityRepository:
             query = query.with_for_update()
         row = await self._session.scalar(query)
         return None if row is None else _entity(row)
+
+    async def get_many(self, entity_ids: Collection[UUID]) -> dict[UUID, Entity]:
+        if not entity_ids:
+            return {}
+        rows = await self._session.scalars(select(EntityDB).where(EntityDB.id.in_(list(entity_ids))))
+        return {row.id: _entity(row) for row in rows}
 
     async def ancestors(self, entity: Entity) -> list[Entity]:
         above = entity.path[:-1]

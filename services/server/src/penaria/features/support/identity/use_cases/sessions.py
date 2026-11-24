@@ -10,7 +10,7 @@ from penaria.features.shared.actor import Actor
 from penaria.features.shared.errors import UnauthenticatedError
 from penaria.features.shared.journal import Event
 from penaria.features.support.identity.domain.accounts import normalize_username
-from penaria.features.support.identity.domain.models import User
+from penaria.features.support.identity.domain.models import Grant, User
 from penaria.features.support.identity.domain.passkeys import (
     Assertion,
     Ceremony,
@@ -26,7 +26,14 @@ from penaria.features.support.identity.domain.passkeys import (
 )
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
-from penaria.features.support.identity.domain.sessions import Client, CurrentSession, Session, hash_token
+from penaria.features.support.identity.domain.sessions import (
+    Client,
+    CurrentSession,
+    GuestSession,
+    RequestSession,
+    Session,
+    hash_token,
+)
 from penaria.features.support.identity.domain.throttle import account_key, address_key
 from penaria.features.support.identity.use_cases.attempts import attempt_succeeded, count_attempt
 from penaria.features.support.identity.use_cases.challenges import issue_challenge
@@ -41,12 +48,12 @@ class InvalidCredentialsError(UnauthenticatedError):
 
 
 class Authenticate:
-    """The session behind a request's cookie, if it is still open."""
+    """The session behind a request's cookie, if it is still open: an account's, or a guest's."""
 
     def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction]) -> None:
         self._uow = uow
 
-    async def execute(self, token: str | None) -> CurrentSession:
+    async def execute(self, token: str | None) -> RequestSession:
         if not token:
             raise UnauthenticatedError("sign in first")
         now = datetime.now(UTC)
@@ -54,12 +61,11 @@ class Authenticate:
             found = await tx.sessions.by_token_hash(hash_token(token))
             if found is None:
                 raise UnauthenticatedError("sign in first")
-            session, user = found
-            if not session.is_active(now) or user.disabled_at is not None:
-                raise UnauthenticatedError("the session has ended; sign in again")
+            session, user, grant = found
+            current = _open(session, user, grant, now)
             if session.needs_touch(now):
                 await tx.sessions.touch(session.id, now)
-        return CurrentSession(id=session.id, user_id=user.id, authenticated_at=session.authenticated_at)
+        return RequestSession(current)
 
 
 class SignIn:
@@ -210,6 +216,25 @@ class SignOut:
                     )
                 ]
             )
+
+
+def _open(session: Session, user: User | None, grant: Grant | None, now: datetime) -> CurrentSession | GuestSession:
+    if not session.is_active(now):
+        raise UnauthenticatedError("the session has ended; sign in again")
+    if user is not None:
+        if user.disabled_at is not None:
+            raise UnauthenticatedError("the session has ended; sign in again")
+        return CurrentSession(id=session.id, user_id=user.id, authenticated_at=session.authenticated_at)
+    # A guest's session lasts as long as its link's grant: revoking or expiring it ends the visit at once.
+    if grant is None or grant.expires_at is None or not grant.is_active(now):
+        raise UnauthenticatedError("the guest link has ended")
+    return GuestSession(
+        id=session.id,
+        grant_id=grant.id,
+        link_id=grant.principal_id,
+        home_id=grant.home_id,
+        expires_at=grant.expires_at,
+    )
 
 
 async def start_session(
