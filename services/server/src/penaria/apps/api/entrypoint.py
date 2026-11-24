@@ -3,6 +3,9 @@
 from servicewright import AppSpec
 from servicewright.adapters.dishka import DishkaContainer
 from servicewright.adapters.fastapi import FastApiEntrypoint
+from servicewright.adapters.health.postgres import PostgresHealthCheck
+from servicewright.core.contracts import AppScopeProtocol
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from penaria import __version__
 from penaria.apps.api.container import build_container
@@ -12,7 +15,18 @@ SERVICE_NAME = "penaria-api"
 
 
 def build_spec() -> AppSpec[Settings, DishkaContainer]:
-    return AppSpec(service_name=SERVICE_NAME, create_container=build_container)
+    spec = AppSpec(service_name=SERVICE_NAME, create_container=build_container)
+
+    async def check_database(app_scope: AppScopeProtocol | None = None) -> None:
+        # Resolving the session maker connects, retrying while the database starts; from then
+        # on readiness follows the database.
+        if app_scope is None:
+            raise RuntimeError("the host runs pre-start hooks inside the application scope")
+        session_maker = await app_scope.get(async_sessionmaker[AsyncSession])
+        spec.health.add_check("postgres", PostgresHealthCheck(session_maker))
+
+    spec.lifecycle.add_pre_start_hook(check_database)
+    return spec
 
 
 def build_http(settings: Settings) -> FastApiEntrypoint:
