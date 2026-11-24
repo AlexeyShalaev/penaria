@@ -1493,7 +1493,8 @@
           "password_reset",
           "invitation",
           "password_changed",
-          "passkey_added"
+          "passkey_added",
+          "email_changed"
         ],
         "title": "MailKind",
         "type": "string"
@@ -1655,7 +1656,7 @@
                 "type": "null"
               }
             ],
-            "description": "Empty or omitted: keep the saved one",
+            "description": "Empty or omitted: keep the saved one; required again when the server or the login changes",
             "title": "Password"
           },
           "port": {

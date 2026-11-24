@@ -355,7 +355,7 @@ async def list_invitations(home_id: UUID, scope: UnitScopeDep) -> list[Invitatio
 async def create_invitation(
     home_id: UUID, body: Annotated[InvitationIn, Body()], scope: UnitScopeDep
 ) -> CreatedInvitationOut:
-    view, token = await (await scope.get(CreateInvitation)).execute(
+    view, url = await (await scope.get(CreateInvitation)).execute(
         await scope.get(CurrentSession),
         home_id,
         role_id=body.role_id,
@@ -367,7 +367,7 @@ async def create_invitation(
     )
     return CreatedInvitationOut(
         invitation=InvitationOut.of(view),
-        url=(await scope.get(PublicLinks)).invitation(token),
+        url=url,
         emailed_to=view.emailed_to,
     )
 

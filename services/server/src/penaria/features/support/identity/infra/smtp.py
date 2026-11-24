@@ -9,15 +9,13 @@ import base64
 import contextlib
 import re
 import ssl
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 
 import aiosmtplib
 
 from penaria.features.support.identity.domain.mail import (
-    ERROR_TEXT_MAX_LENGTH,
-    SMTP_CODES,
     Envelope,
     Failure,
     FailureReason,
@@ -27,6 +25,9 @@ from penaria.features.support.identity.domain.mailbox import Mailbox, MailSecuri
 
 TIMEOUT_SECONDS = 15
 HIDDEN = "[hidden]"
+# The log shows one line of the server's words; longer replies are cut.
+ERROR_TEXT_MAX_LENGTH = 500
+SMTP_CODES = range(100, 1000)
 
 # Order matters: a connect timeout is a connect error too, and a disconnection or timeout is an OSError.
 REASONS: tuple[tuple[type[BaseException] | tuple[type[BaseException], ...], FailureReason], ...] = (
@@ -46,17 +47,8 @@ REASONS: tuple[tuple[type[BaseException] | tuple[type[BaseException], ...], Fail
 class SmtpTransport:
     async def send(self, mailbox: Mailbox, envelope: Envelope) -> str:
         fields = mailbox.fields
-        message = EmailMessage()
-        message["From"] = formataddr((fields.from_name, fields.from_address))
-        message["To"] = envelope.to
-        message["Subject"] = envelope.content.subject
-        message_id = make_msgid(domain=_domain(fields.from_address))
-        message["Message-ID"] = message_id
-        # RFC 3834: out-of-office replies and other robots should not answer.
-        message["Auto-Submitted"] = "auto-generated"
-        message.set_content(envelope.content.text)
-        message.add_alternative(envelope.content.html, subtype="html")
         try:
+            message, message_id = _message(mailbox, envelope)
             await aiosmtplib.send(
                 message,
                 hostname=fields.host,
@@ -70,20 +62,21 @@ class SmtpTransport:
                 local_hostname=_domain(fields.from_address),
             )
         except Exception as exc:
-            raise MailDeliveryError(classify(exc, secrets=(fields.username, mailbox.password))) from exc
+            raise MailDeliveryError(classify(exc, login=fields.username, password=mailbox.password)) from exc
         return message_id
 
     async def probe(self, mailbox: Mailbox) -> None:
         fields = mailbox.fields
-        client = aiosmtplib.SMTP(
-            hostname=fields.host,
-            port=fields.port,
-            use_tls=fields.security is MailSecurity.TLS,
-            start_tls=False,
-            timeout=TIMEOUT_SECONDS,
-            local_hostname=_domain(fields.from_address),
-        )
+        client: aiosmtplib.SMTP | None = None
         try:
+            client = aiosmtplib.SMTP(
+                hostname=fields.host,
+                port=fields.port,
+                use_tls=fields.security is MailSecurity.TLS,
+                start_tls=False,
+                timeout=TIMEOUT_SECONDS,
+                local_hostname=_domain(fields.from_address),
+            )
             await client.connect()
             if fields.security is MailSecurity.STARTTLS:
                 await client.starttls()
@@ -91,15 +84,17 @@ class SmtpTransport:
                 await client.login(fields.username, mailbox.password or "")
             await client.noop()
         except Exception as exc:
-            raise MailDeliveryError(classify(exc, secrets=(fields.username, mailbox.password))) from exc
+            raise MailDeliveryError(classify(exc, login=fields.username, password=mailbox.password)) from exc
         finally:
             # The connection may not have opened, or the server may have dropped it already.
-            with contextlib.suppress(aiosmtplib.SMTPException, OSError):
-                await client.quit()
+            if client is not None:
+                with contextlib.suppress(aiosmtplib.SMTPException, OSError):
+                    await client.quit()
 
 
-def classify(exc: BaseException, *, secrets: Iterable[str | None] = ()) -> Failure:
-    """The failure an exception of aiosmtplib, ``ssl`` or the network stands for, its text scrubbed of ``secrets``."""
+def classify(exc: BaseException, *, login: str | None, password: str | None) -> Failure:
+    """The failure an exception of aiosmtplib, ``ssl`` or the network stands for, its text scrubbed of the
+    mailbox's login and password."""
     source = exc
     code: int | None = None
     if isinstance(exc, aiosmtplib.SMTPRecipientsRefused) and exc.recipients:
@@ -121,22 +116,38 @@ def classify(exc: BaseException, *, secrets: Iterable[str | None] = ()) -> Failu
     text = _words(source)
     if not isinstance(source, aiosmtplib.SMTPException):
         text = f"{type(source).__name__}: {text}" if text else type(source).__name__
-    return Failure(reason=reason, smtp_code=code, text=scrub(text, secrets=secrets))
+    return Failure(reason=reason, smtp_code=code, text=scrub(text, login=login, password=password))
 
 
-def scrub(text: str, *, secrets: Iterable[str | None] = ()) -> str | None:
-    """``text`` on one line, at most 500 characters, with each secret hidden, plain or in base64."""
-    plain = [secret for secret in secrets if secret]
+def scrub(text: str, *, login: str | None, password: str | None) -> str | None:
+    """``text`` on one line, at most 500 characters, with the login and the password hidden, plain or in the
+    base64 that ``AUTH LOGIN`` and ``AUTH PLAIN`` send them in."""
+    plain = [secret for secret in (login, password) if secret]
     variants = plain + [base64.b64encode(secret.encode()).decode() for secret in plain]
-    login_and_password = 2
-    if len(plain) == login_and_password:
-        login, password = plain
+    if login and password:
         variants.append(base64.b64encode(f"\0{login}\0{password}".encode()).decode())
     hidden = sorted(set(variants), key=len, reverse=True)
     if hidden:
         text = re.compile("|".join(re.escape(secret) for secret in hidden), re.IGNORECASE).sub(HIDDEN, text)
     one_line = " ".join("".join(c if c.isprintable() else " " for c in text).split())
     return one_line[:ERROR_TEXT_MAX_LENGTH] or None
+
+
+def _message(mailbox: Mailbox, envelope: Envelope) -> tuple[EmailMessage, str]:
+    """The email as text and HTML, and its ``Message-ID``."""
+    fields = mailbox.fields
+    message = EmailMessage()
+    local = fields.from_address.rpartition("@")[0]
+    message["From"] = formataddr((fields.from_name, f"{local}@{_domain(fields.from_address)}"))
+    message["To"] = envelope.to
+    message["Subject"] = envelope.content.subject
+    message_id = make_msgid(domain=_domain(fields.from_address))
+    message["Message-ID"] = message_id
+    # RFC 3834: out-of-office replies and other robots should not answer.
+    message["Auto-Submitted"] = "auto-generated"
+    message.set_content(envelope.content.text)
+    message.add_alternative(envelope.content.html, subtype="html")
+    return message, message_id
 
 
 def _chain(exc: BaseException) -> Iterator[BaseException]:
@@ -156,4 +167,6 @@ def _words(exc: BaseException) -> str:
 
 
 def _domain(address: str) -> str:
-    return address.rpartition("@")[2] or "localhost"
+    """The domain of an address as SMTP sends it, in ASCII: ``почта.рф`` as ``xn--80a1acny.xn--p1ai``."""
+    domain = address.rpartition("@")[2]
+    return domain.encode("idna").decode("ascii") if domain else "localhost"

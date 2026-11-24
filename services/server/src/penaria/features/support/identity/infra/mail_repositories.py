@@ -225,7 +225,6 @@ def _mail_fields(mail: Mail) -> dict[str, object]:
         "state": mail.state.value,
         "attempts": mail.attempts,
         "next_attempt_at": mail.next_attempt_at,
-        "retried": mail.retried,
     }
 
 
@@ -244,7 +243,6 @@ def _mail(row: MailDB) -> Mail:
         state=MailState(row.state),
         attempts=row.attempts,
         next_attempt_at=row.next_attempt_at,
-        retried=row.retried,
     )
 
 

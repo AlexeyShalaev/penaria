@@ -7,6 +7,7 @@ mail log, and a temporary failure brings the mail back after 1, 5, 15 and 30 min
 
 A mail being sent is held by a lease: taking it moves its next attempt five minutes ahead, in a
 transaction that skips rows other replicas hold, so several api replicas never take the same mail.
+Mails are taken one at a time, so a slow server never keeps a mail past its lease.
 """
 
 import logging
@@ -39,7 +40,7 @@ from penaria.features.support.identity.domain.mail import (
 )
 from penaria.features.support.identity.domain.mail_texts import Link, compose
 from penaria.features.support.identity.domain.mailbox import (
-    PASSWORD_BINDING,
+    MAILBOX_SEAL,
     Mailbox,
     MailboxSource,
     MailOffError,
@@ -47,28 +48,47 @@ from penaria.features.support.identity.domain.mailbox import (
 )
 from penaria.features.support.identity.domain.models import User
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
-from penaria.features.support.identity.domain.secrets import SecretBox, SecretUnreadableError, bound_to
+from penaria.features.support.identity.domain.secrets import SecretBox, SecretUnreadableError
 
-# How many due mails one pass of the loop takes.
+# How many due mails one pass of the loop sends at most before it looks again.
 BATCH = 20
 SEALED_LOGIN_UNREADABLE = (
     "the saved SMTP password does not open with PENARIA_SECRET_KEY (was the key changed?): enter the password again"
 )
 CONTENT_UNREADABLE = "the mail does not open with PENARIA_SECRET_KEY (was the key changed?)"
+# Failures of the mailbox rather than of one mail: the rest of the due mail waits for the next pass.
+MAILBOX_FAILURES = frozenset(
+    {
+        FailureReason.AUTH,
+        FailureReason.CONNECT,
+        FailureReason.TIMEOUT,
+        FailureReason.TLS,
+        FailureReason.DISCONNECTED,
+        FailureReason.MAIL_OFF,
+    }
+)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class Resolved:
-    """The mailbox to send through, or why there is none to use: mail is off, or its password does not open."""
+class MailOff:
+    """The install has no mailbox."""
 
-    mailbox: Mailbox | None
-    problem: Failure | None = None
 
-    @property
-    def on(self) -> bool:
-        return self.mailbox is not None or self.problem is not None
+@dataclass(frozen=True, slots=True)
+class MailboxReady:
+    mailbox: Mailbox
+
+
+@dataclass(frozen=True, slots=True)
+class MailboxUnreadable:
+    """A mailbox is saved, but its password does not open with the install's keys."""
+
+    failure: Failure
+
+
+type MailboxState = MailOff | MailboxReady | MailboxUnreadable
 
 
 class Mailboxes:
@@ -80,34 +100,27 @@ class Mailboxes:
 
     @property
     def operator(self) -> Mailbox | None:
+        """The mailbox of ``PENARIA_MAIL__*``; with it, the interface cannot change the mailbox."""
         return self._operator.mailbox
 
-    @property
-    def locked(self) -> bool:
-        return self._operator.mailbox is not None
-
-    async def resolve(self, tx: IdentityTransaction) -> Resolved:
+    async def resolve(self, tx: IdentityTransaction) -> MailboxState:
         if self._operator.mailbox is not None:
-            return Resolved(self._operator.mailbox)
+            return MailboxReady(self._operator.mailbox)
         stored = await tx.install_settings.mailbox()
         if stored is None:
-            return Resolved(None)
+            return MailOff()
         try:
             password = None if stored.sealed_password is None else self.open_password(stored.sealed_password)
         except SecretUnreadableError as exc:
             logger.error("The saved SMTP password does not open: %s", exc)  # noqa: TRY400 - expected, no trace
-            return Resolved(None, Failure(FailureReason.UNREADABLE, text=SEALED_LOGIN_UNREADABLE))
-        return Resolved(Mailbox(fields=stored.fields, password=password, source=MailboxSource.INTERFACE))
-
-    async def on(self, tx: IdentityTransaction) -> bool:
-        """Whether the install sends mail; links go by hand when it does not."""
-        return self.locked or await tx.install_settings.mailbox() is not None
+            return MailboxUnreadable(Failure(FailureReason.UNREADABLE, text=SEALED_LOGIN_UNREADABLE))
+        return MailboxReady(Mailbox(fields=stored.fields, password=password, source=MailboxSource.INTERFACE))
 
     def seal_password(self, password: str) -> str:
-        return self._box.seal(password, bound_to=PASSWORD_BINDING)
+        return self._box.seal(password, bound_to=MAILBOX_SEAL)
 
     def open_password(self, sealed: str) -> str:
-        return self._box.open(sealed, bound_to=PASSWORD_BINDING)
+        return self._box.open(sealed, bound_to=MAILBOX_SEAL)
 
 
 class Postman:
@@ -126,8 +139,9 @@ class Postman:
         self._links = links
 
     async def on(self) -> bool:
+        """Whether the install sends mail; links go by hand when it does not."""
         async with self._uow.query() as tx:
-            return await self._mailboxes.on(tx)
+            return await self._on(tx)
 
     async def queue(
         self,
@@ -142,39 +156,41 @@ class Postman:
         created_by: UUID | None,
     ) -> Mail:
         """Queue a mail in ``tx``: the mail loop sends it once the transaction commits. Refused when mail is off."""
-        if not await self._mailboxes.on(tx):
+        if not await self._on(tx):
             raise MailOffError("the install sends no email: pass the link on by hand")
         now = datetime.now(UTC)
         content = compose(kind, locale, values, server=self._links.origin, link=link)
-        mail = self._mail(kind, to, locale, content, link, user_id, created_by, now, next_attempt_at=now, retried=True)
+        mail = self._mail(kind, to, locale, content, link, user_id, created_by, now, next_attempt_at=now)
         await tx.mail.add(mail)
         return mail
 
-    async def notify(self, tx: IdentityTransaction, user: User, kind: MailKind, values: dict[str, str]) -> None:
-        """Tell the account something by email, at its confirmed address, when the install sends mail."""
-        if user.email is None or not await self._mailboxes.on(tx):
+    async def notify(
+        self, tx: IdentityTransaction, user: User, kind: MailKind, values: dict[str, str] | None = None
+    ) -> None:
+        """Tell the account something at its confirmed address, when the install sends mail; the email names
+        the person and the account, and ``values`` adds what else its words need."""
+        if user.email is None or not await self._on(tx):
             return
+        if user.username is None:
+            raise RuntimeError(f"the user ({user.id}) has an email but no account")
+        named = {"name": user.display_name, "username": user.username, **(values or {})}
         await self.queue(
-            tx, kind, to=user.email, locale=user.locale, values=values, link=None, user_id=user.id, created_by=None
+            tx, kind, to=user.email, locale=user.locale, values=named, link=None, user_id=user.id, created_by=None
         )
 
-    async def send_now(
-        self, kind: MailKind, *, to: str, locale: str, values: dict[str, str], user_id: UUID | None, by: UUID
-    ) -> Attempt:
-        """Send a mail without a link at once, and once: an admin waits for the result, as with a test."""
+    async def send_test(self, *, to: str, locale: str, user_id: UUID | None, by: UUID) -> Attempt:
+        """Send a test email at once, and once: the admin waits for the result."""
         now = datetime.now(UTC)
-        content = compose(kind, locale, values, server=self._links.origin)
+        content = compose(MailKind.TEST, locale, {}, server=self._links.origin)
         async with self._uow.transaction() as tx:
-            resolved = await self._mailboxes.resolve(tx)
-            if not resolved.on:
+            state = await self._mailboxes.resolve(tx)
+            if isinstance(state, MailOff):
                 raise MailOffError("the install sends no email: set up its mailbox first")
             # Held from the start, so the mail loop leaves it to this sender.
-            mail = self._mail(
-                kind, to, locale, content, None, user_id, by, now, next_attempt_at=now + LEASE, retried=False
-            )
+            mail = self._mail(MailKind.TEST, to, locale, content, None, user_id, by, now, next_attempt_at=now + LEASE)
             mail.attempts = 1
             await tx.mail.add(mail)
-        return await self._send_held(mail, resolved, by)
+        return await self._send_held(mail, state, by)
 
     async def resend(self, mail_id: UUID, by: UUID) -> Attempt:
         """Send a mail again at once, while it can still be sent; its retries start over."""
@@ -187,25 +203,36 @@ class Postman:
                 raise MailQueuedError("this email is waiting for its next attempt already")
             if not mail.sendable(now):
                 raise MailExpiredError("this email can no longer be sent: its link stopped working, or it is too old")
-            resolved = await self._mailboxes.resolve(tx)
-            if not resolved.on:
+            state = await self._mailboxes.resolve(tx)
+            if isinstance(state, MailOff):
                 raise MailOffError("the install sends no email: set up its mailbox first")
             mail.state = MailState.QUEUED
             mail.attempts = 1
             mail.next_attempt_at = now + LEASE
             await tx.mail.save(mail)
-        return await self._send_held(mail, resolved, by)
+        return await self._send_held(mail, state, by)
 
-    async def deliver_due(self) -> int:
-        """Send the mails whose attempt is due; how many were tried."""
-        now = datetime.now(UTC)
-        async with self._uow.transaction() as tx:
-            mails = await tx.mail.claim_due(now, now + LEASE, BATCH)
-            resolved = await self._mailboxes.resolve(tx) if mails else Resolved(None)
-        for mail in mails:
+    async def deliver_due(self) -> bool:
+        """Send the mails whose attempt is due, one at a time; whether more may be due.
+
+        A failure of the mailbox itself (it cannot be reached or signed in to) ends the pass: the
+        other mails would only fail the same way, so they wait for their next pass untouched.
+        """
+        for _ in range(BATCH):
+            now = datetime.now(UTC)
+            async with self._uow.transaction() as tx:
+                claimed = await tx.mail.claim_due(now, now + LEASE, 1)
+                state = await self._mailboxes.resolve(tx) if claimed else MailOff()
+            if not claimed:
+                return False
+            mail = claimed[0]
             mail.attempts += 1
-            await self._send_held(mail, resolved, by=None)
-        return len(mails)
+            attempt = await self._send_held(mail, state, by=None)
+            if attempt.failure is not None and attempt.failure.reason in MAILBOX_FAILURES:
+                return False
+            if isinstance(state, MailboxUnreadable):
+                return False
+        return True
 
     async def sweep(self) -> None:
         """Forget what can no longer be sent: the bodies of stale mails, old log rows and expired links."""
@@ -215,10 +242,13 @@ class Postman:
             await tx.mail.delete_created_before(now - RETENTION)
             await tx.account_links.forget_expired(now)
 
-    async def _send_held(self, mail: Mail, resolved: Resolved, by: UUID | None) -> Attempt:
+    async def _on(self, tx: IdentityTransaction) -> bool:
+        return not isinstance(await self._mailboxes.resolve(tx), MailOff)
+
+    async def _send_held(self, mail: Mail, state: MailboxState, by: UUID | None) -> Attempt:
         """One attempt at a mail this sender holds, recorded with its outcome; ``mail.attempts`` counts it."""
         started = time.monotonic()
-        failure, message_id = await self._attempt(mail, resolved)
+        failure, message_id = await self._attempt(mail, state)
         duration_ms = round((time.monotonic() - started) * 1000)
         now = datetime.now(UTC)
         mail.state, mail.next_attempt_at = after_attempt(mail, failure, now)
@@ -237,19 +267,22 @@ class Postman:
         _log(mail, attempt)
         return attempt
 
-    async def _attempt(self, mail: Mail, resolved: Resolved) -> tuple[Failure | None, str | None]:
+    async def _attempt(self, mail: Mail, state: MailboxState) -> tuple[Failure | None, str | None]:
         if not mail.sendable(datetime.now(UTC)) or mail.sealed_content is None:
             return Failure(FailureReason.EXPIRED), None
-        if resolved.problem is not None:
-            return resolved.problem, None
-        if resolved.mailbox is None:
-            return Failure(FailureReason.MAIL_OFF), None
+        match state:
+            case MailOff():
+                return Failure(FailureReason.MAIL_OFF), None
+            case MailboxUnreadable(failure=failure):
+                return failure, None
+            case MailboxReady(mailbox=mailbox):
+                pass
         try:
             content = self._open(mail, mail.sealed_content)
         except SecretUnreadableError:
             return Failure(FailureReason.UNREADABLE, text=CONTENT_UNREADABLE), None
         try:
-            message_id = await self._transport.send(resolved.mailbox, Envelope(to=mail.to_address, content=content))
+            message_id = await self._transport.send(mailbox, Envelope(to=mail.to_address, content=content))
         except MailDeliveryError as exc:
             return exc.failure, None
         return None, message_id
@@ -266,7 +299,6 @@ class Postman:
         now: datetime,
         *,
         next_attempt_at: datetime,
-        retried: bool,
     ) -> Mail:
         mail = Mail(
             kind=kind,
@@ -278,7 +310,6 @@ class Postman:
             user_id=user_id,
             created_by=created_by,
             next_attempt_at=next_attempt_at,
-            retried=retried,
         )
         mail.sealed_content = self._box.seal(_pack(content), bound_to=_binding(mail.id))
         return mail
@@ -297,7 +328,8 @@ def _pack(content: Content) -> str:
 
 
 def _binding(mail_id: UUID) -> str:
-    return bound_to("identity_mail", "content", mail_id)
+    """The record a mail's sealed body belongs to: copied into another mail, it does not open."""
+    return f"mail/{mail_id}/content"
 
 
 def _log(mail: Mail, attempt: Attempt) -> None:

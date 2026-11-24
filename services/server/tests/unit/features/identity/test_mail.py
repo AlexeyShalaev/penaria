@@ -17,16 +17,15 @@ NOW = datetime(2026, 1, 1, 12, tzinfo=UTC)
 BUSY = Failure(FailureReason.OTHER, smtp_code=451, text="4.3.0 Try again later")
 
 
-def mail(attempts: int, *, retried: bool = True) -> Mail:
+def mail(attempts: int, *, kind: MailKind = MailKind.PASSWORD_RESET) -> Mail:
     return Mail(
-        kind=MailKind.PASSWORD_RESET,
+        kind=kind,
         to_address="someone@example.org",
         locale="en",
         subject="Reset your Penaria password",
         created_at=NOW,
         expires_at=NOW + timedelta(minutes=30),
         attempts=attempts,
-        retried=retried,
     )
 
 
@@ -53,7 +52,7 @@ def test_a_permanent_failure_is_not_retried() -> None:
 
 
 def test_a_test_mail_is_never_retried() -> None:
-    assert after_attempt(mail(1, retried=False), BUSY, NOW) == (MailState.FAILED, None)
+    assert after_attempt(mail(1, kind=MailKind.TEST), BUSY, NOW) == (MailState.FAILED, None)
 
 
 @pytest.mark.parametrize(

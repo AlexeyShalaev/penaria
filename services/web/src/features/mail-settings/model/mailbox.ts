@@ -11,8 +11,8 @@ export type MailboxDraft = {
   from_name: string
 }
 
-export type MailboxIssue = 'hostRequired' | 'portInvalid' | 'fromInvalid'
-export type MailboxIssues = Partial<Record<'host' | 'port' | 'from_address', MailboxIssue>>
+export type MailboxIssue = 'hostRequired' | 'portInvalid' | 'fromInvalid' | 'passwordAgain'
+export type MailboxIssues = Partial<Record<'host' | 'port' | 'from_address' | 'password', MailboxIssue>>
 
 export const SECURITIES: readonly MailSecurity[] = ['starttls', 'tls', 'none']
 
@@ -46,13 +46,22 @@ export function withSecurity(draft: MailboxDraft, security: MailSecurity): Mailb
   return {...draft, security, port: typedOwnPort ? draft.port : String(DEFAULT_PORT[security])}
 }
 
-export function validateMailbox(draft: MailboxDraft): MailboxIssues {
+/** What is wrong with the form; the saved password stays only with the server and login it was given for. */
+export function validateMailbox(draft: MailboxDraft, saved: Mailbox): MailboxIssues {
   const issues: MailboxIssues = {}
   if (draft.host.trim() === '') issues.host = 'hostRequired'
   const port = Number(draft.port)
   if (!/^\d+$/.test(draft.port.trim()) || port < 1 || port > MAX_PORT) issues.port = 'portInvalid'
   if (!isEmail(draft.from_address)) issues.from_address = 'fromInvalid'
+  if (needsPasswordAgain(draft, saved)) issues.password = 'passwordAgain'
   return issues
+}
+
+/** Whether the saved password would go to another server or login than it was given for. */
+export function needsPasswordAgain(draft: MailboxDraft, saved: Mailbox): boolean {
+  if (!saved.password_set || draft.password !== '' || draft.username.trim() === '') return false
+  const before = draftOf(saved)
+  return (['host', 'port', 'security', 'username'] as const).some((key) => draft[key].trim() !== before[key].trim())
 }
 
 /** What is sent to save the form; an empty password keeps the saved one. */

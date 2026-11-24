@@ -2,9 +2,9 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 
 import {api, type Schemas, unwrap} from '@/shared/api'
 
-export type ResetPreview = Schemas['ResetPreviewOut']
+import {ACCOUNT_KEY, forgetAccount} from './account'
 
-const ACCOUNT_KEY = ['account'] as const
+export type ResetPreview = Schemas['ResetPreviewOut']
 
 /** Asks for a reset link by email; the answer is the same whether or not the account exists. */
 export function useRequestPasswordReset() {
@@ -22,10 +22,13 @@ export function usePasswordResetPreview(token: string) {
   })
 }
 
+/** Sets the new password; every session of the account ends, this browser's too if it was signed in. */
 export function useResetPassword(token: string) {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (newPassword: string) =>
       unwrap(api.POST('/api/v1/password-reset', {body: {token, new_password: newPassword}})),
+    onSuccess: () => forgetAccount(queryClient),
   })
 }
 

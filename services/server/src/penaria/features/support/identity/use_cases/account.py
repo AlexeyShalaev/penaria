@@ -13,6 +13,7 @@ from penaria.features.support.identity.domain.accounts import check_display_name
 from penaria.features.support.identity.domain.mail import MailKind
 from penaria.features.support.identity.domain.models import User
 from penaria.features.support.identity.domain.passwords import PasswordHasher
+from penaria.features.support.identity.domain.recovery import LinkPurpose
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import CurrentSession, Session
 from penaria.features.support.identity.domain.throttle import account_key
@@ -89,10 +90,9 @@ class ChangePassword:
                     *_revoked_events(current, revoked),
                 ]
             )
-            user = await load_user(tx, current)
-            await self._postman.notify(
-                tx, user, MailKind.PASSWORD_CHANGED, {"name": user.display_name, "username": user.username or ""}
-            )
+            # A reset link made before stays a way in no longer: the person knows their password.
+            await tx.account_links.forget_unused(current.user_id, LinkPurpose.PASSWORD_RESET)
+            await self._postman.notify(tx, await load_user(tx, current), MailKind.PASSWORD_CHANGED)
 
 
 class ListSessions:

@@ -36,8 +36,8 @@ from penaria.features.support.identity.domain.models import Home, PrincipalType,
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, hash_token
-from penaria.features.support.identity.domain.throttle import account_key
-from penaria.features.support.identity.use_cases.attempts import find_by_secret
+from penaria.features.support.identity.domain.throttle import account_key, mail_sent_key
+from penaria.features.support.identity.use_cases.attempts import count_attempt, find_by_secret
 from penaria.features.support.identity.use_cases.members import (
     access_in,
     check_place,
@@ -99,9 +99,12 @@ class CreateInvitation:
         leave_when_accepted: bool,
         email: str | None = None,
     ) -> tuple[InvitationView, str]:
-        """The invitation and the secret token of its link, shown only now; mailed to ``email`` when given."""
+        """The invitation and its link, shown only now; mailed to ``email`` when given."""
         recipient = None if email is None else check_email(email)
         now = datetime.now(UTC)
+        if recipient is not None:
+            async with self._uow.transaction() as tx:
+                await count_attempt(tx, [mail_sent_key(current.user_id)], now)
         actor = Actor.user(current.user_id)
         async with self._uow.query() as tx:
             await require_member(tx, actor, home_id, now)
@@ -124,14 +127,15 @@ class CreateInvitation:
             leave_when_accepted=leave_when_accepted,
             now=now,
         )
+        url = self._links.invitation(token)
         async with self._uow.transaction() as tx:
             check_can_give(await access_in(tx, actor, home_id, scope, now), role)
             await tx.invitations.add(invitation)
             await tx.journal.append([Event("invitation.created", home_id, actor, _payload(invitation, role))])
             if recipient is not None:
-                await self._mail(tx, invitation, role, inviter, recipient, token, now)
+                await self._mail(tx, invitation, role, inviter, recipient, url, now)
         view = InvitationView(invitation=invitation, role=role, scope=scope, created_by=inviter, emailed_to=recipient)
-        return view, token
+        return view, url
 
     async def _mail(
         self,
@@ -140,7 +144,7 @@ class CreateInvitation:
         role: Role,
         inviter: User,
         to: str,
-        token: str,
+        url: str,
         now: datetime,
     ) -> None:
         """Mail the invitation's link, in the home's language: the person invited has no account to say theirs."""
@@ -158,7 +162,7 @@ class CreateInvitation:
                 "home": home.name,
                 "role": role_name(role.preset, locale) if role.preset else (role.name or ""),
             },
-            link=Link(self._links.invitation(token), invitation.expires_at - now),
+            link=Link(url, invitation.expires_at - now),
             user_id=None,
             created_by=inviter.id,
         )

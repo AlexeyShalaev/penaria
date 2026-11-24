@@ -13,10 +13,11 @@ import time
 from servicewright.adapters.builtin import DaemonEntrypoint
 from servicewright.core.contracts import UnitScopeProtocol
 
-from penaria.features.support.identity.use_cases.postman import BATCH, Postman
+from penaria.features.support.identity.use_cases.postman import Postman
 
 # A reset link asked for is in the mailbox within a few seconds; one indexed query per pass.
 POLL_SECONDS = 3
+# What can no longer be sent is forgotten within ten minutes; the sweep need not run on every pass.
 SWEEP_SECONDS = 600
 
 logger = logging.getLogger(__name__)
@@ -31,8 +32,7 @@ async def deliver_mail(scope: UnitScopeProtocol, stop: asyncio.Event) -> None:
     swept_at = -math.inf
     while not stop.is_set():
         try:
-            # A full batch may leave more due: take the next one at once.
-            while await postman.deliver_due() == BATCH and not stop.is_set():
+            while await postman.deliver_due() and not stop.is_set():
                 pass
             if time.monotonic() - swept_at >= SWEEP_SECONDS:
                 await postman.sweep()

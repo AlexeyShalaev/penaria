@@ -232,4 +232,23 @@ describe('PeoplePage', () => {
       `/api/v1/homes/${HOME_ID}:leave`,
     ])
   })
+
+  it('offers a reset link for another member, not for yourself', async () => {
+    mockApi({
+      ...manager(),
+      [`POST /api/v1/homes/${HOME_ID}/members/maria:reset-link`]: {
+        url: 'http://localhost/reset-password/abc',
+        expires_at: '2099-01-02T10:00:00Z',
+      },
+    })
+    renderPage()
+
+    const members = await screen.findByRole('region', {name: 'Members'})
+    await within(members).findByText('Maria')
+    // One button: yours is not offered, since you change your own password on the account page.
+    fireEvent.click(within(members).getByRole('button', {name: 'Reset password'}))
+    fireEvent.click(await screen.findByRole('button', {name: 'Make the link'}))
+
+    expect(await screen.findByRole('textbox', {name: 'Link'})).toHaveValue('http://localhost/reset-password/abc')
+  })
 })

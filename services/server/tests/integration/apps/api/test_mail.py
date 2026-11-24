@@ -10,7 +10,9 @@ from servicewright.adapters.dishka import DishkaContainer
 from sqlalchemy import select, update
 
 from penaria.apps.api.mail import deliver_mail
-from penaria.features.support.identity.infra.orm import InstallSettingDB, MailAttemptDB, MailDB
+from penaria.features.support.identity.domain.mailbox import MAILBOX_SEAL
+from penaria.features.support.identity.infra.fernet import FernetSecretBox
+from penaria.features.support.identity.infra.orm import AccountLinkDB, InstallSettingDB, MailAttemptDB, MailDB
 from penaria.features.support.identity.use_cases.postman import Postman
 from penaria.features.support.platform.infra.orm import JournalEventDB
 from tests.integration.apps.api.test_people import age_sign_ins, make_home, member, ok
@@ -343,12 +345,12 @@ async def test_a_mail_left_by_a_sender_that_stopped_is_taken_again_after_its_lea
         claimed = await tx.mail.claim_due(now, now + timedelta(minutes=5), 10)
     sender = await postman(container)
 
-    tried_while_held = await sender.deliver_due()
+    await sender.deliver_due()
+    sent_while_held = len(smtp.messages)
     await make_due(container)
-    tried_after = await sender.deliver_due()
+    await sender.deliver_due()
 
-    assert (len(claimed), tried_while_held, tried_after) == (1, 0, 1)
-    assert len(smtp.messages) == 1
+    assert (len(claimed), sent_while_held, len(smtp.messages)) == (1, 0, 1)
 
 
 async def test_two_senders_at_once_send_each_mail_once(
@@ -357,14 +359,14 @@ async def test_two_senders_at_once_send_each_mail_once(
     await connect(api, smtp)
     ids = await make_home(api)
     roles = {role["preset"]: role["id"] for role in await ok(await api.get(f"/homes/{ids['home']}/roles"))}
-    for n in range(6):
+    for n in range(5):
         body = {"role_id": roles["family"], "email": f"person{n}@example.org"}
         await ok(await api.post(f"/homes/{ids['home']}/invitations", json=body), 201)
     sender = await postman(container)
 
     await asyncio.gather(sender.deliver_due(), sender.deliver_due(), sender.deliver_due())
 
-    assert sorted(m["To"] for m in smtp.messages) == [f"person{n}@example.org" for n in range(6)]
+    assert sorted(m["To"] for m in smtp.messages) == [f"person{n}@example.org" for n in range(5)]
 
 
 async def test_a_mail_whose_link_expired_is_not_sent(
@@ -489,3 +491,192 @@ async def test_the_mail_loop_sends_what_is_queued_until_it_is_stopped(
         await asyncio.wait_for(loop, timeout=5)
 
     assert [m["To"] for m in smtp.messages] == ["owner@example.org"]
+
+
+# The saved password stays with its server
+
+
+async def test_a_changed_server_needs_the_password_again(api: httpx.AsyncClient, smtp: FakeSmtp) -> None:
+    await connect(api, smtp, username="home@example.org", password=SECRET)
+
+    moved = await api.put(
+        "/install/mail", json={**smtp.mailbox(), "host": "smtp.elsewhere.org", "username": "home@example.org"}
+    )
+    unsafe = await api.put("/install/mail", json={**smtp.mailbox(), "port": 25, "username": "home@example.org"})
+    again = await connect(api, smtp, host="localhost", username="home@example.org", password=SECRET)
+
+    assert (moved.status_code, moved.json()["code"], moved.json()["params"]) == (
+        400,
+        "invalid_mailbox",
+        {"field": "password"},
+    )
+    assert unsafe.status_code == 400
+    assert (again["host"], again["password_set"]) == ("localhost", True)
+
+
+async def test_a_password_that_no_longer_opens_says_so(
+    api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer
+) -> None:
+    await connect(api, smtp, username="home@example.org", password=SECRET)
+    other = FernetSecretBox.of("another-install-key-of-32-characters")
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(update(InstallSettingDB).values(secret=other.seal(SECRET, bound_to=MAILBOX_SEAL)))
+    await ok(await api.post("/me/email", json={"email": "owner@example.org"}), 202)
+
+    status = await ok(await api.get("/install/mail/status"))
+    await (await postman(container)).deliver_due()
+    [logged] = await ok(await api.get("/install/mail/messages"))
+
+    assert status["health"] == "failed"
+    assert "enter the password again" in status["error"]
+    assert (logged["state"], logged["attempts"][0]["reason"]) == ("failed", "unreadable")
+    assert smtp.messages == []
+
+
+async def test_a_mail_that_no_longer_opens_is_not_sent(
+    api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer
+) -> None:
+    await connect(api, smtp)
+    await ok(await api.post("/me/email", json={"email": "owner@example.org"}), 202)
+    other = FernetSecretBox.of("another-install-key-of-32-characters")
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(update(MailDB).values(content=other.seal("text", bound_to="x")))
+
+    await (await postman(container)).deliver_due()
+
+    [logged] = await ok(await api.get("/install/mail/messages"))
+    assert (logged["state"], logged["attempts"][0]["reason"]) == ("failed", "unreadable")
+
+
+# The journal
+
+
+async def install_events(container: DishkaContainer) -> list[tuple[str, dict[str, Any]]]:
+    async with (await uow_of(container)).query() as tx:
+        rows = await tx.session.scalars(
+            select(JournalEventDB)
+            .where(
+                JournalEventDB.type.in_(
+                    ["install.mailbox_saved", "install.mailbox_removed", "install.mail_tested", "mail.resent"]
+                )
+            )
+            .order_by(JournalEventDB.seq)
+        )
+        return [(row.type, row.payload) for row in rows]
+
+
+async def test_every_change_of_the_mailbox_is_journalled_and_no_save_without_one(
+    api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer
+) -> None:
+    await connect(api, smtp)
+    await connect(api, smtp, from_name="Dacha")
+    await connect(api, smtp, from_name="Dacha")
+    test = await ok(await api.post("/install/mail:test", json={"to": "t@example.org"}))
+    resent = await ok(await api.post(f"/install/mail/messages/{test['mail_id']}:resend"))
+    await ok(await api.delete("/install/mail"), 204)
+
+    events = await install_events(container)
+
+    assert events[1:] == [
+        ("install.mailbox_saved", {"changed": ["from_name"], "password_changed": False}),
+        ("install.mail_tested", {"mail_id": test["mail_id"], "sent": True}),
+        ("mail.resent", {"mail_id": resent["mail_id"], "sent": True}),
+        ("install.mailbox_removed", {}),
+    ]
+
+
+async def test_a_test_without_an_address_goes_to_the_admins_own(
+    api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer
+) -> None:
+    await connect(api, smtp)
+    await ok(await api.post("/me/email", json={"email": "admin@example.org"}), 202)
+    await (await postman(container)).deliver_due()
+    token = text_of(smtp.messages[-1]).split("/verify-email/")[1].split()[0]
+    await ok(await api.post("/email-verifications:confirm", json={"token": token}))
+
+    result = await ok(await api.post("/install/mail:test", json={}))
+
+    assert result["ok"] is True
+    assert smtp.messages[-1]["To"] == "admin@example.org"
+
+
+async def test_a_sender_address_with_a_national_domain_sends(api: httpx.AsyncClient, smtp: FakeSmtp) -> None:
+    await connect(api, smtp, from_address="home@почта.рф")
+
+    result = await ok(await api.post("/install/mail:test", json={"to": "someone@example.org"}))
+
+    assert (result["ok"], result["error"]) == (True, None)
+    assert smtp.messages[-1]["From"] == "Penaria <home@xn--80a1acny.xn--p1ai>"
+
+
+# Limits and refusals
+
+
+async def test_mailing_invitations_again_and_again_is_slowed_down(api: httpx.AsyncClient, smtp: FakeSmtp) -> None:
+    await connect(api, smtp)
+    ids = await make_home(api)
+    roles = {role["preset"]: role["id"] for role in await ok(await api.get(f"/homes/{ids['home']}/roles"))}
+
+    statuses = [
+        (
+            await api.post(
+                f"/homes/{ids['home']}/invitations", json={"role_id": roles["family"], "email": f"p{n}@example.org"}
+            )
+        ).status_code
+        for n in range(6)
+    ]
+
+    assert statuses == [201] * 5 + [429]
+
+
+async def test_an_unknown_mail_is_not_resent(api: httpx.AsyncClient, smtp: FakeSmtp) -> None:
+    await connect(api, smtp)
+
+    response = await api.post("/install/mail/messages/01900000-0000-7000-8000-000000000000:resend")
+
+    assert (response.status_code, response.json()["code"]) == (404, "mail_not_found")
+
+
+async def test_nothing_is_resent_once_mail_is_off(
+    api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer
+) -> None:
+    await connect(api, smtp)
+    test = await ok(await api.post("/install/mail:test", json={"to": "t@example.org"}))
+    await ok(await api.delete("/install/mail"), 204)
+
+    response = await api.post(f"/install/mail/messages/{test['mail_id']}:resend")
+
+    assert (response.status_code, response.json()["code"]) == (409, "mail_off")
+
+
+# What is forgotten
+
+
+async def test_the_sweep_forgets_old_mail_and_expired_links_but_keeps_what_waits(
+    api: httpx.AsyncClient, smtp: FakeSmtp, container: DishkaContainer
+) -> None:
+    await connect(api, smtp)
+    await ok(await api.post("/install/mail:test", json={"to": "old@example.org"}))
+    smtp.refuse = "451 4.3.0 Try again later"
+    await ok(await api.post("/me/email", json={"email": "owner@example.org"}), 202)
+    await (await postman(container)).deliver_due()
+    now = datetime.now(UTC)
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(
+            update(MailDB).where(MailDB.kind == "test").values(created_at=now - timedelta(days=31))
+        )
+        # Waiting for a retry, though its link ended: it is not sent again, but nothing is lost meanwhile.
+        await tx.session.execute(
+            update(MailDB).where(MailDB.kind == "email_verification").values(expires_at=now - timedelta(seconds=1))
+        )
+        await tx.session.execute(update(AccountLinkDB).values(expires_at=now - timedelta(seconds=1)))
+
+    await (await postman(container)).sweep()
+
+    rows = await mail_rows(container)
+    async with (await uow_of(container)).query() as tx:
+        links = list(await tx.session.scalars(select(AccountLinkDB)))
+        attempts = list(await tx.session.scalars(select(MailAttemptDB.mail_id)))
+    assert [(row.kind, row.state, row.content is not None) for row in rows] == [("email_verification", "queued", True)]
+    assert set(attempts) == {rows[0].id}
+    assert links == []

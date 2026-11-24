@@ -94,4 +94,32 @@ describe('MailLog', () => {
 
     expect(await screen.findByText('No email yet')).toBeVisible()
   })
+
+  it('shows older mail a page at a time', async () => {
+    const page = Array.from({length: 20}, (_, n) => mail({id: `m${n}`, subject: `Mail ${n}`}))
+    const calls = mockApi({
+      'GET /api/v1/install/mail/messages?limit=20': page,
+      'GET /api/v1/install/mail/messages?limit=20&before=m19': [mail({id: 'older', subject: 'An older mail'})],
+    })
+    renderAt('/', <Route path="/" element={<MailLog />} />)
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Show older'}))
+
+    expect(await screen.findByText('An older mail')).toBeVisible()
+    expect(screen.getByText('Mail 0')).toBeVisible()
+    expect(calls).toHaveLength(2)
+    expect(screen.queryByRole('button', {name: 'Show older'})).toBeNull()
+  })
+
+  it('shows when a waiting mail is tried again', async () => {
+    mockApi({
+      'GET /api/v1/install/mail/messages?limit=20': [
+        mail({state: 'queued', resendable: false, next_attempt_at: '2099-01-01T10:00:00Z'}),
+      ],
+    })
+    renderAt('/', <Route path="/" element={<MailLog />} />)
+
+    expect(await screen.findByText(/^Next try/)).toBeVisible()
+    expect(screen.queryByRole('button', {name: 'Send again'})).toBeNull()
+  })
 })

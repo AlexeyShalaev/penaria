@@ -133,4 +133,28 @@ describe('InviteDialog', () => {
     expect(posts).toHaveLength(2)
     expect(posts[1]?.body).toMatchObject({role_id: 'role-owner', leave_when_accepted: true, scope_entity_id: null})
   })
+
+  it('also mails the invitation when the install sends email', async () => {
+    const calls = mockApi({
+      'GET /api/v1/mail': {enabled: true},
+      [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES,
+      [`POST /api/v1/homes/${HOME_ID}/invitations`]: {...created('family'), emailed_to: 'ivan@example.org'},
+    })
+    renderDialog(false)
+
+    fireEvent.change(await screen.findByLabelText('Also send to email'), {target: {value: ' ivan@example.org '}})
+    fireEvent.click(screen.getByRole('button', {name: 'Make the link'}))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('The invitation went to ivan@example.org.')
+    expect(calls.find((call) => call.method === 'POST')?.body).toMatchObject({email: 'ivan@example.org'})
+  })
+
+  it('has no email field when the install sends none', async () => {
+    mockApi({...MAIL_OFF, [`GET /api/v1/homes/${HOME_ID}/roles`]: ROLES})
+    renderDialog(false)
+
+    await screen.findByRole('radio', {name: /Family member/})
+
+    expect(screen.queryByLabelText('Also send to email')).toBeNull()
+  })
 })

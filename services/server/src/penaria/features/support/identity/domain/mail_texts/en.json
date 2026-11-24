@@ -4,9 +4,18 @@
     "valid_for": "The link works for {duration}, once.",
     "footer": "Penaria at {server} sent this message automatically. Replies to it are not read.",
     "duration": {
-      "minute": {"one": "{n} minute", "other": "{n} minutes"},
-      "hour": {"one": "{n} hour", "other": "{n} hours"},
-      "day": {"one": "{n} day", "other": "{n} days"}
+      "minute": {
+        "one": "{n} minute",
+        "other": "{n} minutes"
+      },
+      "hour": {
+        "one": "{n} hour",
+        "other": "{n} hours"
+      },
+      "day": {
+        "one": "{n} day",
+        "other": "{n} days"
+      }
     }
   },
   "roles": {
@@ -28,33 +37,52 @@
       "title": "Confirm your email",
       "lead": "{name}, confirm that {email} is your address. Penaria will send password resets and notices about your account there.",
       "action": "Confirm the address",
-      "notes": ["If you did not add this address to an account in Penaria, ignore this email: nothing changes until the address is confirmed."]
+      "notes": [
+        "If you did not add this address to an account in Penaria, ignore this email: nothing changes until the address is confirmed."
+      ]
     },
     "password_reset": {
       "subject": "Reset your Penaria password",
       "title": "Reset your password",
       "lead": "{name}, someone asked to reset the password of the account {username}. Open the link to choose a new password.",
       "action": "Choose a new password",
-      "notes": ["If it was not you, ignore this email: your password stays as it is.", "A new password signs you out on every device. Your passkeys keep working."]
+      "notes": [
+        "If it was not you, ignore this email: your password stays as it is.",
+        "A new password signs you out on every device. Your passkeys keep working."
+      ]
     },
     "invitation": {
       "subject": "{inviter} invites you to {home} in Penaria",
       "title": "You are invited to {home}",
       "lead": "{inviter} invites you to the home {home} in Penaria as {role}. Open the link to accept with your account, or to make one.",
       "action": "Open the invitation",
-      "notes": ["The invitation works once. If you do not know {inviter}, ignore this email."]
+      "notes": [
+        "The invitation works once. If you do not know {inviter}, ignore this email."
+      ]
     },
     "password_changed": {
       "subject": "Your Penaria password was changed",
       "title": "Your password was changed",
       "lead": "{name}, the password of the account {username} was just changed, and every other device was signed out.",
-      "notes": ["If it was not you, reset the password at once from the sign-in page, or ask the admin of your home for a reset link."]
+      "notes": [
+        "If it was not you, reset the password at once from the sign-in page, or ask the admin of your home for a reset link."
+      ]
     },
     "passkey_added": {
       "subject": "A passkey was added to your Penaria account",
       "title": "A new passkey",
       "lead": "{name}, a passkey named “{passkey}” was just added to the account {username}. It signs in without a password.",
-      "notes": ["If it was not you, sign in, remove the passkey on the account page and change your password."]
+      "notes": [
+        "If it was not you, sign in, remove the passkey on the account page and change your password."
+      ]
+    },
+    "email_changed": {
+      "subject": "The email of your Penaria account was changed",
+      "title": "Your email was changed",
+      "lead": "{name}, the email of the account {username} is now {email}. Password resets and notices go there from now on.",
+      "notes": [
+        "If it was not you, sign in at once, change your password and set your own address again, or ask the admin of your home for a reset link."
+      ]
     }
   }
 }

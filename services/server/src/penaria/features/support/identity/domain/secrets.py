@@ -9,14 +9,10 @@ class SecretUnreadableError(Exception):
 
 class SecretBox(Protocol):
     def seal(self, plaintext: str, *, bound_to: str) -> str:
-        """The secret encrypted for storage, opened only with the same ``bound_to``."""
+        """The secret encrypted for storage, opened only with the same ``bound_to``: the record it belongs to,
+        such as ``mail/<id>/content``, so a ciphertext copied into another record does not open."""
         ...
 
     def open(self, sealed: str, *, bound_to: str) -> str:
         """The secret ``seal`` made; ``SecretUnreadableError`` when it does not open."""
         ...
-
-
-def bound_to(table: str, column: str, key: object) -> str:
-    """What ties a sealed secret to its cell: moved to another row, column or table, it does not open."""
-    return f"{table}/{column}/{key}"

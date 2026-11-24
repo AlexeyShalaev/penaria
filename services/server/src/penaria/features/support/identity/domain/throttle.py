@@ -4,6 +4,7 @@ import hashlib
 import ipaddress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from penaria.features.shared.errors import TooManyRequestsError
 
@@ -70,6 +71,17 @@ def recovery_keys(ip: str | None, login: str) -> list[str]:
     address = address_key(ip)
     named = "recovery:" + hashlib.sha256(login.encode()).hexdigest()
     return [named] if address is None else [named, f"recovery:{address}"]
+
+
+def mail_sent_key(user_id: UUID) -> str:
+    """The counter of emails an account has the install send to addresses it types (confirmations,
+    invitations): a few an hour, so the install's mailbox does not become someone's way to mail strangers."""
+    return f"mail-sent:{user_id}"
+
+
+def email_key(email: str) -> str:
+    """The lock of an address, so two accounts never confirm it at once."""
+    return "email:" + hashlib.sha256(email.encode()).hexdigest()
 
 
 def address_key(ip: str | None) -> str | None:

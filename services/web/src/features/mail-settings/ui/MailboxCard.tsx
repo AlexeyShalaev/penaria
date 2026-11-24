@@ -59,6 +59,7 @@ export function MailboxCard(props: {mailbox: Mailbox; ownEmail: string | null}) 
         key={JSON.stringify(mailbox)}
         mailbox={mailbox}
         locked={locked}
+        on={on}
         ownEmail={props.ownEmail}
         save={save}
         remove={remove}
@@ -90,6 +91,7 @@ function StatusLine(props: {on: boolean}) {
 function MailboxForm(props: {
   mailbox: Mailbox
   locked: boolean
+  on: boolean
   ownEmail: string | null
   save: ReturnType<typeof useSaveMailbox>
   remove: ReturnType<typeof useRemoveMailbox>
@@ -111,10 +113,16 @@ function MailboxForm(props: {
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    const issues = validateMailbox(draft)
+    const issues = validateMailbox(draft, mailbox)
     setShown(issues)
     if (Object.keys(issues).length > 0) return
-    const send = () => save.mutate(inputOf(draft), {onError: recent.retryOnError(send)})
+    const send = () =>
+      save.mutate(inputOf(draft), {
+        // The form starts from what was saved, the password field empty again, even when the answer
+        // looks as before (only the password changed).
+        onSuccess: (saved) => setDraft(draftOf(saved)),
+        onError: recent.retryOnError(send),
+      })
     send()
   }
   const turnOff = () => {
@@ -175,6 +183,7 @@ function MailboxForm(props: {
           <Field
             label={t('mail.password')}
             hint={mailbox.password_set ? t('mail.passwordSetHint') : t('mail.passwordHint')}
+            error={issue('password')}
             aside={
               lockMark ??
               (mailbox.password_set && (
@@ -192,6 +201,7 @@ function MailboxForm(props: {
               disabled={locked}
               autoComplete="new-password"
               name="smtp-password"
+              aria-invalid={!!shown.password}
             />
           </Field>
         </div>
@@ -241,7 +251,7 @@ function MailboxForm(props: {
           </FormActions>
         )}
       </form>
-      <TestMail on={mailbox.source !== null} dirty={dirty} ownEmail={props.ownEmail} />
+      <TestMail on={props.on} dirty={dirty} ownEmail={props.ownEmail} />
       {recent.dialog}
     </>
   )
@@ -275,7 +285,7 @@ function TestMail(props: {on: boolean; dirty: boolean; ownEmail: string | null})
       <h3 className={styles.testTitle}>{t('mail.test.title')}</h3>
       <p className={styles.text}>{t('mail.test.text')}</p>
       <div className={styles.testRow}>
-        <Field label={t('mail.test.to')} error={invalid ? t('mail.issue.fromInvalid') : undefined}>
+        <Field label={t('mail.test.to')} error={invalid ? t('mail.test.toInvalid') : undefined}>
           <TextInput
             type="email"
             inputMode="email"

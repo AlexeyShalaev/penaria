@@ -2,45 +2,53 @@ import pytest
 from pydantic import ValidationError
 
 from penaria.apps.api.settings import Settings
-from penaria.features.support.identity.domain.mailbox import MailboxSource, MailSecurity
+from penaria.features.support.identity.domain.mailbox import MailboxFields, MailSecurity
 
 pytestmark = pytest.mark.unit
 
+PASSWORD = "smtp-secret-of-the-test"  # noqa: S105 - a value of the tests
 
-def test_without_mail_variables_mail_is_off() -> None:
-    assert Settings().mail.mailbox() is None
+
+def test_without_mail_variables_the_interface_sets_the_mailbox() -> None:
+    assert Settings().mail is None
 
 
 def test_a_host_and_a_sender_make_the_operators_mailbox(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PENARIA_MAIL__HOST", "smtp.example.org")
     monkeypatch.setenv("PENARIA_MAIL__SECURITY", "tls")
     monkeypatch.setenv("PENARIA_MAIL__USERNAME", "home")
-    monkeypatch.setenv("PENARIA_MAIL__PASSWORD", "smtp-secret")
+    monkeypatch.setenv("PENARIA_MAIL__PASSWORD", PASSWORD)
     monkeypatch.setenv("PENARIA_MAIL__FROM_ADDRESS", "home@example.org")
 
-    mailbox = Settings().mail.mailbox()
+    mail = Settings().mail
 
-    assert mailbox is not None
-    assert (mailbox.source, mailbox.fields.port, mailbox.fields.security) == (
-        MailboxSource.ENVIRONMENT,
-        465,
-        MailSecurity.TLS,
+    assert mail is not None
+    assert mail.fields() == MailboxFields(
+        host="smtp.example.org",
+        port=465,
+        security=MailSecurity.TLS,
+        username="home",
+        from_address="home@example.org",
+        from_name="Penaria",
     )
-    assert mailbox.password == "smtp-secret"  # noqa: S105 - the value set above
-    assert "smtp-secret" not in repr(mailbox)
+    assert mail.password is not None
+    assert mail.password.get_secret_value() == PASSWORD
 
 
-def test_a_mail_setting_without_a_host_stops_the_process(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PENARIA_MAIL__USERNAME", "home")
+@pytest.mark.parametrize(
+    ("variables", "missing"),
+    [
+        ({"PENARIA_MAIL__USERNAME": "home"}, "mail.host"),
+        ({"PENARIA_MAIL__HOST": "smtp.example.org"}, "mail.from_address"),
+    ],
+)
+def test_half_a_mailbox_in_the_environment_stops_the_process(
+    monkeypatch: pytest.MonkeyPatch, variables: dict[str, str], missing: str
+) -> None:
+    for name, value in variables.items():
+        monkeypatch.setenv(name, value)
 
-    with pytest.raises(ValidationError, match="PENARIA_MAIL__HOST is required"):
-        Settings()
-
-
-def test_a_host_without_a_sender_stops_the_process(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PENARIA_MAIL__HOST", "smtp.example.org")
-
-    with pytest.raises(ValidationError, match="PENARIA_MAIL__FROM_ADDRESS is required"):
+    with pytest.raises(ValidationError, match=missing):
         Settings()
 
 
@@ -52,10 +60,22 @@ def test_a_wrong_sender_names_its_variable(monkeypatch: pytest.MonkeyPatch) -> N
         Settings()
 
 
-def test_a_misspelt_mail_variable_stops_the_process(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PENARIA_MAIL__HOTS", "smtp.example.org")
+def test_an_error_in_the_mail_settings_never_shows_the_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PENARIA_MAIL__HOST", "smtp.example.org")
+    monkeypatch.setenv("PENARIA_MAIL__PASSWORD", PASSWORD)
 
-    with pytest.raises(ValidationError, match="PENARIA_MAIL__HOTS"):
+    with pytest.raises(ValidationError) as raised:
+        Settings()
+
+    assert PASSWORD not in str(raised.value)
+
+
+def test_a_misspelt_mail_variable_stops_the_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PENARIA_MAIL__HOST", "smtp.example.org")
+    monkeypatch.setenv("PENARIA_MAIL__FROM_ADDRESS", "home@example.org")
+    monkeypatch.setenv("PENARIA_MAIL__USERNAMME", "home")
+
+    with pytest.raises(ValidationError, match="PENARIA_MAIL__USERNAMME"):
         Settings()
 
 

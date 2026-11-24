@@ -11,9 +11,9 @@ from uuid import UUID
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
 from penaria.features.shared.actor import Actor
-from penaria.features.shared.errors import NotFoundError
+from penaria.features.shared.errors import NotFoundError, StaleVersionError
 from penaria.features.shared.journal import Event
-from penaria.features.shared.places import PlaceDirectory
+from penaria.features.shared.places import Place, PlaceDirectory
 from penaria.features.support.identity.domain.accounts import check_password, normalize_username
 from penaria.features.support.identity.domain.links import PublicLinks
 from penaria.features.support.identity.domain.mail import MailKind
@@ -110,24 +110,39 @@ class PreviewPasswordReset:
 
 
 class ResetPassword:
-    """A new password through a reset link: every session of the account ends, its passkeys stay."""
+    """A new password through a reset link: every session of the account ends, its passkeys stay.
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], hasher: PasswordHasher, postman: Postman) -> None:
+    A link an admin made works only while that admin could still make it (``CreateResetLink``): taking
+    their access back, or the person gaining access they cannot give, disarms it, as for invitations.
+    """
+
+    def __init__(
+        self,
+        uow: AsyncUnitOfWork[IdentityTransaction],
+        hasher: PasswordHasher,
+        postman: Postman,
+        places: PlaceDirectory,
+    ) -> None:
         self._uow = uow
         self._hasher = hasher
         self._postman = postman
+        self._places = places
 
     async def execute(self, token: str, new_password: str, client: Client) -> User:
         check_password(new_password)
-        await _open_link(self._uow, token, client)
+        found = await _open_link(self._uow, token, client)
+        places = {} if found.created_by is None else await _places_of_grants(self._uow, self._places, found.user_id)
         password_hash = await self._hasher.hash(new_password)
         now = datetime.now(UTC)
         async with self._uow.transaction() as tx:
+            # The account first, then its link: making a link takes them in this order too.
+            user = await _enabled_user(tx, found.user_id, lock=True)
             link = await tx.account_links.by_token_hash(hash_token(token), LinkPurpose.PASSWORD_RESET, for_update=True)
             if link is None:
                 raise AccountLinkNotFoundError("this link does not work: ask for a new one")
             link.check_open(now)
-            user = await _enabled_user(tx, link.user_id, lock=True)
+            if link.created_by is not None:
+                await check_can_reset(tx, link.created_by, user, places, now)
             if user.username is None:
                 raise RuntimeError(f"the user ({user.id}) of a reset link has no account")
             await tx.passwords.set(user.id, password_hash, now)
@@ -150,19 +165,12 @@ class ResetPassword:
                     ],
                 ]
             )
-            await self._postman.notify(
-                tx, user, MailKind.PASSWORD_CHANGED, {"name": user.display_name, "username": user.username}
-            )
+            await self._postman.notify(tx, user, MailKind.PASSWORD_CHANGED)
         return user
 
 
 class CreateResetLink:
-    """A home's admin makes a reset link for a member, to pass on by hand; it works for 24 hours.
-
-    It hands the member's account to whoever opens it, so the admin must be able to give every access
-    the member holds, in this home and any other, and the member must not be an install admin unless
-    the admin is one too.
-    """
+    """A home's admin makes a reset link for a member, to pass on by hand; it works for 24 hours."""
 
     def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory, links: PublicLinks) -> None:
         self._uow = uow
@@ -177,29 +185,55 @@ class CreateResetLink:
             raise ResetNotAllowedError("change your own password on your account page")
         async with self._uow.query() as tx:
             await require_manager(tx, actor, home_id, now)
-            grants = await tx.grants.for_principal(PrincipalType.USER, user_id)
-        active = [grant for grant in grants if grant.is_active(now)]
-        if not any(grant.home_id == home_id for grant in active):
+            member = await tx.grants.active_of(home_id, PrincipalType.USER, user_id, now)
+        if not member:
             raise AccountNotFoundError("this person is not a member of the home", params={"user_id": str(user_id)})
-        places = await self._places.find({g.scope_entity_id for g in active if g.scope_entity_id})
+        places = await _places_of_grants(self._uow, self._places, user_id)
         async with self._uow.transaction() as tx:
-            admin = await tx.users.get(current.user_id)
-            user = await _enabled_user(tx, user_id, lock=True)
-            if admin is None:
-                raise RuntimeError(f"the user ({current.user_id}) of an open session does not exist")
-            if user.install_admin and not admin.install_admin:
-                raise ResetNotAllowedError("this person is an admin of the install: only another one can reset them")
-            roles = await tx.roles.get_many({grant.role_id for grant in active})
-            for grant in active:
-                access = await access_in(tx, actor, grant.home_id, place_of(places, grant.scope_entity_id), now)
-                if not can_give(access, roles[grant.role_id]):
-                    raise ResetNotAllowedError(
-                        "this person has access you could not give, here or in another home: "
-                        "they can reset their password by email, or ask someone who can"
-                    )
+            user = await tx.users.get_for_update(user_id)
+            if user is None or user.disabled_at is not None:
+                raise AccountNotFoundError("this account is disabled", params={"user_id": str(user_id)})
+            await check_can_reset(tx, current.user_id, user, places, now)
             link, token = await _new_reset_link(tx, user, HANDED_RESET_LIFETIME, now, created_by=current.user_id)
             await tx.journal.append([_created(link, user, ResetBy.ADMIN, actor, home_id=home_id)])
         return HandedLink(url=self._links.password_reset(token), expires_at=link.expires_at, user=user)
+
+
+async def check_can_reset(
+    tx: IdentityTransaction, admin_id: UUID, user: User, places: dict[UUID, Place], now: datetime
+) -> None:
+    """Refuse an admin's reset link for ``user`` unless the admin could give every access the user holds.
+
+    A reset link hands over the whole account, so the rule of who gives what (sign-in.md, 14) applies
+    to all of it, in every home, as the grants stand in ``tx``; and only an install admin resets one.
+    ``places`` are those of the user's grants, looked up beforehand.
+    """
+    admin = await tx.users.get(admin_id)
+    if admin is None or admin.disabled_at is not None:
+        raise ResetNotAllowedError("the admin who made this link can no longer reset passwords")
+    if user.install_admin and not admin.install_admin:
+        raise ResetNotAllowedError("this person is an admin of the install: only another one can reset them")
+    active = [grant for grant in await tx.grants.for_principal(PrincipalType.USER, user.id) if grant.is_active(now)]
+    if any(grant.scope_entity_id is not None and grant.scope_entity_id not in places for grant in active):
+        raise StaleVersionError("this person's access changed meanwhile; try again")
+    roles = await tx.roles.get_many({grant.role_id for grant in active})
+    actor = Actor.user(admin_id)
+    for grant in active:
+        access = await access_in(tx, actor, grant.home_id, place_of(places, grant.scope_entity_id), now)
+        if not can_give(access, roles[grant.role_id]):
+            raise ResetNotAllowedError(
+                "this person has access you could not give, here or in another home: "
+                "they can reset their password by email, or ask someone who can"
+            )
+
+
+async def _places_of_grants(
+    uow: AsyncUnitOfWork[IdentityTransaction], places: PlaceDirectory, user_id: UUID
+) -> dict[UUID, Place]:
+    """The places the user's grants cover, looked up outside the transaction that checks them."""
+    async with uow.query() as tx:
+        grants = await tx.grants.for_principal(PrincipalType.USER, user_id)
+    return await places.find({grant.scope_entity_id for grant in grants if grant.scope_entity_id})
 
 
 class CreateOperatorResetLink:

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from servicewright.adapters.fastapi import UnitScopeDep
 
 from penaria.features.shared.http import SIGNED_IN
+from penaria.features.support.identity.api.account import NAME_INPUT_MAX_LENGTH, PASSWORD_INPUT_MAX_LENGTH
 from penaria.features.support.identity.domain.mail import Attempt, FailureReason, LoggedMail, MailKind, MailState
 from penaria.features.support.identity.domain.mailbox import (
     EMAIL_MAX_LENGTH,
@@ -31,9 +32,6 @@ from penaria.features.support.identity.use_cases.install import (
     SendTestMail,
 )
 
-# Room for a passphrase of an SMTP service; the server is the judge of it.
-PASSWORD_INPUT_MAX_LENGTH = 1024
-NAME_INPUT_MAX_LENGTH = 200
 LOG_PAGE = 50
 
 router = APIRouter(prefix="/api/v1/install", tags=["install"], dependencies=[SIGNED_IN])
@@ -72,7 +70,9 @@ class MailboxIn(BaseModel):
     security: MailSecurity
     username: str | None = Field(default=None, max_length=LOGIN_MAX_LENGTH, description="Empty: no sign-in")
     password: str | None = Field(
-        default=None, max_length=PASSWORD_INPUT_MAX_LENGTH, description="Empty or omitted: keep the saved one"
+        default=None,
+        max_length=PASSWORD_INPUT_MAX_LENGTH,
+        description="Empty or omitted: keep the saved one; required again when the server or the login changes",
     )
     from_address: str = Field(min_length=1, max_length=EMAIL_MAX_LENGTH, examples=["home@example.org"])
     from_name: str | None = Field(default=None, max_length=NAME_INPUT_MAX_LENGTH, examples=["Penaria"])
@@ -170,7 +170,7 @@ async def save_mailbox(body: Annotated[MailboxIn, Body()], scope: UnitScopeDep) 
         from_address=body.from_address,
         from_name=body.from_name,
     )
-    view = await (await scope.get(SaveMailbox)).execute(await scope.get(CurrentSession), fields, body.password)
+    view = await (await scope.get(SaveMailbox)).execute(await scope.get(CurrentSession), fields, body.password or None)
     return MailboxOut.of(view)
 
 

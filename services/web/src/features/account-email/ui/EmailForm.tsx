@@ -1,7 +1,7 @@
 import {type FormEvent, useState} from 'react'
 import {useTranslation} from 'react-i18next'
 
-import {type Account, useRemoveEmail, useRequestEmailChange} from '@/entities/account'
+import {type Account, useRecentSignIn, useRemoveEmail, useRequestEmailChange} from '@/entities/account'
 import {useMailEnabled} from '@/entities/install'
 import {describeError} from '@/shared/api'
 import {Badge, Button, Field, FormActions, FormError, FormLayout, QueryState, TextInput} from '@/shared/ui'
@@ -34,16 +34,23 @@ export function EmailForm(props: {account: Account}) {
 function Current(props: {email: string}) {
   const {t} = useTranslation()
   const remove = useRemoveEmail()
+  const recent = useRecentSignIn()
+  const removeEmail = () => {
+    const send = () => remove.mutate(undefined, {onError: recent.retryOnError(send)})
+    send()
+  }
+  const error = recent.errorToShow(remove.error)
   return (
     <div className={styles.current}>
       <span className={styles.address}>{props.email}</span>
       <Badge tone="ok" dot>
         {t('email.confirmed')}
       </Badge>
-      <Button variant="ghost" size="sm" disabled={remove.isPending} onClick={() => remove.mutate()}>
+      <Button variant="ghost" size="sm" disabled={remove.isPending} onClick={removeEmail}>
         {t('email.remove')}
       </Button>
-      {remove.isError && <FormError>{describeError(remove.error, t)}</FormError>}
+      {error && <FormError>{describeError(error, t)}</FormError>}
+      {recent.dialog}
     </div>
   )
 }
@@ -51,12 +58,17 @@ function Current(props: {email: string}) {
 function ChangeEmail(props: {hasEmail: boolean}) {
   const {t} = useTranslation()
   const request = useRequestEmailChange()
+  const recent = useRecentSignIn()
   const [email, setEmail] = useState('')
 
+  // Reset links go to this address, so changing it asks to confirm it is you, as adding a passkey does.
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    request.mutate(email.trim(), {onSuccess: () => setEmail('')})
+    const address = email.trim()
+    const send = () => request.mutate(address, {onSuccess: () => setEmail(''), onError: recent.retryOnError(send)})
+    send()
   }
+  const error = recent.errorToShow(request.error)
 
   return (
     <form onSubmit={submit}>
@@ -71,7 +83,7 @@ function ChangeEmail(props: {hasEmail: boolean}) {
             required
           />
         </Field>
-        {request.isError && <FormError>{describeError(request.error, t)}</FormError>}
+        {error && <FormError>{describeError(error, t)}</FormError>}
         {request.isSuccess && (
           <p role="status" className={styles.sent}>
             {t('email.sent', {email: request.data.email})}
@@ -83,6 +95,7 @@ function ChangeEmail(props: {hasEmail: boolean}) {
           </Button>
         </FormActions>
       </FormLayout>
+      {recent.dialog}
     </form>
   )
 }

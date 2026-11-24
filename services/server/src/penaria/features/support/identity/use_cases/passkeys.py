@@ -101,12 +101,7 @@ class AddPasskey:
                 [_event("account.passkey_added", current, passkey_id=str(passkey.id), name=passkey.name)]
             )
             user = await load_user(tx, current)
-            await self._postman.notify(
-                tx,
-                user,
-                MailKind.PASSKEY_ADDED,
-                {"name": user.display_name, "username": user.username or "", "passkey": passkey.name},
-            )
+            await self._postman.notify(tx, user, MailKind.PASSKEY_ADDED, {"passkey": passkey.name})
         return passkey
 
 

@@ -169,4 +169,51 @@ describe('App', () => {
     expect(await screen.findByText(/198\.51\.100\.9/)).toBeVisible()
     expect(screen.queryByText(/192\.0\.2\.1/)).toBeNull()
   })
+
+  it('opens a reset link without a session', async () => {
+    mockApi({
+      'GET /api/v1/me': problem(401, 'unauthenticated'),
+      'POST /api/v1/password-reset:preview': {username: 'anna', display_name: 'Anna', passkeys: []},
+    })
+    renderApp('/reset-password/tok')
+
+    expect(await screen.findByRole('heading', {name: 'Choose a new password'})).toBeVisible()
+  })
+
+  it('shows the settings only to an admin of the install', async () => {
+    mockApi({
+      ...MAIL_OFF,
+      'GET /api/v1/me': account({install_admin: false}),
+      'GET /api/v1/homes': [home()],
+      [`GET /api/v1/homes/${HOME_ID}`]: home(),
+      [`GET /api/v1/homes/${HOME_ID}/entities`]: [],
+    })
+    renderApp('/settings')
+
+    expect(await screen.findByRole('heading', {name: 'Places and things'})).toBeVisible()
+    expect(screen.queryByRole('link', {name: 'Settings'})).toBeNull()
+  })
+
+  it('leads an admin of the install to the settings', async () => {
+    mockApi({
+      ...MAIL_OFF,
+      'GET /api/v1/me': account(),
+      'GET /api/v1/homes': [],
+      'GET /api/v1/install/mail': {
+        source: null,
+        host: null,
+        port: null,
+        security: null,
+        username: null,
+        from_address: null,
+        from_name: null,
+        password_set: false,
+      },
+      'GET /api/v1/install/mail/messages?limit=20': [],
+    })
+    renderApp('/settings')
+
+    expect(await screen.findByRole('heading', {name: 'Mail (SMTP)'})).toBeVisible()
+    expect(screen.getAllByRole('link', {name: 'Settings'})[0]).toHaveAttribute('aria-current', 'page')
+  })
 })

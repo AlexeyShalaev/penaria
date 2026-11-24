@@ -63,13 +63,13 @@ def public_url() -> str:
 
 
 @pytest.fixture
-def operator_mail() -> dict[str, Any]:
+def operator_mail() -> dict[str, Any] | None:
     """``PENARIA_MAIL__*`` of the tests: none; a test overrides it to set the mailbox in the environment."""
-    return {}
+    return None
 
 
 @pytest.fixture
-def settings(database_settings: DatabaseSettings, public_url: str, operator_mail: dict[str, Any]) -> Settings:
+def settings(database_settings: DatabaseSettings, public_url: str, operator_mail: dict[str, Any] | None) -> Settings:
     return Settings.model_validate(
         {
             "server": HttpServerSettings(),

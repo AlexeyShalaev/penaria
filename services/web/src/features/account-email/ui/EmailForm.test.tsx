@@ -1,4 +1,4 @@
-import {fireEvent, screen} from '@testing-library/react'
+import {fireEvent, screen, waitFor} from '@testing-library/react'
 import {Route} from 'react-router'
 import {describe, expect, it} from 'vitest'
 
@@ -48,5 +48,17 @@ describe('EmailForm', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Send the link'}))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Another account uses this address.')
+  })
+
+  it('removes the confirmed address', async () => {
+    const calls = mockApi({
+      'GET /api/v1/mail': {enabled: true},
+      'DELETE /api/v1/me/email': account(),
+    })
+    renderAt('/', <Route path="/" element={<EmailForm account={account({email: 'alex@example.org'})} />} />)
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Remove'}))
+
+    await waitFor(() => expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(1))
   })
 })

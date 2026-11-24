@@ -35,7 +35,7 @@ from penaria.features.shared.places import PlaceDirectory
 from penaria.features.support.identity.api.cookies import SESSION_COOKIE, SessionCookie
 from penaria.features.support.identity.domain.links import PublicLinks
 from penaria.features.support.identity.domain.mail import MailTransport
-from penaria.features.support.identity.domain.mailbox import OperatorMailbox
+from penaria.features.support.identity.domain.mailbox import Mailbox, MailboxSource, OperatorMailbox
 from penaria.features.support.identity.domain.passkeys import RelyingParty
 from penaria.features.support.identity.domain.passwords import PasswordHasher
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
@@ -155,7 +155,11 @@ class SettingsProvider(Provider):
 
     @provide
     def operator_mailbox(self) -> OperatorMailbox:
-        return OperatorMailbox(self._settings.mail.mailbox())
+        mail = self._settings.mail
+        if mail is None:
+            return OperatorMailbox(None)
+        password = None if mail.password is None else mail.password.get_secret_value()
+        return OperatorMailbox(Mailbox(fields=mail.fields(), password=password, source=MailboxSource.ENVIRONMENT))
 
 
 class UnitOfWorkProvider(Provider):

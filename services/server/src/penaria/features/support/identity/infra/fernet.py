@@ -4,7 +4,7 @@ A sealed secret is an envelope, ``pnr1:<key id>:<Fernet token>``. The key id nam
 sealed it, so a secret sealed before the key was rotated opens with the retired key that sealed it,
 and a secret whose key is gone is told apart from a damaged one. Fernet has no associated data, so
 the binding goes inside the token: the plaintext is the binding, a NUL byte and the secret, and
-opening checks the binding, so a ciphertext copied into another row, column or table does not open.
+opening checks the binding, so a ciphertext copied into another record does not open.
 """
 
 import base64

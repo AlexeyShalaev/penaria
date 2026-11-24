@@ -27,11 +27,11 @@ const OFF: Mailbox = {
 
 describe('validateMailbox', () => {
   it('passes a complete form', () => {
-    expect(validateMailbox(DRAFT)).toEqual({})
+    expect(validateMailbox(DRAFT, OFF)).toEqual({})
   })
 
   it('names every field that is wrong', () => {
-    expect(validateMailbox({...DRAFT, host: ' ', port: '70000', from_address: 'home'})).toEqual({
+    expect(validateMailbox({...DRAFT, host: ' ', port: '70000', from_address: 'home'}, OFF)).toEqual({
       host: 'hostRequired',
       port: 'portInvalid',
       from_address: 'fromInvalid',
@@ -39,7 +39,7 @@ describe('validateMailbox', () => {
   })
 
   it.each(['0', '1.5', 'abc', ''])('refuses the port %j', (port) => {
-    expect(validateMailbox({...DRAFT, port}).port).toBe('portInvalid')
+    expect(validateMailbox({...DRAFT, port}, OFF).port).toBe('portInvalid')
   })
 })
 
@@ -79,5 +79,23 @@ describe('draftOf and isDirty', () => {
     expect(isDirty(draftOf(saved), saved)).toBe(false)
     expect(isDirty({...draftOf(saved), password: 'new'}, saved)).toBe(true)
     expect(isDirty({...draftOf(saved), from_name: 'Home'}, saved)).toBe(true)
+  })
+})
+
+describe('the saved password', () => {
+  const saved: Mailbox = {...OFF, source: 'interface', ...DRAFT, port: 587, password_set: true}
+
+  it('stays with the server and login it was given for', () => {
+    expect(validateMailbox({...draftOf(saved), from_name: 'Dacha'}, saved)).toEqual({})
+  })
+
+  it.each([
+    ['host', {host: 'smtp.elsewhere.org'}],
+    ['port', {port: '25'}],
+    ['security', {security: 'none' as const}],
+    ['login', {username: 'someone@example.org'}],
+  ])('is asked for again when the %s changes', (_, changes) => {
+    expect(validateMailbox({...draftOf(saved), ...changes}, saved)).toEqual({password: 'passwordAgain'})
+    expect(validateMailbox({...draftOf(saved), ...changes, password: 'typed'}, saved)).toEqual({})
   })
 })

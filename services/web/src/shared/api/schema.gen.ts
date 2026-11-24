@@ -1528,7 +1528,7 @@ export interface components {
          * MailKind
          * @enum {string}
          */
-        MailKind: "test" | "email_verification" | "password_reset" | "invitation" | "password_changed" | "passkey_added";
+        MailKind: "test" | "email_verification" | "password_reset" | "invitation" | "password_changed" | "passkey_added" | "email_changed";
         /** MailOut */
         MailOut: {
             /**
@@ -1604,7 +1604,7 @@ export interface components {
             host: string;
             /**
              * Password
-             * @description Empty or omitted: keep the saved one
+             * @description Empty or omitted: keep the saved one; required again when the server or the login changes
              */
             password?: string | null;
             /**

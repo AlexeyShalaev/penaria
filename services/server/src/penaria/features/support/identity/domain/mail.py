@@ -20,9 +20,7 @@ LEASE = timedelta(minutes=5)
 SENDABLE_FOR = timedelta(days=3)
 # The log keeps a mail and its attempts this long.
 RETENTION = timedelta(days=30)
-ERROR_TEXT_MAX_LENGTH = 500
 SMTP_TEMPORARY = range(400, 500)
-SMTP_CODES = range(100, 1000)
 
 
 class MailKind(StrEnum):
@@ -32,6 +30,7 @@ class MailKind(StrEnum):
     INVITATION = "invitation"
     PASSWORD_CHANGED = "password_changed"  # noqa: S105 - a kind of mail, not a password
     PASSKEY_ADDED = "passkey_added"
+    EMAIL_CHANGED = "email_changed"
 
 
 class MailState(StrEnum):
@@ -156,8 +155,6 @@ class Mail:
     # Attempts since it was queued or last resent.
     attempts: int = 0
     next_attempt_at: datetime | None = None
-    # A test waits for its one attempt; everything else is retried after a temporary failure.
-    retried: bool = True
     id: UUID = field(default_factory=new_id)
 
     def sendable(self, now: datetime) -> bool:
@@ -194,6 +191,7 @@ def after_attempt(mail: Mail, failure: Failure | None, now: datetime) -> tuple[M
     """The mail's state after an attempt that ended with ``failure`` (None: sent), and its next attempt."""
     if failure is None:
         return MailState.SENT, None
-    if mail.retried and failure.temporary and mail.attempts < MAX_ATTEMPTS:
+    # A test is never retried: the admin waits for its one attempt.
+    if mail.kind is not MailKind.TEST and failure.temporary and mail.attempts < MAX_ATTEMPTS:
         return MailState.QUEUED, now + RETRY_DELAYS[mail.attempts - 1]
     return MailState.FAILED, None

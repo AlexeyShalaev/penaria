@@ -197,4 +197,43 @@ describe('MailboxCard', () => {
     expect(screen.getByRole('heading', {name: 'Почта (SMTP)'})).toBeVisible()
     expect(screen.getByText('Выключена')).toBeVisible()
   })
+
+  it('turns mail off', async () => {
+    const calls = mockApi({
+      'GET /api/v1/install/mail/status': {health: 'ok', error: null},
+      'DELETE /api/v1/install/mail': new Response(null, {status: 204}),
+      'GET /api/v1/install/mail': OFF,
+    })
+    renderCard(SAVED)
+
+    fireEvent.click(screen.getByRole('button', {name: 'Turn mail off'}))
+
+    await waitFor(() => expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(1))
+  })
+
+  it('says it saved and empties the password field', async () => {
+    mockApi({
+      'GET /api/v1/install/mail/status': {health: 'ok', error: null},
+      'PUT /api/v1/install/mail': SAVED,
+      'GET /api/v1/install/mail': SAVED,
+    })
+    renderCard(SAVED)
+
+    type('Password', 'a new app password')
+    fireEvent.click(screen.getByRole('button', {name: 'Save'}))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Saved.')
+    expect(screen.getByLabelText('Password')).toHaveValue('')
+  })
+
+  it('asks for the password again when the server changes', () => {
+    const calls = mockApi({'GET /api/v1/install/mail/status': {health: 'ok', error: null}})
+    renderCard(SAVED)
+
+    type('Server', 'smtp.elsewhere.org')
+    fireEvent.click(screen.getByRole('button', {name: 'Save'}))
+
+    expect(screen.getByText('The server or the login changed: enter the password again.')).toBeVisible()
+    expect(calls.filter((call) => call.method === 'PUT')).toEqual([])
+  })
 })

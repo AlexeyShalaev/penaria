@@ -85,13 +85,12 @@ def upgrade() -> None:
         sa.Column("state", sa.Text(), nullable=False),
         sa.Column("attempts", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("next_attempt_at", postgresql.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column("retried", sa.Boolean(), nullable=False),
         sa.CheckConstraint(
             "(state = 'queued') = (next_attempt_at IS NOT NULL)", name=op.f("identity_mail_queued_check")
         ),
         sa.CheckConstraint(
             "kind IN ('test', 'email_verification', 'password_reset', 'invitation', 'password_changed', "
-            "'passkey_added')",
+            "'passkey_added', 'email_changed')",
             name=op.f("identity_mail_kind_check"),
         ),
         sa.CheckConstraint("state IN ('queued', 'sent', 'failed')", name=op.f("identity_mail_state_check")),

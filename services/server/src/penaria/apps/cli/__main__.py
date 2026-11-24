@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import sys
 
+from pydantic import ValidationError
 from servicewright import ServiceError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -50,8 +51,12 @@ async def reset_password(settings: Settings, username: str) -> str:
 def main(argv: list[str] | None = None) -> None:
     args = parse(argv)
     try:
+        settings = Settings()
+    except ValidationError as exc:
+        sys.exit(f"error: the PENARIA_* environment is not valid:\n{exc}")
+    try:
         # The only command so far: users reset.
-        message = asyncio.run(reset_password(Settings(), args.username))
+        message = asyncio.run(reset_password(settings, args.username))
     except ServiceError as exc:
         sys.exit(f"error: {exc}")
     print(message)  # noqa: T201 - the link is the command's output

@@ -239,7 +239,7 @@ class MailDB(Base):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('test', 'email_verification', 'password_reset', 'invitation', 'password_changed', "
-            "'passkey_added')",
+            "'passkey_added', 'email_changed')",
             name="kind",
         ),
         CheckConstraint("state IN ('queued', 'sent', 'failed')", name="state"),
@@ -262,7 +262,6 @@ class MailDB(Base):
     state: Mapped[str] = mapped_column(Text)
     attempts: Mapped[int] = mapped_column(server_default=text("0"))
     next_attempt_at: Mapped[datetime.datetime | None]
-    retried: Mapped[bool]
 
 
 class MailAttemptDB(Base):

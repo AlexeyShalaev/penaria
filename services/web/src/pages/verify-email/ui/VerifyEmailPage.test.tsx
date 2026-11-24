@@ -1,4 +1,5 @@
 import {screen} from '@testing-library/react'
+import {StrictMode} from 'react'
 import {Route} from 'react-router'
 import {describe, expect, it} from 'vitest'
 
@@ -8,9 +9,19 @@ import {renderAt} from '@/test/render'
 import {VerifyEmailPage} from './VerifyEmailPage'
 
 describe('VerifyEmailPage', () => {
-  it('confirms the address once, on opening', async () => {
+  it('confirms the address once, on opening, though React runs the effect twice', async () => {
     const calls = mockApi({'POST /api/v1/email-verifications:confirm': {email: 'anna@example.org'}})
-    renderAt('/verify-email/tok', <Route path="/verify-email/:token" element={<VerifyEmailPage />} />)
+    renderAt(
+      '/verify-email/tok',
+      <Route
+        path="/verify-email/:token"
+        element={
+          <StrictMode>
+            <VerifyEmailPage />
+          </StrictMode>
+        }
+      />,
+    )
 
     expect(await screen.findByRole('status')).toHaveTextContent('anna@example.org is now the email of your account.')
     expect(calls).toEqual([

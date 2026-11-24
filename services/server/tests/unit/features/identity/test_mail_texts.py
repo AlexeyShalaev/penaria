@@ -17,6 +17,7 @@ VALUES = {
     MailKind.INVITATION: {"inviter": "Oleg", "home": "Dacha", "role": "family member"},
     MailKind.PASSWORD_CHANGED: {"name": "Anna", "username": "anna"},
     MailKind.PASSKEY_ADDED: {"name": "Anna", "username": "anna", "passkey": "Phone"},
+    MailKind.EMAIL_CHANGED: {"name": "Anna", "username": "anna", "email": "anna@example.org"},
 }
 LINKED = {MailKind.EMAIL_VERIFICATION, MailKind.PASSWORD_RESET, MailKind.INVITATION}
 

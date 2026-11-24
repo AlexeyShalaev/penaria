@@ -14,15 +14,16 @@ from penaria.features.support.identity.domain.mail import (
     Attempt,
     LoggedMail,
     MailDeliveryError,
-    MailKind,
     MailTransport,
 )
 from penaria.features.support.identity.domain.mailbox import (
     InstallAdminRequiredError,
     InvalidEmailError,
+    InvalidMailboxError,
     MailboxFields,
     MailboxLockedError,
     MailboxSource,
+    MailSecurity,
     StoredMailbox,
     check_email,
 )
@@ -30,9 +31,13 @@ from penaria.features.support.identity.domain.models import User
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import CurrentSession
 from penaria.features.support.identity.use_cases.account import load_user
-from penaria.features.support.identity.use_cases.postman import Mailboxes, Postman
-
-LOG_PAGE_MAX = 100
+from penaria.features.support.identity.use_cases.postman import (
+    Mailboxes,
+    MailboxReady,
+    MailboxUnreadable,
+    MailOff,
+    Postman,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +76,8 @@ class SaveMailbox:
     """Connect the install's mailbox, or change it; the password is kept unless a new one is given.
 
     Where email goes decides who receives reset links, so it needs a recent sign-in, like adding a
-    sign-in method.
+    sign-in method. The saved password is kept only for the server and login it was given for: sent to
+    another one, it would reach whoever runs that server, so a changed connection needs it again.
     """
 
     def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], mailboxes: Mailboxes) -> None:
@@ -79,21 +85,18 @@ class SaveMailbox:
         self._mailboxes = mailboxes
 
     async def execute(self, current: CurrentSession, new: MailboxFields, password: str | None) -> MailboxView:
+        """``password`` None keeps the saved one."""
         now = datetime.now(UTC)
         current.require_recent_sign_in(now)
-        if self._mailboxes.locked:
-            raise MailboxLockedError("PENARIA_MAIL__HOST is set: the mailbox comes from the environment")
+        _check_not_locked(self._mailboxes)
+        # Without a login the server is not signed in to, so no password is kept.
+        password_changed = new.username is not None and password is not None
         # Sealed before the transaction, so it stays short.
-        sealed = self._mailboxes.seal_password(password) if password else None
+        sealed_new = self._mailboxes.seal_password(password) if password_changed and password else None
         async with self._uow.transaction() as tx:
             await require_install_admin(tx, current)
             stored = await tx.install_settings.mailbox(for_update=True)
-            if sealed is None and stored is not None:
-                sealed = stored.sealed_password
-            # Without a login the server is not signed in to, so no password is kept.
-            if new.username is None:
-                sealed = None
-            password_changed = password is not None and password != "" and new.username is not None
+            sealed = sealed_new if password_changed else _kept_password(stored, new)
             changed = _changed(None if stored is None else stored.fields, new)
             if changed or password_changed:
                 await tx.install_settings.save_mailbox(StoredMailbox(new, sealed), current.user_id, now)
@@ -119,8 +122,7 @@ class RemoveMailbox:
 
     async def execute(self, current: CurrentSession) -> None:
         current.require_recent_sign_in(datetime.now(UTC))
-        if self._mailboxes.locked:
-            raise MailboxLockedError("PENARIA_MAIL__HOST is set: the mailbox comes from the environment")
+        _check_not_locked(self._mailboxes)
         async with self._uow.transaction() as tx:
             await require_install_admin(tx, current)
             if await tx.install_settings.remove_mailbox():
@@ -142,13 +144,8 @@ class SendTestMail:
             raise InvalidEmailError(
                 "your account has no email: type the address to send the test to", params={"field": "to"}
             )
-        attempt = await self._postman.send_now(
-            MailKind.TEST,
-            to=recipient,
-            locale=admin.locale,
-            values={},
-            user_id=admin.id if recipient == admin.email else None,
-            by=admin.id,
+        attempt = await self._postman.send_test(
+            to=recipient, locale=admin.locale, user_id=admin.id if recipient == admin.email else None, by=admin.id
         )
         async with self._uow.transaction() as tx:
             await tx.journal.append(
@@ -177,13 +174,16 @@ class CheckMailbox:
     async def execute(self, current: CurrentSession) -> MailboxStatus:
         async with self._uow.query() as tx:
             await require_install_admin(tx, current)
-            resolved = await self._mailboxes.resolve(tx)
-        if resolved.problem is not None:
-            return MailboxStatus(MailboxHealth.FAILED, resolved.problem.describe())
-        if resolved.mailbox is None:
-            return MailboxStatus(MailboxHealth.OFF)
+            state = await self._mailboxes.resolve(tx)
+        match state:
+            case MailOff():
+                return MailboxStatus(MailboxHealth.OFF)
+            case MailboxUnreadable(failure=failure):
+                return MailboxStatus(MailboxHealth.FAILED, failure.describe())
+            case MailboxReady(mailbox=mailbox):
+                pass
         try:
-            await self._transport.probe(resolved.mailbox)
+            await self._transport.probe(mailbox)
         except MailDeliveryError as exc:
             return MailboxStatus(MailboxHealth.FAILED, exc.failure.describe())
         return MailboxStatus(MailboxHealth.OK)
@@ -197,7 +197,7 @@ class ListMail:
         """The newest mails, ``limit`` of them, older than the mail ``before`` when given."""
         async with self._uow.query() as tx:
             await require_install_admin(tx, current)
-            return await tx.mail.page(before, min(limit, LOG_PAGE_MAX))
+            return await tx.mail.page(before, limit)
 
 
 class ResendMail:
@@ -228,6 +228,27 @@ async def require_install_admin(tx: IdentityTransaction, current: CurrentSession
     if not user.install_admin:
         raise InstallAdminRequiredError("only an admin of the install can do this")
     return user
+
+
+def _check_not_locked(mailboxes: Mailboxes) -> None:
+    if mailboxes.operator is not None:
+        raise MailboxLockedError("PENARIA_MAIL__HOST is set: the mailbox comes from the environment")
+
+
+def _kept_password(stored: StoredMailbox | None, new: MailboxFields) -> str | None:
+    """The saved password, when the new fields still sign in to the server it was given for."""
+    if stored is None or stored.sealed_password is None or new.username is None:
+        return None
+    if _connection(stored.fields) != _connection(new):
+        raise InvalidMailboxError(
+            "the server or the login changed: enter the password again", params={"field": "password"}
+        )
+    return stored.sealed_password
+
+
+def _connection(fields: MailboxFields) -> tuple[str, int, MailSecurity, str | None]:
+    """What the password is sent to: the server, how, and as whom."""
+    return fields.host, fields.port, fields.security, fields.username
 
 
 async def _view(tx: IdentityTransaction, mailboxes: Mailboxes) -> MailboxView:

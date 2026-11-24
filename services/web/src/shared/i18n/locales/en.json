@@ -253,7 +253,8 @@
     "account_not_found": "There is no such account.",
     "mail_not_found": "This email is no longer in the log.",
     "mail_expired": "This email can no longer be sent: its link stopped working, or it is too old.",
-    "mail_queued": "This email is waiting for its next attempt already."
+    "mail_queued": "This email is waiting for its next attempt already.",
+    "invalid_mailbox_password": "The server or the login changed: enter the password again, so the saved one never goes to another server."
   },
   "languages": {
     "en": "English",
@@ -504,7 +505,8 @@
     "issue": {
       "hostRequired": "Enter the server.",
       "portInvalid": "A port is from 1 to 65535.",
-      "fromInvalid": "This does not look like an email address."
+      "fromInvalid": "This does not look like an email address.",
+      "passwordAgain": "The server or the login changed: enter the password again."
     },
     "host": "Server",
     "hostHint": "The address of the mail server, such as smtp.example.org.",
@@ -539,7 +541,8 @@
       "saveFirst": "Save your changes first: the test checks the saved settings.",
       "needAddress": "Your account has no email: type the address to send the test to.",
       "sent": "Sent to {{to}}. Check the inbox.",
-      "failed": "The email was not sent. The server said:"
+      "failed": "The email was not sent. The server said:",
+      "toInvalid": "This does not look like an email address."
     }
   },
   "mailLog": {
@@ -554,7 +557,8 @@
       "password_reset": "Password reset",
       "invitation": "Invitation",
       "password_changed": "Password changed",
-      "passkey_added": "Passkey added"
+      "passkey_added": "Passkey added",
+      "email_changed": "Email changed"
     },
     "retryAt": "Next try {{when}}",
     "state": {

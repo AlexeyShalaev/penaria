@@ -58,12 +58,21 @@ export function useRemoveMailbox() {
   return useMailMutation(() => unwrap(api.DELETE('/api/v1/install/mail')))
 }
 
+/** A send adds to the log only: the connection's status was just checked by sending. */
+function useSendMutation<T, R>(send: (input: T) => Promise<R>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: send,
+    onSettled: () => queryClient.invalidateQueries({queryKey: mailKeys.log}),
+  })
+}
+
 export function useSendTestMail() {
-  return useMailMutation((to: string | null) => unwrap(api.POST('/api/v1/install/mail:test', {body: {to}})))
+  return useSendMutation((to: string | null) => unwrap(api.POST('/api/v1/install/mail:test', {body: {to}})))
 }
 
 export function useResendMail() {
-  return useMailMutation((mailId: string) =>
+  return useSendMutation((mailId: string) =>
     unwrap(api.POST('/api/v1/install/mail/messages/{mail_id}:resend', {params: {path: {mail_id: mailId}}})),
   )
 }

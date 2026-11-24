@@ -1,7 +1,8 @@
 """The account's email: an address becomes the account's only once a link sent to it is opened (sign-in.md, 15).
 
 Reset links go to it, so an address nobody confirmed would hand the account to whoever owns that
-address; without outgoing mail an account has no email at all.
+address; without outgoing mail an account has no email at all. For the same reason changing it needs
+a recent sign-in, and the old address is told of the change.
 """
 
 from dataclasses import dataclass
@@ -25,6 +26,7 @@ from penaria.features.support.identity.domain.recovery import (
 )
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, hash_token
+from penaria.features.support.identity.domain.throttle import email_key, mail_sent_key
 from penaria.features.support.identity.use_cases.account import load_user
 from penaria.features.support.identity.use_cases.attempts import count_attempt, find_by_secret
 from penaria.features.support.identity.use_cases.postman import Postman
@@ -47,9 +49,9 @@ class RequestEmailChange:
     async def execute(self, current: CurrentSession, email: str) -> PendingEmail:
         email = check_email(email)
         now = datetime.now(UTC)
+        current.require_recent_sign_in(now)
         async with self._uow.transaction() as tx:
-            # Each request mails a stranger's address, maybe: a few an hour per account.
-            await count_attempt(tx, [f"email:{current.user_id}"], now)
+            await count_attempt(tx, [mail_sent_key(current.user_id)], now)
         async with self._uow.transaction() as tx:
             user = await load_user(tx, current)
             await _check_free(tx, user, email)
@@ -78,8 +80,9 @@ class RequestEmailChange:
 class ConfirmEmail:
     """The link from the confirmation email makes its address the account's; it needs no session."""
 
-    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction]) -> None:
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction], postman: Postman) -> None:
         self._uow = uow
+        self._postman = postman
 
     async def execute(self, token: str, client: Client) -> User:
         await find_by_secret(
@@ -100,11 +103,15 @@ class ConfirmEmail:
             if user is None or user.disabled_at is not None:
                 raise AccountLinkNotFoundError("this link does not work: the account is gone or disabled")
             # Two accounts confirming one address at once take turns here.
-            await tx.failures.lock([f"email:{link.email}"])
+            await tx.failures.lock([email_key(link.email)])
             await _check_free(tx, user, link.email)
+            if user.email is not None and user.email != link.email:
+                await self._postman.notify(tx, user, MailKind.EMAIL_CHANGED, {"email": link.email})
             user.email = link.email
             await tx.users.save(user)
             await tx.account_links.use(link.id, now)
+            # A reset link sent to the old address opens the account no longer.
+            await tx.account_links.forget_unused(user.id, LinkPurpose.PASSWORD_RESET)
             await tx.journal.append(
                 [
                     Event(
@@ -123,6 +130,7 @@ class RemoveEmail:
         self._uow = uow
 
     async def execute(self, current: CurrentSession) -> User:
+        current.require_recent_sign_in(datetime.now(UTC))
         async with self._uow.transaction() as tx:
             user = await tx.users.get_for_update(current.user_id)
             if user is None:
@@ -130,6 +138,7 @@ class RemoveEmail:
             if user.email is not None:
                 user.email = None
                 await tx.users.save(user)
+                await tx.account_links.forget_unused(user.id, LinkPurpose.PASSWORD_RESET)
                 await tx.journal.append(
                     [Event("account.email_removed", None, Actor.user(user.id), {"user_id": str(user.id)})]
                 )

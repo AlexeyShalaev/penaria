@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from penaria.features.shared.errors import ConflictError, ForbiddenError, InvalidError
-from penaria.features.support.identity.domain.secrets import bound_to
 
 HOST_MAX_LENGTH = 253
 LOGIN_MAX_LENGTH = 320
@@ -15,8 +14,8 @@ EMAIL_MAX_LENGTH = 254
 PORT_MAX = 65535
 DEFAULT_SENDER_NAME = "Penaria"
 EMAIL_PATTERN = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
-# The saved password is sealed for this cell only.
-PASSWORD_BINDING = bound_to("identity_install_settings", "secret", "mail")
+# The record the saved password is sealed for (domain/secrets.py).
+MAILBOX_SEAL = "mailbox/password"
 # A host name, an IPv4 address or a bracketless IPv6 one: no spaces, slashes or credentials.
 HOST_PATTERN = re.compile(r"[A-Za-z0-9.:_-]+")
 
