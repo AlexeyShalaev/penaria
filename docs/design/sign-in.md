@@ -220,6 +220,8 @@ CREATE TABLE identity_tokens (id uuid PRIMARY KEY, token_hash bytea UNIQUE NOT N
   principal_id uuid NOT NULL, name text NOT NULL, created_at timestamptz NOT NULL, last_used_at timestamptz, revoked_at timestamptz);
 ```
 
+Step 3 built `identity_invitations`, `identity_tokens` and the guest side of `identity_sessions` as above; `identity_grants` gained `granted_by` (section 14).
+
 A guest link's secret is stored as a token for its `link` principal.
 
 The TOTP secret is encrypted with a key derived from `PENARIA_SECRET_KEY`, a new required variable. The quickstart generates it.
@@ -258,7 +260,7 @@ Step 1 (accounts, passwords, sessions, the setup token, sign-out and the account
 - **The `Origin` check** (section 5) falls back to `Referer` when a request has no `Origin`. A request with neither comes from a client that is not a browser, which a forged page cannot make carry the cookie, and passes.
 - **Account events are journalled with no home:** `journal_events.home_id` is nullable (core-model 9.3). The types are `account.setup_completed`, `account.signed_in`, `account.sign_in_failed`, `account.signed_out`, `account.updated`, `account.password_changed` and `session.revoked`, each with the `user_id` in the payload. A failed sign-in is recorded only for an existing account, with the `system` actor: nobody is signed in.
 - **A session's last use** is written at most every 5 minutes, so reading pages does not write on every request.
-- **`identity_sessions` has no `grant_id` yet:** it comes with guest links (step 3), and `user_id` is required until then.
+- **`identity_sessions` has no `grant_id` yet:** it comes with guest links (step 3, section 14), and `user_id` is required until then.
 
 ## 13. Notes from step 2
 
@@ -278,3 +280,23 @@ Step 2 (passkeys) settled these:
 - **Names.** A new passkey is named after the browser and system that made it ("Chrome on macOS", "Safari on iPhone"); its person renames it on the account page, which lists each passkey with when it was added and last used.
 - **The suggestion.** An account without passkeys, in a browser that can make one, sees "Sign in faster with a passkey" above its pages, with a button that adds one at once. "Not now" hides it for good in that browser.
 - **The web app** calls `navigator.credentials` directly, converting the JSON options and answers itself (`src/shared/lib/webauthn.ts`), rather than adding `@simplewebauthn/browser`: the conversion is a few lines, and the app maps the browser's refusals (`NotAllowedError`, `InvalidStateError`, `SecurityError`) to its own messages anyway.
+
+## 14. Notes from step 3
+
+Step 3 (invitations, a home's people and guest links) settled these:
+
+- **Who gives what.** Making, changing and taking back access all follow one rule, the no-escalation rule of core-model 11.1: a role can be given over a place only by someone who holds `members.manage` there and every permission of the role; a role with every permission only by someone with every permission; a role with guest view is the only kind a guest-view holder can give; an owner only by an owner. Changing or taking back a grant needs the same right over the grant as it is, so a member who manages people cannot demote an admin. Everyone can take back their own access (leaving), except the last owner.
+- **Owners** are made only by invitation and leave only by revocation: an owner grant is never edited (`409 owner_grant`). Removing an owner, and leaving as one, is refused for the last owner (`409 last_owner`). Every change to a home's people locks the home's row, so two owners cannot remove each other at once.
+- **A recent sign-in** (section 5) is needed to invite an owner (a transfer of ownership is one), to change a grant and to take back an owner grant, leaving as an owner included. Taking back other grants, revoking invitations and guest links need none: they only reduce access.
+- **Invitations.** The role is named by its id, so roles made later work as they are. The scope is a live place of the same home, or the whole home; an owner invitation covers the whole home and gives access without end. The link works for 7 days by default and for 30 at most, and never longer than the access it gives: a guest invitation whose access ends in 3 days stops working then too. A role that requires an end gets its default duration from when the invitation is made, unless the inviter picks a day.
+- **Accepting** re-checks the rule above for the inviter: an invitation gives only what its inviter may still give (`409 inviter_lost_access`), so taking an admin's access back also disarms their pending invitations. The invitation row is locked, so it is used once. Accepting your own invitation is refused (`own_invitation`), and so is access you already hold with the same role over the same place (`already_granted`); the invitation then stays unused, to be passed on. Accepting a different role adds a grant: access is the union of grants (core-model 11.2). For a transfer, the inviter's owner grants are revoked in the same transaction, journalled with the inviter as the actor and the reason `transferred`.
+- **New accounts.** Accepting an invitation is the only way to make an account besides the setup. It takes a username, a display name and a password; the account is not an install admin, and the passkey suggestion of section 13 follows. A taken username answers `409 username_taken`: only someone holding a valid invitation can learn that a username exists.
+- **Secrets in bodies.** The web pages carry the token in their address (`/invite/<token>`, `/guest/<token>`), but the API takes it only in request bodies (`POST /invitations:preview`, `:accept`, `:accept-new-account`, `POST /guest-sessions`), so API access logs never hold one. The guest page moves on to `/guest` once the session is open, so the token leaves the address bar too. Links are shown once, when made: only hashes are kept, and a lost link is replaced by a new one.
+- **Limits.** Unknown invitation and guest-link tokens count per address as section 7 counts failures, under a key of their own (`links:<address>`), so guessing tokens and guessing passwords do not share a counter. A token found takes its count back.
+- **Guest links.** A link is a `link` principal: one grant and one row in `identity_tokens` share its id. Its role must have guest view; it ends after the role's default duration (3 days for the guest preset) unless the person making it picks another day. Revoking a link's grant revokes its token and ends its guest sessions in the same transaction, and every request of a guest session checks the grant, so an expired or revoked link ends the visit at the next request. A guest session reaches no account endpoint (`401`), cannot create a home (`403 account_required`) and changes nothing its role does not allow. A link's access is not changed afterwards: a new link is made instead.
+- **One cookie.** A guest session uses the session cookie of section 5. A browser signed in to an account that opens a guest link is asked first, and signs out before it becomes a guest's.
+- **Who sees the people.** The lists of members, invitations and guest links need `members.manage` over the whole home. Everyone else sees their own place in the home and a way to leave it. Grants keep who gave them (`identity_grants.granted_by`), so the list says who invited whom.
+- **The guest's tree** counts only what a guest may see: a place's count of what is inside leaves out the things not meant for guests.
+- **Places across contexts.** Identity checks a scope and names it through a `PlaceDirectory` port that the registry implements, as the registry asks identity through `AccessPolicy`; neither reads the other's tables.
+- **The journal** gains `invitation.created`, `invitation.revoked`, `invitation.accepted`, `account.created` (with the `invitation_id`), `grant.created` (with the `invitation_id`), `grant.changed` (with the grant `before`), `grant.revoked` (with the `reason`: `revoked`, `left` or `transferred`), `guest_link.created`, `guest_link.opened` and `guest_link.revoked` (with the number of `sessions_ended`).
+- **QR codes** are drawn in the browser with `uqr`, a dependency-free encoder, as an SVG of the app's own, rather than with `qrcode`, which brings a command line tool's dependencies along. The link never leaves the browser to be drawn.

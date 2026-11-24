@@ -26,7 +26,7 @@ Behind a reverse proxy, let the server trust its `X-Forwarded-For`, so that the 
 
 ## HTTP API
 
-REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. The same document is committed as `openapi.json` (`make openapi` exports it without a database), and the web app generates its API types from it; a unit test fails when the committed file no longer matches the code. So far: setup and signing in (`/setup`, `/sign-in`, `/sign-in/passkey`, `/sign-out`), the signed-in account, its sessions and passkeys (`/me`, `/me/password`, `/me/sessions`, `/me/passkeys`, `/me/reauthenticate`), the account's homes (`/homes`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`; a request without a session answers 401 with the code `unauthenticated`.
+REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. The same document is committed as `openapi.json` (`make openapi` exports it without a database), and the web app generates its API types from it; a unit test fails when the committed file no longer matches the code. So far: setup and signing in (`/setup`, `/sign-in`, `/sign-in/passkey`, `/sign-out`), the signed-in account, its sessions and passkeys (`/me`, `/me/password`, `/me/sessions`, `/me/passkeys`, `/me/reauthenticate`), the account's homes (`/homes`), a home's people (`/homes/{id}/roles`, `/members`, `/grants/{id}`, `:leave`, `/invitations`, `/guest-links`), accepting invitations (`/invitations:preview`, `:accept`, `:accept-new-account`), guest visits (`/guest-sessions`, `/guest`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`; a request without a session answers 401 with the code `unauthenticated`.
 
 ## Sign-in and the first start
 
@@ -38,6 +38,8 @@ make run-api                                               # development: the to
 ```
 
 Each start before setup prints a new token and the old one stops working; with several api replicas, use the token of the one that started last. An install from before sign-in keeps its data: setup turns its one local user, with its homes, into the new account.
+
+People join a home through invitations: whoever manages the home's people makes a link (`<PENARIA_PUBLIC_URL>/invite/<token>`) with a role, a place and an end of access, and the person accepts it with their account or makes one through it; there is no open sign-up. Guest links (`<PENARIA_PUBLIC_URL>/guest/<token>`) need no account: opening one gives the browser a guest session that sees only guest-visible things and ends when the link expires or is revoked. Both links are shown once, when made: the server keeps only hashes of their tokens. The rules are in `docs/design/sign-in.md`, section 14.
 
 Passkeys belong to the host name of `PENARIA_PUBLIC_URL`: browsers offer them only on `https` with a domain name, or on `localhost`, so an install opened at a plain IP address signs in with passwords only. Changing the host name later makes every passkey unusable (people sign in with their password and add a new one). Adding or removing a passkey needs a sign-in within the last 10 minutes; the web app asks for the password or a passkey again when it is older.
 

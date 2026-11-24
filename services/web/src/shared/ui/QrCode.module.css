@@ -1,0 +1,12 @@
+.qr {
+  flex: none;
+  border-radius: var(--r-sm);
+}
+
+.light {
+  fill: var(--qr-light);
+}
+
+.dark {
+  fill: var(--qr-dark);
+}

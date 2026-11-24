@@ -11,6 +11,7 @@ export {
   useSetupStatus,
   useSignIn,
   useSignOut,
+  useStartSession,
   useUpdateAccount,
 } from './api/account'
 export {

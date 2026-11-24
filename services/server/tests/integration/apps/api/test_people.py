@@ -601,6 +601,8 @@ async def test_a_guest_link_opens_a_guest_view_of_guest_visible_things(
     api: httpx.AsyncClient, new_client: NewClient
 ) -> None:
     ids = await make_home(api)
+    bed = {"kind": "item", "name": "Bed", "parent_id": ids["guest_room"]}
+    await ok(await api.post(f"/homes/{ids['home']}/entities", json=bed), 201)
     token = await guest_link(api, ids["home"])
     guest = new_client()
 
@@ -615,6 +617,8 @@ async def test_a_guest_link_opens_a_guest_view_of_guest_visible_things(
     assert [e["name"] for e in top] == ["Country house"]
     # Only the way to the towels: no kitchen, no study.
     assert [e["name"] for e in inside] == ["Guest room"]
+    # Counts leave out what a guest does not see: the bed beside the towels.
+    assert (top[0]["children"], inside[0]["children"]) == (1, 1)
     assert (await guest.get(f"/entities/{ids['kitchen']}")).status_code == 404
 
 

@@ -67,6 +67,10 @@
   --ai: var(--violet-500);
   --ai-soft: var(--violet-50);
 
+  /* A QR code stays dark on light in either theme, or phones cannot read it */
+  --qr-dark: #000000;
+  --qr-light: #ffffff;
+
   /* A device that is on */
   --on: #f2b632;
   --on-soft: #fff4d6;

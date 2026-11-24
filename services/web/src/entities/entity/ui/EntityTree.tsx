@@ -20,10 +20,12 @@ type Props = {
   /** The entity whose contents to show; the tops of the home when null. */
   parentId?: string | null
   includeArchived?: boolean
-  expanded: ReadonlySet<string>
+  expanded: Pick<ReadonlySet<string>, 'has'>
   onToggle: (entityId: string) => void
   /** Rows pick a place instead of opening it. */
   select?: TreeSelection
+  /** Rows only show their entity, as for a guest, who has no entity pages. */
+  readOnly?: boolean
   /** Left out with everything inside it, such as the entity being moved. */
   hiddenId?: string
   empty?: ReactNode
@@ -86,11 +88,9 @@ function Row(props: Props & {entity: EntitySummary; depth: number}) {
       </span>
       {PrivacyIcon && <PrivacyIcon className={styles.marker} role="img" aria-label={t(`privacy.${entity.privacy}`)} />}
       {entity.archived_at !== null && <Badge>{t('entity.archived')}</Badge>}
-      {select ? (
-        selected && <Check className={styles.check} aria-hidden />
-      ) : (
-        <ChevronRight className={styles.chevron} aria-hidden />
-      )}
+      {select
+        ? selected && <Check className={styles.check} aria-hidden />
+        : !props.readOnly && <ChevronRight className={styles.chevron} aria-hidden />}
     </>
   )
   return (
@@ -122,13 +122,15 @@ function Row(props: Props & {entity: EntitySummary; depth: number}) {
           >
             {content}
           </button>
+        ) : props.readOnly ? (
+          <div className={styles.main}>{content}</div>
         ) : (
           <Link className={styles.main} to={`/entities/${entity.id}`}>
             {content}
           </Link>
         )}
       </div>
-      {open && (
+      {open && expandable && (
         <ul className={styles.tree}>
           <Level {...props} parentId={entity.id} depth={depth + 1} />
         </ul>
