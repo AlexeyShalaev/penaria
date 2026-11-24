@@ -2,7 +2,7 @@
 SERVICES := server web
 
 .DEFAULT_GOAL := help
-.PHONY: help install fmt check test hooks hadolint change changelog
+.PHONY: help install fmt check test hooks hadolint workflows change changelog
 
 help:  ## Show the commands
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  make %-10s %s\n", $$1, $$2}'
@@ -22,6 +22,10 @@ check:  ## Lint and type-check every service and the scripts, read-only (the sam
 test:  ## Test every service and the scripts
 	@for s in $(SERVICES); do $(MAKE) -C services/$$s test || exit 1; done
 	uv run --no-project --with pytest pytest scripts -q
+
+workflows:  ## Lint the GitHub workflows with actionlint and zizmor, as CI does
+	docker run --rm -v "$(CURDIR):/repo" -w /repo rhysd/actionlint:1.7.12 -color
+	uvx zizmor@1.33.1 .github/workflows
 
 change:  ## Add a release note fragment: make change slug=<what-changed> type=<added|fixed|...>
 	python3 scripts/release/notes.py new "$(slug)" --type "$(type)"
