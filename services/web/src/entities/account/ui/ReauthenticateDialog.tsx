@@ -41,8 +41,11 @@ export function ReauthenticateDialog({onConfirmed, onClose}: Props) {
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    // Without a password, the form's one field is the code, which goes along to the provider.
-    if (!offerPassword) return confirmWithProvider()
+    // Without a password, the form's one field is the code, which goes along to the provider, if any.
+    if (!offerPassword) {
+      if (offerProvider) confirmWithProvider()
+      return
+    }
     withPasskey.reset()
     withPassword.mutate({password, ...(asksCode ? secondFactorCode(code, recovery) : {})}, {onSuccess: onConfirmed})
   }

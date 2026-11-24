@@ -64,4 +64,18 @@ describe('ReauthenticateDialog', () => {
       .toEqual([{return_to: '/account?tab=people', code: '123456'}])
     expect(screen.queryByLabelText('Password')).toBeNull()
   })
+
+  it('sends nothing on Enter when neither a password nor the provider can confirm', async () => {
+    leaveFrom('/account')
+    const calls = mockApi({
+      ...APP_ON,
+      'GET /api/v1/me/passkeys': [],
+      'GET /api/v1/me/sign-in-methods': {password: false, external_identities: []},
+    })
+    renderDialog()
+
+    fireEvent.submit(await screen.findByLabelText('Code from the app'))
+
+    expect(calls.filter((call) => call.method === 'POST')).toEqual([])
+  })
 })
