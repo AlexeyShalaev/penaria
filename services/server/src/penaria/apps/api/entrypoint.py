@@ -19,6 +19,7 @@ from penaria.apps.api.settings import Settings
 from penaria.features.core.registry.api.routes import router as registry_router
 from penaria.features.support.identity.api.account import router as account_router
 from penaria.features.support.identity.api.account import sign_in_router
+from penaria.features.support.identity.api.devices import router as devices_router
 from penaria.features.support.identity.api.install import router as install_router
 from penaria.features.support.identity.api.passkeys import router as passkeys_router
 from penaria.features.support.identity.api.passkeys import sign_in_router as passkey_sign_in_router
@@ -39,6 +40,7 @@ ROUTERS = (
     totp_router,
     identity_router,
     people_router,
+    devices_router,
     public_router,
     guest_router,
     install_router,

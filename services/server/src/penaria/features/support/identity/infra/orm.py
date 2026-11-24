@@ -230,7 +230,7 @@ class InvitationDB(Base):
 
 
 class TokenDB(Base):
-    """Secrets that stand for a principal; so far the tokens of guest links (sign-in.md, 10)."""
+    """Secrets that stand for a principal: the tokens of guest links and devices (sign-in.md, 10)."""
 
     __tablename__ = "identity_tokens"
     __table_args__ = (
@@ -245,6 +245,7 @@ class TokenDB(Base):
     name: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime.datetime]
     last_used_at: Mapped[datetime.datetime | None]
+    last_used_ip: Mapped[str | None] = mapped_column(INET)
     revoked_at: Mapped[datetime.datetime | None]
 
 

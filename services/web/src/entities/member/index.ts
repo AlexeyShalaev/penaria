@@ -7,6 +7,7 @@ export {
   useInvitationPreview,
 } from './api/invitations'
 export {
+  type Device,
   type GrantChanges,
   type GuestLink,
   type Invitation,
@@ -15,9 +16,11 @@ export {
   type PlaceRef,
   type Role,
   useChangeGrant,
+  useCreateDevice,
   useCreateGuestLink,
   useCreateInvitation,
   useCreateResetLink,
+  useDevices,
   useGuestLinks,
   useInvitations,
   useLeaveHome,

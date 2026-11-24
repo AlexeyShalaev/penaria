@@ -16,7 +16,7 @@ from penaria.features.support.identity.domain.members import (
     InvitationUsedError,
     changed_expiry,
     check_can_give,
-    check_link_name,
+    check_token_name,
     grant_expiry,
     link_expiry,
 )
@@ -206,6 +206,6 @@ def test_a_guest_link_ends_within_ninety_days() -> None:
 
 def test_a_guest_link_without_a_name_is_refused() -> None:
     with pytest.raises(InvalidGrantError) as raised:
-        check_link_name("   ")
+        check_token_name("   ")
 
     assert raised.value.params == {"field": "name", "max_length": 100}

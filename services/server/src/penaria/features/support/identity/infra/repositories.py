@@ -8,6 +8,7 @@ from sqlalchemy import ColumnElement, case, delete, exists, func, or_, select, u
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from penaria.features.support.identity.domain.devices import Device
 from penaria.features.support.identity.domain.members import GuestLink, Invitation, Token
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
 from penaria.features.support.identity.domain.passkeys import Ceremony, Challenge, Passkey
@@ -697,6 +698,7 @@ class PostgresTokenRepository:
                 name=token.name,
                 created_at=token.created_at,
                 last_used_at=token.last_used_at,
+                last_used_ip=token.last_used_ip,
                 revoked_at=token.revoked_at,
             )
         )
@@ -711,8 +713,10 @@ class PostgresTokenRepository:
         )
         return None if row is None else _token(row)
 
-    async def used(self, token_id: UUID, now: datetime) -> None:
-        await self._session.execute(update(TokenDB).where(TokenDB.id == token_id).values(last_used_at=now))
+    async def used(self, token_id: UUID, now: datetime, ip: str | None) -> None:
+        await self._session.execute(
+            update(TokenDB).where(TokenDB.id == token_id).values(last_used_at=now, last_used_ip=ip)
+        )
 
     async def revoke_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> None:
         await self._session.execute(
@@ -728,10 +732,7 @@ class PostgresTokenRepository:
     async def links_in(self, home_id: UUID, now: datetime) -> list[GuestLink]:
         rows = await self._session.execute(
             select(GrantDB, TokenDB)
-            .join(
-                TokenDB,
-                (TokenDB.principal_type == GrantDB.principal_type) & (TokenDB.principal_id == GrantDB.principal_id),
-            )
+            .join(TokenDB, _token_of_grant())
             .where(
                 GrantDB.home_id == home_id,
                 GrantDB.principal_type == PrincipalType.LINK.value,
@@ -741,6 +742,35 @@ class PostgresTokenRepository:
             .order_by(GrantDB.created_at.desc(), GrantDB.id.desc())
         )
         return [GuestLink(grant=_grant(grant), token=_token(token)) for grant, token in rows]
+
+    async def devices_in(self, home_id: UUID, now: datetime) -> list[Device]:
+        rows = await self._session.execute(
+            select(GrantDB, TokenDB)
+            .join(TokenDB, _token_of_grant())
+            .where(
+                GrantDB.home_id == home_id,
+                GrantDB.principal_type == PrincipalType.DEVICE.value,
+                TokenDB.revoked_at.is_(None),
+                *_active(now),
+            )
+            .order_by(GrantDB.created_at.desc(), GrantDB.id.desc())
+        )
+        return [Device(grant=_grant(grant), token=_token(token)) for grant, token in rows]
+
+    async def device_by_token_hash(self, token_hash: bytes) -> Device | None:
+        row = (
+            await self._session.execute(
+                select(GrantDB, TokenDB)
+                .join(TokenDB, _token_of_grant())
+                .where(TokenDB.token_hash == token_hash, TokenDB.principal_type == PrincipalType.DEVICE.value)
+            )
+        ).one_or_none()
+        return None if row is None else Device(grant=_grant(row[0]), token=_token(row[1]))
+
+
+def _token_of_grant() -> ColumnElement[bool]:
+    # A guest link's or a device's grant and token share the principal.
+    return (TokenDB.principal_type == GrantDB.principal_type) & (TokenDB.principal_id == GrantDB.principal_id)
 
 
 def _active(now: datetime) -> tuple[ColumnElement[bool], ...]:
@@ -866,6 +896,7 @@ def _token(row: TokenDB) -> Token:
         name=row.name,
         created_at=row.created_at,
         last_used_at=row.last_used_at,
+        last_used_ip=None if row.last_used_ip is None else str(row.last_used_ip),
         revoked_at=row.revoked_at,
     )
 

@@ -7,9 +7,11 @@ export type Member = Schemas['MemberOut']
 export type MemberGrant = Schemas['GrantOut']
 export type Invitation = Schemas['InvitationOut']
 export type GuestLink = Schemas['GuestLinkOut']
+export type Device = Schemas['DeviceOut']
 export type PlaceRef = Schemas['PlaceRefOut']
 export type NewInvitation = Schemas['InvitationIn']
 export type NewGuestLink = Schemas['GuestLinkIn']
+export type NewDevice = Schemas['DeviceIn']
 export type GrantChanges = Schemas['GrantPatch']
 
 const peopleKeys = {
@@ -18,6 +20,7 @@ const peopleKeys = {
   members: (homeId: string) => ['people', homeId, 'members'] as const,
   invitations: (homeId: string) => ['people', homeId, 'invitations'] as const,
   guestLinks: (homeId: string) => ['people', homeId, 'guest-links'] as const,
+  devices: (homeId: string) => ['people', homeId, 'devices'] as const,
 }
 
 const path = (homeId: string) => ({params: {path: {home_id: homeId}}})
@@ -48,6 +51,13 @@ export function useGuestLinks(homeId: string) {
   return useQuery({
     queryKey: peopleKeys.guestLinks(homeId),
     queryFn: () => unwrap(api.GET('/api/v1/homes/{home_id}/guest-links', path(homeId))),
+  })
+}
+
+export function useDevices(homeId: string) {
+  return useQuery({
+    queryKey: peopleKeys.devices(homeId),
+    queryFn: () => unwrap(api.GET('/api/v1/homes/{home_id}/devices', path(homeId))),
   })
 }
 
@@ -82,6 +92,13 @@ export function useCreateGuestLink(homeId: string) {
   )
 }
 
+/** A device or an integration, and its token, which the answer carries only this once. */
+export function useCreateDevice(homeId: string) {
+  return usePeopleMutation(homeId, (body: NewDevice) =>
+    unwrap(api.POST('/api/v1/homes/{home_id}/devices', {...path(homeId), body})),
+  )
+}
+
 export function useChangeGrant(homeId: string) {
   return usePeopleMutation(homeId, (input: {grantId: string; changes: GrantChanges}) =>
     unwrap(
@@ -93,7 +110,7 @@ export function useChangeGrant(homeId: string) {
   )
 }
 
-/** Takes back a member's access, or ends a guest link and every visit made with it. */
+/** Takes back a member's access, or ends a guest link and every visit made with it, or a device's token. */
 export function useRevokeGrant(homeId: string) {
   return usePeopleMutation(homeId, (grantId: string) =>
     unwrap(

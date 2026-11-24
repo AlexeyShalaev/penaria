@@ -1,12 +1,14 @@
 """Browser sessions: a random token in a cookie, of which the server keeps only a hash (sign-in.md, 5).
 
 A session belongs to an account, or to a guest link's grant: a guest needs no account (sign-in.md, 6.2).
+A device has no session: each of its requests carries its token (sign-in.md, 6.3).
 """
 
 import hashlib
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import assert_never
 from uuid import UUID
 
 from penaria.features.shared.actor import Actor
@@ -112,26 +114,47 @@ class GuestSession:
 
 
 @dataclass(frozen=True, slots=True)
-class RequestSession:
-    """The session behind a request: an account's or a guest's."""
+class DeviceCaller:
+    """A request made with a device's token: it acts as the device, within the device's grant."""
 
-    session: CurrentSession | GuestSession
+    device_id: UUID
+    grant_id: UUID
+    home_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class RequestSession:
+    """Who is behind a request: an account's session, a guest's, or a device's token."""
+
+    session: CurrentSession | GuestSession | DeviceCaller
 
     def account(self) -> CurrentSession:
-        """The account's session; a guest's answers as no session, since a guest link opens no account."""
-        if isinstance(self.session, GuestSession):
-            raise UnauthenticatedError("a guest link opens no account: sign in")
-        return self.session
+        """The account's session; a guest's or a device's answers as none, since neither opens an account."""
+        match self.session:
+            case CurrentSession():
+                return self.session
+            case GuestSession():
+                raise UnauthenticatedError("a guest link opens no account: sign in")
+            case DeviceCaller():
+                raise UnauthenticatedError("a device's token opens no account: sign in")
+            case _:
+                assert_never(self.session)
 
     def guest(self) -> GuestSession:
-        if isinstance(self.session, CurrentSession):
+        if not isinstance(self.session, GuestSession):
             raise UnauthenticatedError("this is not a guest's session: open the guest link")
         return self.session
 
     def actor(self) -> Actor:
-        if isinstance(self.session, GuestSession):
-            return Actor.link(self.session.link_id)
-        return Actor.user(self.session.user_id)
+        match self.session:
+            case CurrentSession():
+                return Actor.user(self.session.user_id)
+            case GuestSession():
+                return Actor.link(self.session.link_id)
+            case DeviceCaller():
+                return Actor.device(self.session.device_id)
+            case _:
+                assert_never(self.session)
 
 
 def new_secret() -> tuple[str, bytes]:

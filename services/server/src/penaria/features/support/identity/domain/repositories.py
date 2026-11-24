@@ -6,6 +6,7 @@ from typing import Protocol
 from uuid import UUID
 
 from penaria.features.shared.journal import Journal
+from penaria.features.support.identity.domain.devices import Device
 from penaria.features.support.identity.domain.mail import Attempt, LoggedMail, Mail
 from penaria.features.support.identity.domain.mailbox import StoredMailbox
 from penaria.features.support.identity.domain.members import GuestLink, Invitation, Token
@@ -300,12 +301,22 @@ class TokenRepository(Protocol):
         """The principal's token; a guest link has exactly one."""
         ...
 
-    async def used(self, token_id: UUID, now: datetime) -> None: ...
+    async def used(self, token_id: UUID, now: datetime, ip: str | None) -> None:
+        """Keep when and from which address the token was last used."""
+        ...
 
     async def revoke_for(self, principal_type: PrincipalType, principal_id: UUID, now: datetime) -> None: ...
 
     async def links_in(self, home_id: UUID, now: datetime) -> list[GuestLink]:
         """The home's guest links that still open, the newest first."""
+        ...
+
+    async def devices_in(self, home_id: UUID, now: datetime) -> list[Device]:
+        """The home's devices whose tokens still work, the newest first."""
+        ...
+
+    async def device_by_token_hash(self, token_hash: bytes) -> Device | None:
+        """The device whose token this is, whatever the state of its token and grant."""
         ...
 
 

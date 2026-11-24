@@ -32,7 +32,9 @@ from penaria.features.core.registry.use_cases.queries import EntityHistory, GetE
 from penaria.features.shared.access import AccessPolicy
 from penaria.features.shared.actor import Actor
 from penaria.features.shared.places import PlaceDirectory
+from penaria.features.support.identity.api.account import client_of
 from penaria.features.support.identity.api.cookies import SESSION_COOKIE, SessionCookie
+from penaria.features.support.identity.api.devices import device_token_of
 from penaria.features.support.identity.domain.links import PublicLinks
 from penaria.features.support.identity.domain.mail import MailTransport
 from penaria.features.support.identity.domain.mailbox import Mailbox, MailboxSource, OperatorMailbox
@@ -54,6 +56,7 @@ from penaria.features.support.identity.use_cases.account import (
     RevokeSession,
     UpdateAccount,
 )
+from penaria.features.support.identity.use_cases.devices import AuthenticateDevice, CreateDevice, ListDevices
 from penaria.features.support.identity.use_cases.email import ConfirmEmail, RemoveEmail, RequestEmailChange
 from penaria.features.support.identity.use_cases.guest_links import (
     CreateGuestLink,
@@ -258,6 +261,9 @@ class UseCaseProvider(Provider):
         ListGuestLinks,
         OpenGuestLink,
         GetGuestView,
+        CreateDevice,
+        ListDevices,
+        AuthenticateDevice,
         EntityAccess,
         CreateEntity,
         UpdateEntity,
@@ -272,14 +278,20 @@ class UseCaseProvider(Provider):
 
 
 class RequestProvider(Provider):
-    """Who makes the request: resolved once per request, from its session cookie: an account, or a guest."""
+    """Who makes the request, resolved once per request: a device by its bearer token, otherwise an account or a
+    guest by the session cookie."""
 
     scope = Scope.REQUEST
 
     request = from_context(provides=Request)
 
     @provide
-    async def request_session(self, request: Request, authenticate: Authenticate) -> RequestSession:
+    async def request_session(
+        self, request: Request, authenticate: Authenticate, authenticate_device: AuthenticateDevice
+    ) -> RequestSession:
+        device_token = device_token_of(request)
+        if device_token is not None:
+            return RequestSession(await authenticate_device.execute(device_token, client_of(request)))
         return await authenticate.execute(request.cookies.get(SESSION_COOKIE))
 
     @provide
