@@ -1,6 +1,16 @@
 import '@testing-library/jest-dom/vitest'
 import {cleanup} from '@testing-library/react'
-import {afterEach} from 'vitest'
+import {afterEach, vi} from 'vitest'
+
+import {i18n, initI18n} from '@/shared/i18n'
+
+await initI18n('en')
 
 // Vitest runs without globals, so Testing Library cannot register its own cleanup.
-afterEach(cleanup)
+afterEach(async () => {
+  cleanup()
+  vi.unstubAllGlobals()
+  sessionStorage.clear()
+  localStorage.clear()
+  await i18n.changeLanguage('en')
+})

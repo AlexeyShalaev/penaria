@@ -1,0 +1,43 @@
+.picker {
+  max-height: min(360px, 45dvh);
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-raised);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--sp-2) var(--sp-3);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font-weight: var(--fw-medium);
+  text-align: left;
+  cursor: pointer;
+}
+
+.top[aria-pressed='true'] {
+  background: var(--accent-soft);
+}
+
+.grow {
+  flex: 1;
+}
+
+.check {
+  width: 18px;
+  height: 18px;
+  color: var(--accent-text);
+}
+
+.empty {
+  padding: var(--sp-4);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
