@@ -1,6 +1,6 @@
 [project]
 name = "penaria-server"
-version = "0.0.0"
+version = "0.1.0"
 description = "Penaria server: the core and its processes (api, worker)"
 readme = "README.md"
 requires-python = ">=3.15"
