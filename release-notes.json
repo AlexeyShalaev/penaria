@@ -4,12 +4,6 @@
       "version": "0.1.0",
       "date": "2026-11-26",
       "notes": {
-        "upgrade": [
-          {
-            "en": "Set two new variables for the server: PENARIA_PUBLIC_URL, the address you open Penaria at (such as https://home.example.org), and PENARIA_SECRET_KEY, a random secret of at least 32 characters (`openssl rand -hex 32`) that you keep. After the upgrade, read the setup token from the server's log (`docker compose logs penaria-server | grep \"setup token\"`) and enter it on the setup screen: your existing homes become your new account's.",
-            "ru": "Задайте серверу две новые переменные: PENARIA_PUBLIC_URL — адрес, по которому вы открываете Penaria (например, https://home.example.org), и PENARIA_SECRET_KEY — случайный секрет не короче 32 символов (`openssl rand -hex 32`), который нужно сохранить. После обновления возьмите токен настройки из журнала сервера (`docker compose logs penaria-server | grep \"setup token\"`) и введите его на экране настройки: ваши дома перейдут в новый аккаунт."
-          }
-        ],
         "added": [
           {
             "en": "Devices and integrations, such as a smart mirror or a backup script, get a token of their own on the People page, with a role and a place: they see and do only what that role allows, the page shows when and from where each was last used, and revoking a token ends its access at once.",
@@ -34,10 +28,6 @@
           {
             "en": "Passkeys: sign in with your fingerprint, face or screen lock instead of a password, without typing a username. Add, rename and remove passkeys on the account page; Penaria asks you to confirm it's you before you add or remove one. Passkeys need Penaria opened over https at a domain name.",
             "ru": "Ключи доступа: входите по отпечатку пальца, лицу или коду блокировки экрана вместо пароля, не вводя имя пользователя. Ключи добавляют, переименовывают и удаляют на странице аккаунта, а перед добавлением или удалением Penaria просит подтвердить, что это вы. Ключам доступа нужно, чтобы Penaria открывалась по https и доменному имени."
-          },
-          {
-            "en": "Penaria keeps its data in PostgreSQL 15 or newer, set with the PENARIA_DATABASE__* variables; `python -m penaria.apps.migrate upgrade` prepares the database before the server starts.",
-            "ru": "Penaria хранит данные в PostgreSQL 15 или новее, подключение задаётся переменными PENARIA_DATABASE__*; `python -m penaria.apps.migrate upgrade` готовит базу перед запуском сервера."
           },
           {
             "en": "If you run an identity provider such as Authentik or Keycloak, people can sign in to Penaria with it: set the PENARIA_AUTH__OIDC__* variables, and the sign-in page offers \"Sign in with\" your provider. People link it on their account page or join through an invitation with it; new accounts are made only if you allow it.",

@@ -6,10 +6,6 @@ All notable changes to Penaria, newest first. This file is generated from `relea
 
 ## 0.1.0 (2026-11-26)
 
-### Before you upgrade
-
-- Set two new variables for the server: PENARIA_PUBLIC_URL, the address you open Penaria at (such as https://home.example.org), and PENARIA_SECRET_KEY, a random secret of at least 32 characters (`openssl rand -hex 32`) that you keep. After the upgrade, read the setup token from the server's log (`docker compose logs penaria-server | grep "setup token"`) and enter it on the setup screen: your existing homes become your new account's.
-
 ### Added
 
 - Devices and integrations, such as a smart mirror or a backup script, get a token of their own on the People page, with a role and a place: they see and do only what that role allows, the page shows when and from where each was last used, and revoking a token ends its access at once.
@@ -18,7 +14,6 @@ All notable changes to Penaria, newest first. This file is generated from `relea
 - Invite your family and others into a home with a link or a QR code, each with a role, a place and an end date; they make their account through the link, and one account can belong to many homes. Guests need no account: a guest link shows only what you marked for guests, ends on its own and can be revoked in one click. The People page shows who has access, lets you change or take it back, and hands the home over to a new owner.
 - Homes and their tree: create a home, then its properties, buildings, floors, rooms, containers and things; move, rename, archive, restore and confirm them, and see the history of each.
 - Passkeys: sign in with your fingerprint, face or screen lock instead of a password, without typing a username. Add, rename and remove passkeys on the account page; Penaria asks you to confirm it's you before you add or remove one. Passkeys need Penaria opened over https at a domain name.
-- Penaria keeps its data in PostgreSQL 15 or newer, set with the PENARIA_DATABASE__* variables; `python -m penaria.apps.migrate upgrade` prepares the database before the server starts.
 - If you run an identity provider such as Authentik or Keycloak, people can sign in to Penaria with it: set the PENARIA_AUTH__OIDC__* variables, and the sign-in page offers "Sign in with" your provider. People link it on their account page or join through an invitation with it; new accounts are made only if you allow it.
 - Sign-in with accounts: the first start asks for a setup token from the server's log and creates the owner's account; everyone signs in with a username and a password, and the account page changes the name, language and password and shows every signed-in device, each of which can be signed out.
 - Two-step sign-in: signing in with a password can also ask for a code from an authenticator app, with ten recovery codes for a lost phone. Home owners and admins who sign in with a password must add an authenticator app or a passkey.
