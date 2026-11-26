@@ -36,7 +36,7 @@ docker compose logs penaria-server | grep "setup token"
 
 Open the address, enter the token and create the first account. It manages this install and owns the homes it creates. The token proves you have access to the machine, so nobody who merely finds the address can take the install over. Every restart before setup makes a new token.
 
-If `docker compose up` asks you to sign in to `ghcr.io`, the images are not public yet: run `docker login ghcr.io` with a GitHub account that can read them.
+Once you own a home, Penaria asks you for a second step: a passkey or an authenticator app (any that makes six-digit codes). Keep the ten recovery codes it shows with the app: they stand in for a lost phone.
 
 ## The address and HTTPS
 
