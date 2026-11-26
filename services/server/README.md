@@ -26,7 +26,7 @@ The api process also needs these; the migrate and cli processes accept them too,
 | `PENARIA_AUTH__OIDC__ISSUER`, `..._CLIENT_ID`, `..._CLIENT_SECRET`, `..._ALLOW_SIGN_UP`, `..._NAME`, `..._SCOPES` | Optional sign-in with your OpenID Connect provider, such as Authentik or Keycloak ("Sign-in with your identity provider" below) |
 | `PENARIA_MAIL__HOST`, `..._PORT`, `..._SECURITY` (`starttls`, `tls` or `none`), `..._USERNAME`, `..._PASSWORD`, `..._FROM_ADDRESS`, `..._FROM_NAME` | Optional outgoing email. Usually an install admin connects the mailbox in the web app (Settings); set these to manage it as configuration instead. With `PENARIA_MAIL__HOST` set, every mail setting comes from the environment (`..._FROM_ADDRESS` is then required, and the port defaults to 587, 465 or 25 by the security) and the web app shows them locked |
 
-Behind a reverse proxy, let the server trust its `X-Forwarded-For`, so that the session list and the sign-in limits see people's addresses rather than the proxy's: `PENARIA_SERVER__UVICORN__FORWARDED_ALLOW_IPS=<the proxy's address>`. Without it everyone signs in from the proxy's address, and five wrong passwords by anyone make everyone wait.
+The Compose install (`deploy/compose`) sets this up by itself: only `penaria-web` reaches the server there. Otherwise, behind a reverse proxy, let the server trust its `X-Forwarded-For`, so that the session list and the sign-in limits see people's addresses rather than the proxy's: `PENARIA_SERVER__UVICORN__FORWARDED_ALLOW_IPS=<the proxy's address>`. Without it everyone signs in from the proxy's address, and five wrong passwords by anyone make everyone wait.
 
 ## HTTP API
 

@@ -31,6 +31,17 @@ updates:
       - dependency-name: python
         update-types: ["version-update:semver-minor"]
 
+  # PostgreSQL, Caddy and the development services of the Compose files.
+  - package-ecosystem: docker-compose
+    directories: [/deploy/compose, /scripts/dev]
+    schedule: {interval: weekly, day: monday}
+    ignore:
+      # Our own images move with the release (release-please), not here.
+      - dependency-name: "ghcr.io/alexeyshalaev/penaria-*"
+      # A new PostgreSQL major needs pg_upgrade or a dump and restore: moved by hand, with the steps.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: weekly, day: monday}

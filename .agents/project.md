@@ -24,6 +24,7 @@ From the root for every service, or from `services/<service>/` for one (its `Mak
 | Run the web app locally (:5173) | `make -C services/web dev` |
 | After an API change: export the OpenAPI document, regenerate the web app's API types | `make -C services/server openapi`, then `make -C services/web api` |
 | Stop the local run | Ctrl+C |
+| Check the home install (Compose) built from the checkout | `deploy/compose/smoke-test.sh` (`--https` also checks the HTTPS overlay) |
 
 ## Conventions
 
@@ -36,7 +37,7 @@ From the root for every service, or from `services/<service>/` for one (its `Mak
 - Releases: release-please keeps a release pull request open; merging it releases one version of the whole product (every service, image and chart). The version moves by Conventional Commits: `feat` a minor, `fix` a patch, while below 1.0 a breaking change a minor too.
 - Language of pull request titles and descriptions: English.
 - Languages of the docs, of code comments and of notes for agents: English. User-facing strings are never hard-coded: the UI is internationalized from day one, with `en` and `ru` as the primary locales.
-- Where operational runbooks live: `docs/` (to be created with the deployment).
+- Where operational runbooks live: next to the deployment they describe: `deploy/compose/README.md` for the home install (install, HTTPS, backups, upgrades).
 - Where specs and design notes go: `docs/design/`. A new area gets a design before code.
 
 ## Boundaries

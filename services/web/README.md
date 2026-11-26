@@ -19,7 +19,7 @@ make api                    # regenerate the types
 
 `make check` (and CI) fails when the generated types do not match the document.
 
-The app calls the API on its own origin (`/api`, `/system`): the dev server proxies them to the server on :8000, and an install must route them to `penaria-server` the same way in front of `penaria-web`.
+The app calls the API on its own origin (`/api`). The dev server proxies it to the server on :8000. The image does the same: its nginx passes `/api/` on to `PENARIA_API_UPSTREAM` (`http://penaria-server:8000` by default, the server's name in the Compose install), with the visitor's address in `X-Forwarded-For`. Behind another reverse proxy, `PENARIA_TRUSTED_PROXIES` lists that proxy's addresses or networks, comma-separated, so the address is the visitor's and not the proxy's (`nginx.conf.template`, `trusted-proxies.sh`).
 
 ## Signing in
 

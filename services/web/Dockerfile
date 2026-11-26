@@ -13,6 +13,12 @@ RUN pnpm build
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Where /api goes; the name of the server's service in the Compose file and the Helm chart.
+# The entrypoint fills NGINX_LOCAL_RESOLVERS from the container's own DNS settings.
+ENV PENARIA_API_UPSTREAM=http://penaria-server:8000 \
+    NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY --chmod=755 trusted-proxies.sh /docker-entrypoint.d/30-penaria-trusted-proxies.sh
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080

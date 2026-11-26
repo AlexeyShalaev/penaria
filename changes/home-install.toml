@@ -1,0 +1,3 @@
+type = "added"
+en = "Install Penaria at home with Docker Compose: one folder with the database, the server and the web app, HTTPS by itself when you have a domain, and steps for backups and upgrades (deploy/compose)."
+ru = "Penaria можно поставить дома через Docker Compose: одна папка с базой, сервером и веб-приложением, HTTPS настраивается сам, если есть домен, и есть инструкция по резервным копиям и обновлению (deploy/compose)."
