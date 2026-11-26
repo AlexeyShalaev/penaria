@@ -1,9 +1,9 @@
 name: Release Please
 
-# release-please keeps a release pull request open with the next version. Each time it opens or
-# updates it, the fragments in changes/ are collected into release-notes.json and CHANGELOG.md in
-# that pull request. Merging it tags the release; the GitHub release then gets the curated notes,
-# and the images are published.
+# release-please keeps a release pull request open with the next version. On every push to master
+# the notes of that pull request are rebuilt from master's fragments in changes/, into
+# release-notes.json and CHANGELOG.md. Merging it tags the release; the GitHub release then gets
+# the curated notes, and the images are published.
 on:
   push:
     branches: [master]
@@ -44,37 +44,45 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # ── The release pull request was opened or updated: collect the notes into it. ──────────
+      # ── A release pull request is open: rebuild its notes from master. ──────────────────────
+      # release-please reports the pull request only when it changed it, and a commit that does not
+      # release (docs, ci, chore) changes nothing for it, even when it edits or removes a fragment.
+      # So the pull request is looked up, not taken from release-please's output.
+      - name: Find the release pull request
+        id: pending
+        if: steps.release.outputs.release_created != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --label "autorelease: pending" \
+            --json headRefName --jq '.[0].headRefName // ""')
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
       - name: Check out the release pull request
-        if: steps.release.outputs.pr
+        if: steps.pending.outputs.branch != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # The token stays in the checkout on purpose: the next step pushes the notes to the release
         # pull request. No artifact is uploaded from this job.
         with:  # zizmor: ignore[artipacked]
-          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          ref: ${{ steps.pending.outputs.branch }}
+          # The whole history: master is merged into the branch below.
+          fetch-depth: 0
           token: ${{ steps.app.outputs.token || github.token }}
 
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
-        if: steps.release.outputs.pr
+        if: steps.pending.outputs.branch != ''
         with:
           # No cache in a job that writes to the repository: a poisoned cache would reach the release.
           enable-cache: false
 
-      - name: Collect the release notes
-        if: steps.release.outputs.pr
+      - name: Rebuild the release notes
+        if: steps.pending.outputs.branch != ''
         env:
           APP_SLUG: ${{ steps.app.outputs.app-slug }}
           GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
         run: |
           set -euo pipefail
-          version=$(jq -r '.["."]' .release-please-manifest.json)
-          python3 scripts/release/notes.py collect --version "$version" --date "$(date -u +%F)"
-          # release-please bumped the version in pyproject.toml; uv.lock records it too.
-          uv lock --project services/server
-          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
-            echo "Nothing to collect."
-            exit 0
-          fi
           if [ -n "$APP_SLUG" ]; then
             user_id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
             git config user.name "${APP_SLUG}[bot]"
@@ -83,9 +91,31 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
           fi
-          git add -A
-          git commit -m "chore: release notes for $version"
-          git push
+          commit_if_changed() {
+            git add -A
+            git diff --cached --quiet || git commit --quiet -m "$1"
+          }
+          version=$(jq -r '.["."]' .release-please-manifest.json)
+
+          # 1. Undo the notes an earlier run made: what the notes are built from is master's again,
+          #    so merging master cannot conflict in it.
+          rm -rf changes
+          git checkout origin/master -- changes release-notes.json CHANGELOG.md services/server/uv.lock
+          commit_if_changed "chore: take the release notes' sources from master"
+          # 2. Catch up with master when release-please left the branch behind it.
+          git merge --quiet --no-edit origin/master
+          # 3. Collect master's fragments into this version's notes.
+          python3 scripts/release/notes.py collect --version "$version" --date "$(date -u +%F)"
+          # release-please bumped the version in pyproject.toml; uv.lock records it too.
+          uv lock --project services/server
+          commit_if_changed "chore: release notes for $version"
+
+          # Steps 1 and 3 undo and redo the same notes when nothing changed on master.
+          if git diff --quiet '@{upstream}' HEAD; then
+            echo "The release notes are up to date."
+          else
+            git push
+          fi
 
       # ── The release pull request was merged: publish. ───────────────────────────────────────
       - name: Check out the release
@@ -105,9 +135,10 @@ jobs:
           python3 scripts/release/notes.py render --version "${TAG#v}" > "$RUNNER_TEMP/notes.md"
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
 
-      # A tag pushed with GITHUB_TOKEN starts no workflow, but workflow_dispatch does.
+      # The release App's tag starts publish.yml by itself. A tag pushed with GITHUB_TOKEN starts no
+      # workflow, but workflow_dispatch does.
       - name: Publish the images of the new tag
-        if: steps.release.outputs.release_created == 'true'
+        if: steps.release.outputs.release_created == 'true' && steps.app.outcome == 'skipped'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag_name }}
