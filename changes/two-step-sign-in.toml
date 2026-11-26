@@ -1,3 +1,0 @@
-type = "added"
-en = "Two-step sign-in: signing in with a password can also ask for a code from an authenticator app, with ten recovery codes for a lost phone. Home owners and admins who sign in with a password must add an authenticator app or a passkey."
-ru = "Двухэтапный вход: вход по паролю может спрашивать ещё и код из приложения-аутентификатора, а на случай потери телефона есть десять кодов восстановления. Владельцы домов и администраторы, входящие по паролю, должны добавить приложение-аутентификатор или ключ доступа."
