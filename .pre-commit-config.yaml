@@ -9,6 +9,8 @@ repos:
       - id: check-ast
       - id: check-toml
       - id: check-yaml
+        # Compose's own !reset tag; `docker compose config` checks the file in smoke-test.sh.
+        exclude: ^deploy/compose/compose\.https\.yaml$
       - id: check-json
       - id: check-merge-conflict
       - id: check-added-large-files

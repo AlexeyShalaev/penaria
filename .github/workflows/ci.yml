@@ -171,11 +171,22 @@ jobs:
           docker logs smoke
           exit 1
 
+  # The home install as people run it: the Compose files of deploy/compose with images built
+  # from this commit, first plain, then with the HTTPS overlay.
+  install:
+    name: Install · compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: deploy/compose/smoke-test.sh --https
+
   # The only required status check of the master ruleset; the list of jobs lives here.
   all-checks-passed:
     name: All checks passed
     if: always()
-    needs: [server, web, scripts, workflows, images]
+    needs: [server, web, scripts, workflows, images, install]
     runs-on: ubuntu-latest
     steps:
       - name: Verify

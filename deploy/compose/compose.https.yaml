@@ -1,0 +1,34 @@
+# HTTPS with a certificate Caddy gets and renews by itself. Use it together with compose.yaml:
+#   docker compose -f compose.yaml -f compose.https.yaml up -d
+# PENARIA_DOMAIN in .env is the host name of PENARIA_PUBLIC_URL; its DNS record must point
+# at this machine, and ports 80 and 443 must reach it.
+services:
+  penaria-web:
+    # Only Caddy reaches the web app now, and it tells the visitor's address.
+    ports: !reset []
+    environment:
+      PENARIA_TRUSTED_PROXIES: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+  caddy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    command:
+      - caddy
+      - reverse-proxy
+      - --from
+      - ${PENARIA_DOMAIN:?set PENARIA_DOMAIN in .env, see .env.example}
+      - --to
+      - penaria-web:8080
+    depends_on:
+      - penaria-web
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

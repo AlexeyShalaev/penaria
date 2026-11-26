@@ -12,7 +12,11 @@ Penaria is an open-source home system. It keeps a living registry of your home a
 
 The interface is internationalized: English and Russian first, other languages later.
 
-> **Status:** early development. The repository is being set up; there is nothing to run yet.
+> **Status:** early development. What works today: the registry of places and things with its history, family and guest access with roles, and sign-in (passkeys, passwords with two-step sign-in, your identity provider, tokens for devices). Photos and documents, search and the assistant, the calendar and smart home control are next.
+
+## Install at home
+
+One machine with Docker runs it all; [deploy/compose](deploy/compose/README.md) has the steps, HTTPS, backups and upgrades.
 
 ## How it is built
 
@@ -33,8 +37,10 @@ Penaria has a small core and modules on top of it.
 
 ```
 services/
-  server/    Python backend, one package run as several processes (api now; worker, bot, hub later)
+  server/    Python backend, one package run as several processes (api, migrate and cli now; worker, bot, hub later)
   web/       React PWA
+deploy/
+  compose/   the home install with Docker Compose
 ```
 
 Each service has its own dependencies, lock file, `Makefile` and `Dockerfile`. The root `Makefile` runs the same command in every service:
