@@ -1,3 +1,0 @@
-type = "added"
-en = "Devices and integrations, such as a smart mirror or a backup script, get a token of their own on the People page, with a role and a place: they see and do only what that role allows, the page shows when and from where each was last used, and revoking a token ends its access at once."
-ru = "Устройства и интеграции — например, умное зеркало или скрипт резервного копирования — получают собственный токен на странице «Люди и доступ», с ролью и местом: они видят и делают только то, что разрешает роль, на странице видно, когда и откуда каждое обращалось в последний раз, а отзыв токена сразу закрывает доступ."

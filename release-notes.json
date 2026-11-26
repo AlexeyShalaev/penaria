@@ -1,1 +1,52 @@
-{"releases": []}
+{
+  "releases": [
+    {
+      "version": "0.1.0",
+      "date": "2026-11-26",
+      "notes": {
+        "added": [
+          {
+            "en": "Devices and integrations, such as a smart mirror or a backup script, get a token of their own on the People page, with a role and a place: they see and do only what that role allows, the page shows when and from where each was last used, and revoking a token ends its access at once.",
+            "ru": "Устройства и интеграции — например, умное зеркало или скрипт резервного копирования — получают собственный токен на странице «Люди и доступ», с ролью и местом: они видят и делают только то, что разрешает роль, на странице видно, когда и откуда каждое обращалось в последний раз, а отзыв токена сразу закрывает доступ."
+          },
+          {
+            "en": "An install admin connects a mailbox in Settings, and Penaria emails password reset links, invitations and account notices; without email, a home's admin or the server's owner makes a reset link to pass on by hand.",
+            "ru": "Администратор подключает почтовый ящик в настройках, и Penaria присылает по почте ссылки для сброса пароля, приглашения и уведомления об аккаунте; без почты ссылку для сброса делает администратор дома или владелец сервера и передаёт её сам."
+          },
+          {
+            "en": "Install Penaria at home with Docker Compose: one folder with the database, the server and the web app, HTTPS by itself when you have a domain, and steps for backups and upgrades (deploy/compose).",
+            "ru": "Penaria можно поставить дома через Docker Compose: одна папка с базой, сервером и веб-приложением, HTTPS настраивается сам, если есть домен, и есть инструкция по резервным копиям и обновлению (deploy/compose)."
+          },
+          {
+            "en": "Invite your family and others into a home with a link or a QR code, each with a role, a place and an end date; they make their account through the link, and one account can belong to many homes. Guests need no account: a guest link shows only what you marked for guests, ends on its own and can be revoked in one click. The People page shows who has access, lets you change or take it back, and hands the home over to a new owner.",
+            "ru": "Приглашайте семью и других людей в дом по ссылке или QR-коду — с ролью, местом и сроком; аккаунт они создают по этой же ссылке, и один аккаунт может состоять во многих домах. Гостям аккаунт не нужен: гостевая ссылка показывает только то, что вы отметили «для гостей», сама перестаёт работать в срок и отзывается одним нажатием. На странице «Люди и доступ» видно, у кого есть доступ, его можно изменить или забрать, а дом — передать новому владельцу."
+          },
+          {
+            "en": "Homes and their tree: create a home, then its properties, buildings, floors, rooms, containers and things; move, rename, archive, restore and confirm them, and see the history of each.",
+            "ru": "Дома и их дерево: создайте дом, затем участки, здания, этажи, помещения, контейнеры и вещи; перемещайте, переименовывайте, архивируйте, возвращайте и подтверждайте их и смотрите историю каждой."
+          },
+          {
+            "en": "Passkeys: sign in with your fingerprint, face or screen lock instead of a password, without typing a username. Add, rename and remove passkeys on the account page; Penaria asks you to confirm it's you before you add or remove one. Passkeys need Penaria opened over https at a domain name.",
+            "ru": "Ключи доступа: входите по отпечатку пальца, лицу или коду блокировки экрана вместо пароля, не вводя имя пользователя. Ключи добавляют, переименовывают и удаляют на странице аккаунта, а перед добавлением или удалением Penaria просит подтвердить, что это вы. Ключам доступа нужно, чтобы Penaria открывалась по https и доменному имени."
+          },
+          {
+            "en": "If you run an identity provider such as Authentik or Keycloak, people can sign in to Penaria with it: set the PENARIA_AUTH__OIDC__* variables, and the sign-in page offers \"Sign in with\" your provider. People link it on their account page or join through an invitation with it; new accounts are made only if you allow it.",
+            "ru": "Если у вас есть свой провайдер входа, например Authentik или Keycloak, в Penaria можно входить через него: задайте переменные PENARIA_AUTH__OIDC__*, и на странице входа появится кнопка «Войти через» ваш провайдер. Люди привязывают его на странице аккаунта или присоединяются через него по приглашению; новые аккаунты создаются, только если вы это разрешили."
+          },
+          {
+            "en": "Sign-in with accounts: the first start asks for a setup token from the server's log and creates the owner's account; everyone signs in with a username and a password, and the account page changes the name, language and password and shows every signed-in device, each of which can be signed out.",
+            "ru": "Вход по аккаунтам: при первом запуске Penaria просит токен настройки из журнала сервера и создаёт аккаунт владельца; дальше все входят по имени пользователя и паролю, а на странице аккаунта можно сменить имя, язык и пароль и увидеть все устройства, где выполнен вход, и выйти на любом из них."
+          },
+          {
+            "en": "Two-step sign-in: signing in with a password can also ask for a code from an authenticator app, with ten recovery codes for a lost phone. Home owners and admins who sign in with a password must add an authenticator app or a passkey.",
+            "ru": "Двухэтапный вход: вход по паролю может спрашивать ещё и код из приложения-аутентификатора, а на случай потери телефона есть десять кодов восстановления. Владельцы домов и администраторы, входящие по паролю, должны добавить приложение-аутентификатор или ключ доступа."
+          },
+          {
+            "en": "The web app shows your homes: create the first one, then build its tree of rooms, storage and things in the browser. Every place and thing has a page where you mark that it is in place, move, edit or archive it, and read its history.",
+            "ru": "В веб-приложении появились ваши дома: создайте первый и стройте в браузере дерево комнат, мест хранения и вещей. У каждого места и вещи есть своя страница: там можно отметить, что всё на месте, переместить, изменить, убрать в архив и посмотреть историю."
+          }
+        ]
+      }
+    }
+  ]
+}

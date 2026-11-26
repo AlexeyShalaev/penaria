@@ -1,3 +1,0 @@
-type = "added"
-en = "Sign-in with accounts: the first start asks for a setup token from the server's log and creates the owner's account; everyone signs in with a username and a password, and the account page changes the name, language and password and shows every signed-in device, each of which can be signed out."
-ru = "Вход по аккаунтам: при первом запуске Penaria просит токен настройки из журнала сервера и создаёт аккаунт владельца; дальше все входят по имени пользователя и паролю, а на странице аккаунта можно сменить имя, язык и пароль и увидеть все устройства, где выполнен вход, и выйти на любом из них."
