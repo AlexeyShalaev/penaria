@@ -41,7 +41,7 @@ services:
   # Mailpit catches every email Penaria sends and shows it at http://localhost:58025; nothing leaves the
   # machine. Connect it in Settings: server 127.0.0.1, port 51025, no encryption, no login.
   mail:
-    image: axllent/mailpit:v1.33.0
+    image: axllent/mailpit:v1.34.0
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: "true"
       MP_SMTP_AUTH_ALLOW_INSECURE: "true"
