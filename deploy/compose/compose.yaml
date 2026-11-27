@@ -4,7 +4,7 @@
 name: penaria
 
 x-server: &server
-  image: ghcr.io/alexeyshalaev/penaria-server:0.1.0 # x-release-please-version
+  image: ghcr.io/alexeyshalaev/penaria-server:0.1.1 # x-release-please-version
   environment:
     PENARIA_PUBLIC_URL: ${PENARIA_PUBLIC_URL:?set PENARIA_PUBLIC_URL in .env, see .env.example}
     PENARIA_SECRET_KEY: ${PENARIA_SECRET_KEY:?set PENARIA_SECRET_KEY in .env, see .env.example}
@@ -64,7 +64,7 @@ services:
 
   # The web app; it also passes /api on to the server, so both live at one address.
   penaria-web:
-    image: ghcr.io/alexeyshalaev/penaria-web:0.1.0 # x-release-please-version
+    image: ghcr.io/alexeyshalaev/penaria-web:0.1.1 # x-release-please-version
     restart: unless-stopped
     depends_on:
       penaria-server:

@@ -1,6 +1,18 @@
 {
   "releases": [
     {
+      "version": "0.1.1",
+      "date": "2026-11-27",
+      "notes": {
+        "security": [
+          {
+            "en": "Someone whose own access to a home ends can no longer give access that lasts longer: invitations, changes to people's access, guest links and password reset links stop at their own end. Invitations and guest links such a person made earlier may stop working.",
+            "ru": "Тот, чей доступ к дому ограничен по сроку, больше не может выдать доступ дольше своего: приглашения, изменения доступа, гостевые ссылки и ссылки для сброса пароля не выходят за его собственный срок. Приглашения и гостевые ссылки, сделанные таким человеком раньше, могут перестать работать."
+          }
+        ]
+      }
+    },
+    {
       "version": "0.1.0",
       "date": "2026-11-26",
       "notes": {
