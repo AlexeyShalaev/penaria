@@ -1,7 +1,8 @@
 """``python -m penaria.apps.migrate [upgrade|downgrade|current|revision|check]``.
 
 Every install runs ``upgrade`` before a new version of the other processes starts: the
-all-in-one Compose file as a one-off service, Kubernetes as a pre-upgrade hook.
+all-in-one Compose file as a one-off service, Kubernetes as a pre-upgrade hook. With storage
+set up, ``upgrade`` also creates its bucket when there is none.
 """
 
 import argparse
@@ -16,7 +17,11 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from penaria.apps.migrate.settings import Settings
+from penaria.integrations.s3.settings import S3Settings
+from penaria.integrations.s3.storage import open_s3
 from penaria.migrations.runner import build_config, run_with_connection
+
+logger = logging.getLogger(__name__)
 
 
 def parse_command(argv: list[str] | None = None) -> Callable[[Config], object]:
@@ -56,10 +61,23 @@ async def run(settings: Settings, alembic_command: Callable[[Config], object]) -
         await engine.dispose()
 
 
+async def ensure_bucket(settings: S3Settings) -> None:
+    async with open_s3(settings) as storage:
+        if await storage.ensure_bucket():
+            logger.info("Created the bucket %s", settings.bucket)
+
+
 def main() -> None:
     alembic_command = parse_command()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    asyncio.run(run(Settings(), alembic_command))
+    settings = Settings()
+    asyncio.run(run(settings, alembic_command))
+    if settings.s3 is not None and _upgrades(alembic_command):
+        asyncio.run(ensure_bucket(settings.s3))
+
+
+def _upgrades(alembic_command: Callable[[Config], object]) -> bool:
+    return isinstance(alembic_command, partial) and alembic_command.func is command.upgrade
 
 
 if __name__ == "__main__":

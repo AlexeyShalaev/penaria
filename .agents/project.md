@@ -16,11 +16,12 @@ From the root for every service, or from `services/<service>/` for one (its `Mak
 | Install dependencies | `make install` |
 | Format | `make fmt` |
 | Lint and type-check (the same steps as CI) | `make check` |
-| Test (the server's integration tests need the development stack) | `make test` |
+| Test (the server's integration tests need the development stack: PostgreSQL and S3) | `make test` |
 | Git hooks | `make hooks` |
 | Start / stop PostgreSQL, S3 and Mailpit for development | `make dev-up` / `make dev-down` (`make dev-reset` deletes the data) |
 | Apply migrations / write one from the models | `make -C services/server migrate` / `make -C services/server migration m="..."` |
 | Run the API locally (:8000) | `make -C services/server run-api` |
+| Run the worker (files: cleaning, previews, the trash) | `make -C services/server run-worker` |
 | Run the web app locally (:5173) | `make -C services/web dev` |
 | After an API change: export the OpenAPI document, regenerate the web app's API types | `make -C services/server openapi`, then `make -C services/web api` |
 | Stop the local run | Ctrl+C |
@@ -56,6 +57,6 @@ Architecture, decided and not to be re-litigated without the author:
 - Smart home control runs through a local hub on each property, with an outbound secure channel to the cloud; the property keeps working offline.
 - Infrastructure is supplied by the operator: PostgreSQL 15+ (ltree, pg_trgm), S3-compatible storage, Qdrant, Temporal; Redis only with more than one api replica; an LLM provider is optional. Configuration only through environment variables.
 - Delivery: one multi-arch image per service on ghcr.io, released together under one version: `penaria-server` runs every backend process (api, worker, standalone, migrations, later the bot and the hub), chosen by the command; `penaria-web` serves the PWA. Installs: Docker Compose (an all-in-one file for a home), Docker Swarm, Kubernetes through our own Helm chart.
-- Layout: every deployable is a folder in `services/` with its own dependencies, `Makefile` and `Dockerfile`. `services/server` is one Python package, `penaria`, run as several processes: `apps/<process>` only assembles settings, the DI container and entrypoints (api now; worker, standalone = api + worker in one process, tgbot, cli and the on-site hub as their code lands); `features/{core,support,shared}` hold the product by feature, inside a feature `api -> use_cases -> domain` with `infra` implementing domain's interfaces; `modules/` the home integrations; `integrations/` the adapters to infrastructure; `common/` code with no feature logic. The import rules are contracts in `services/server/pyproject.toml`. `services/web` follows Feature-Sliced Design. Shared code between services (`libs/`) appears when a second consumer needs it; Kubernetes gets one Helm chart with components switched in values.
+- Layout: every deployable is a folder in `services/` with its own dependencies, `Makefile` and `Dockerfile`. `services/server` is one Python package, `penaria`, run as several processes: `apps/<process>` only assembles settings, the DI container and entrypoints (api and worker now; standalone = api + worker in one process, tgbot, cli and the on-site hub as their code lands); `features/{core,support,shared}` hold the product by feature, inside a feature `api -> use_cases -> domain` with `infra` implementing domain's interfaces; `modules/` the home integrations; `integrations/` the adapters to infrastructure; `common/` code with no feature logic. The import rules are contracts in `services/server/pyproject.toml`. `services/web` follows Feature-Sliced Design. Shared code between services (`libs/`) appears when a second consumer needs it; Kubernetes gets one Helm chart with components switched in values.
 
 Open questions: the DI container (Dishka assumed). Event delivery without a required Kafka is decided in `docs/design/core-model.md`: internal handlers read the journal by cursor; omni-box's outbox serves only external brokers; its own short design is still to come.

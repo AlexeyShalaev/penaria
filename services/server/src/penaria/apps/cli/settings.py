@@ -20,6 +20,8 @@ class Settings(PenariaSettings):
     mail: dict[str, Any] | None = None
     auth: dict[str, Any] | None = None
     server: dict[str, Any] | None = None
+    s3: dict[str, Any] | None = None
+    files: dict[str, Any] | None = None
 
     @property
     def public_origin(self) -> str:

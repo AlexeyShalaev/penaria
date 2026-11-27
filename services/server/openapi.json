@@ -344,6 +344,56 @@
         "title": "ConfirmedEmailOut",
         "type": "object"
       },
+      "CoverIn": {
+        "properties": {
+          "file_id": {
+            "format": "uuid",
+            "title": "File Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_id"
+        ],
+        "title": "CoverIn",
+        "type": "object"
+      },
+      "CoverOut": {
+        "properties": {
+          "entity_id": {
+            "format": "uuid",
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "file": {
+            "$ref": "#/components/schemas/FileOut"
+          }
+        },
+        "required": [
+          "entity_id",
+          "file"
+        ],
+        "title": "CoverOut",
+        "type": "object"
+      },
+      "CoversIn": {
+        "properties": {
+          "entity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 500,
+            "title": "Entity Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entity_ids"
+        ],
+        "title": "CoversIn",
+        "type": "object"
+      },
       "CreatedDeviceOut": {
         "properties": {
           "device": {
@@ -696,6 +746,194 @@
           "can_edit"
         ],
         "title": "EntityDetailOut",
+        "type": "object"
+      },
+      "EntityFileOut": {
+        "properties": {
+          "can_detach": {
+            "title": "Can Detach",
+            "type": "boolean"
+          },
+          "can_edit": {
+            "description": "Change its kind, name and visibility, remove it, restore it: needs editing every entity it is attached to",
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "can_set_cover": {
+            "title": "Can Set Cover",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FileFailure"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a failed file could not be processed"
+          },
+          "has_preview": {
+            "description": "Whether /preview/320 and /preview/1600 answer",
+            "title": "Has Preview",
+            "type": "boolean"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "home_id": {
+            "format": "uuid",
+            "title": "Home Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_cover": {
+            "description": "The file that stands for the entity: the chosen one, or the first photo",
+            "title": "Is Cover",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FileKind"
+          },
+          "media_type": {
+            "description": "Told from the content; a HEIC photo becomes image/jpeg",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "purge_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a removed file is deleted for good",
+            "title": "Purge At"
+          },
+          "removed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In the trash since",
+            "title": "Removed At"
+          },
+          "size": {
+            "description": "Bytes of the stored file; of the upload while it is processing",
+            "title": "Size",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FileStatus",
+            "description": "Content and previews are served only when ready"
+          },
+          "taken_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the photo was taken, as its camera wrote",
+            "title": "Taken At"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Of an image, as it is shown",
+            "title": "Width"
+          }
+        },
+        "required": [
+          "id",
+          "home_id",
+          "kind",
+          "visibility",
+          "status",
+          "failure",
+          "name",
+          "media_type",
+          "size",
+          "width",
+          "height",
+          "taken_at",
+          "created_at",
+          "has_preview",
+          "removed_at",
+          "purge_at",
+          "can_edit",
+          "is_cover",
+          "can_detach",
+          "can_set_cover"
+        ],
+        "title": "EntityFileOut",
+        "type": "object"
+      },
+      "EntityFilesOut": {
+        "properties": {
+          "add_kinds": {
+            "description": "The kinds the actor may upload here; empty when none",
+            "items": {
+              "$ref": "#/components/schemas/FileKind"
+            },
+            "title": "Add Kinds",
+            "type": "array"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/EntityFileOut"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files",
+          "add_kinds"
+        ],
+        "title": "EntityFilesOut",
         "type": "object"
       },
       "EntityIn": {
@@ -1077,6 +1315,434 @@
         ],
         "title": "FailureReason",
         "type": "string"
+      },
+      "FileDetailOut": {
+        "properties": {
+          "can_edit": {
+            "description": "Change its kind, name and visibility, remove it, restore it: needs editing every entity it is attached to",
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "entities": {
+            "description": "Where it is attached, as far as the actor may see",
+            "items": {
+              "$ref": "#/components/schemas/FilePlaceOut"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FileFailure"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a failed file could not be processed"
+          },
+          "has_preview": {
+            "description": "Whether /preview/320 and /preview/1600 answer",
+            "title": "Has Preview",
+            "type": "boolean"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "home_id": {
+            "format": "uuid",
+            "title": "Home Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FileKind"
+          },
+          "media_type": {
+            "description": "Told from the content; a HEIC photo becomes image/jpeg",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "purge_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a removed file is deleted for good",
+            "title": "Purge At"
+          },
+          "removed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In the trash since",
+            "title": "Removed At"
+          },
+          "size": {
+            "description": "Bytes of the stored file; of the upload while it is processing",
+            "title": "Size",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FileStatus",
+            "description": "Content and previews are served only when ready"
+          },
+          "taken_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the photo was taken, as its camera wrote",
+            "title": "Taken At"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Of an image, as it is shown",
+            "title": "Width"
+          }
+        },
+        "required": [
+          "id",
+          "home_id",
+          "kind",
+          "visibility",
+          "status",
+          "failure",
+          "name",
+          "media_type",
+          "size",
+          "width",
+          "height",
+          "taken_at",
+          "created_at",
+          "has_preview",
+          "removed_at",
+          "purge_at",
+          "can_edit",
+          "entities"
+        ],
+        "title": "FileDetailOut",
+        "type": "object"
+      },
+      "FileFailure": {
+        "description": "Why a file could not be processed.",
+        "enum": [
+          "broken",
+          "too_many_pixels",
+          "unsupported",
+          "processing_failed",
+          "content_missing"
+        ],
+        "title": "FileFailure",
+        "type": "string"
+      },
+      "FileKind": {
+        "enum": [
+          "photo",
+          "receipt",
+          "warranty",
+          "manual",
+          "other"
+        ],
+        "title": "FileKind",
+        "type": "string"
+      },
+      "FileOut": {
+        "properties": {
+          "can_edit": {
+            "description": "Change its kind, name and visibility, remove it, restore it: needs editing every entity it is attached to",
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FileFailure"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a failed file could not be processed"
+          },
+          "has_preview": {
+            "description": "Whether /preview/320 and /preview/1600 answer",
+            "title": "Has Preview",
+            "type": "boolean"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "home_id": {
+            "format": "uuid",
+            "title": "Home Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FileKind"
+          },
+          "media_type": {
+            "description": "Told from the content; a HEIC photo becomes image/jpeg",
+            "title": "Media Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "purge_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a removed file is deleted for good",
+            "title": "Purge At"
+          },
+          "removed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In the trash since",
+            "title": "Removed At"
+          },
+          "size": {
+            "description": "Bytes of the stored file; of the upload while it is processing",
+            "title": "Size",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FileStatus",
+            "description": "Content and previews are served only when ready"
+          },
+          "taken_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the photo was taken, as its camera wrote",
+            "title": "Taken At"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Of an image, as it is shown",
+            "title": "Width"
+          }
+        },
+        "required": [
+          "id",
+          "home_id",
+          "kind",
+          "visibility",
+          "status",
+          "failure",
+          "name",
+          "media_type",
+          "size",
+          "width",
+          "height",
+          "taken_at",
+          "created_at",
+          "has_preview",
+          "removed_at",
+          "purge_at",
+          "can_edit"
+        ],
+        "title": "FileOut",
+        "type": "object"
+      },
+      "FilePatch": {
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FileKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Visibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "FilePatch",
+        "type": "object"
+      },
+      "FilePlaceOut": {
+        "properties": {
+          "can_detach": {
+            "title": "Can Detach",
+            "type": "boolean"
+          },
+          "entity_id": {
+            "format": "uuid",
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "is_cover": {
+            "description": "Chosen as the entity's cover",
+            "title": "Is Cover",
+            "type": "boolean"
+          },
+          "names": {
+            "description": "The names from the top of the home down to the entity itself",
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entity_id",
+          "names",
+          "is_cover",
+          "can_detach"
+        ],
+        "title": "FilePlaceOut",
+        "type": "object"
+      },
+      "FileStatus": {
+        "enum": [
+          "processing",
+          "ready",
+          "failed"
+        ],
+        "title": "FileStatus",
+        "type": "string"
+      },
+      "FilesConfigOut": {
+        "properties": {
+          "enabled": {
+            "description": "Whether this Penaria keeps files; without storage, uploads answer files_off",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_size": {
+            "description": "The largest file, in bytes",
+            "title": "Max Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "max_size"
+        ],
+        "title": "FilesConfigOut",
+        "type": "object"
       },
       "Freshness": {
         "enum": [
@@ -2561,6 +3227,14 @@
         "title": "Preset",
         "type": "string"
       },
+      "PreviewSize": {
+        "enum": [
+          320,
+          1600
+        ],
+        "title": "PreviewSize",
+        "type": "integer"
+      },
       "Privacy": {
         "enum": [
           "normal",
@@ -3310,6 +3984,15 @@
         ],
         "title": "VersionIn",
         "type": "object"
+      },
+      "Visibility": {
+        "enum": [
+          "normal",
+          "private",
+          "guests"
+        ],
+        "title": "Visibility",
+        "type": "string"
       }
     }
   },
@@ -3502,6 +4185,73 @@
         ]
       }
     },
+    "/api/v1/config/files": {
+      "get": {
+        "operationId": "files_config_api_v1_config_files_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilesConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Files Config",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/covers:find": {
+      "post": {
+        "description": "The covers of the entities a screen shows; those without one the actor may see are left out.",
+        "operationId": "find_covers_api_v1_covers_find_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoversIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CoverOut"
+                  },
+                  "title": "Response Find Covers Api V1 Covers Find Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Find Covers",
+        "tags": [
+          "files"
+        ]
+      }
+    },
     "/api/v1/email-verifications:confirm": {
       "post": {
         "description": "Make the address a confirmation link was sent to the account's email.",
@@ -3635,6 +4385,263 @@
         "summary": "Update Entity",
         "tags": [
           "entities"
+        ]
+      }
+    },
+    "/api/v1/entities/{entity_id}/cover": {
+      "put": {
+        "operationId": "set_cover_api_v1_entities__entity_id__cover_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Entity Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoverIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Cover",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/entities/{entity_id}/files": {
+      "get": {
+        "operationId": "list_entity_files_api_v1_entities__entity_id__files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Entity Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityFilesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Entity Files",
+        "tags": [
+          "files"
+        ]
+      },
+      "post": {
+        "description": "Add one file to a thing or place. It is stored as `processing`, and becomes `ready` or `failed`\nonce the worker has cleaned it. A file over the limit answers 413 `file_too_large`.",
+        "operationId": "upload_file_api_v1_entities__entity_id__files_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Entity Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileKind"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload File",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/entities/{entity_id}/files/{file_id}": {
+      "delete": {
+        "description": "Detach a file; detached from its last entity, it goes to the trash.",
+        "operationId": "detach_file_api_v1_entities__entity_id__files__file_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Entity Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detach File",
+        "tags": [
+          "files"
+        ]
+      },
+      "put": {
+        "description": "Attach an existing file to one more thing or place; attaching it twice changes nothing.",
+        "operationId": "attach_file_api_v1_entities__entity_id__files__file_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Entity Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attach File",
+        "tags": [
+          "files"
         ]
       }
     },
@@ -3896,6 +4903,276 @@
         "summary": "Verify Entity",
         "tags": [
           "entities"
+        ]
+      }
+    },
+    "/api/v1/files/{file_id}": {
+      "delete": {
+        "description": "Move a file to the trash, from every entity it is attached to.",
+        "operationId": "remove_file_api_v1_files__file_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove File",
+        "tags": [
+          "files"
+        ]
+      },
+      "get": {
+        "operationId": "get_file_api_v1_files__file_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get File",
+        "tags": [
+          "files"
+        ]
+      },
+      "patch": {
+        "operationId": "change_file_api_v1_files__file_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change File",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{file_id}/content": {
+      "get": {
+        "description": "The file itself: an image or a PDF is shown, anything else is downloaded. Ranges are supported.",
+        "operationId": "file_content_api_v1_files__file_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "File Content",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{file_id}/preview/{size}": {
+      "get": {
+        "description": "A WebP of an image, or of a PDF's first page, whose longest side is at most `size` pixels.",
+        "operationId": "file_preview_api_v1_files__file_id__preview__size__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "size",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PreviewSize"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "File Preview",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{file_id}:restore": {
+      "post": {
+        "operationId": "restore_file_api_v1_files__file_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore File",
+        "tags": [
+          "files"
         ]
       }
     },
@@ -4293,6 +5570,54 @@
         "summary": "Create Entity",
         "tags": [
           "entities"
+        ]
+      }
+    },
+    "/api/v1/homes/{home_id}/files/trash": {
+      "get": {
+        "description": "The home's removed files the actor may restore, the latest first.",
+        "operationId": "list_trash_api_v1_homes__home_id__files_trash_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "home_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Home Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FileDetailOut"
+                  },
+                  "title": "Response List Trash Api V1 Homes  Home Id  Files Trash Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Trash",
+        "tags": [
+          "files"
         ]
       }
     },

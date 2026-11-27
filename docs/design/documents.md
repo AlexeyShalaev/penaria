@@ -164,3 +164,51 @@ The author accepted every decision below on 2026-11-27.
 | 8 | Storage optional for the server; Compose includes it (9) | Yes: upgrading stays easy |
 | 9 | No encryption of files by Penaria in version one (9) | Yes |
 | 10 | Add things by photos is part of this work (2, 12) | Yes: the fastest way to fill a home before AI |
+
+## 14. Notes from step 1
+
+Step 1 (the server and the Compose install) settled what the sections above left open.
+
+**Upload and storage**
+- `POST /api/v1/entities/{id}/files?kind=…` takes a multipart form with exactly one file, in the field `file`. The kind is in the query so that everything that can be refused is refused before the body is read. The form is parsed as it arrives and goes to storage in one request, or in parts of 5 MB. A file over the limit answers `413 file_too_large`; the web image's nginx answers the same before the server sees it.
+- **A photo is only an image that can be cleaned** (JPEG, PNG, WebP or HEIC, told from the content): photos are shown to guests by default. Anything else sent as a photo answers `400 not_a_photo`. Other image formats (AVIF, GIF, TIFF, camera RAW) are documents like any other: kept byte for byte, only downloaded.
+- The S3 client is aiobotocore: it speaks the whole API, bucket creation and multipart uploads included, and is the widely used one. obstore was considered; it cannot create a bucket.
+
+**Cleaning**
+- JPEG, PNG and WebP are rewritten part by part from a list of what is kept: the picture, its colours (the ICC profile) and animation. EXIF, XMP, IPTC, comments, text, embedded thumbnails, further images and whatever follows the end of the picture go; so does an HDR gain map, which phones keep among those further images. The EXIF orientation is written back alone. A damaged file, or a variant with an unknown part that the picture needs, fails (`broken`, `unsupported`) and nothing of it is kept.
+- HEIC becomes a JPEG at quality 92 with the colour profile; the name's extension becomes `.jpg`.
+- The time a photo was taken is read from EXIF; without an offset it is taken as the home's time.
+- A PDF gets a preview of its first page when it can be drawn; a locked or damaged one is `ready` without.
+
+**The worker**
+- A file is taken under a lease of ten minutes and parsed in a child process with none of the server's environment, 2 GB of memory at most and two minutes. A crash is tried again after 30 seconds, three times in all, then the file is `failed` (`processing_failed`); a storage that is away costs no attempt.
+- The worker also empties the trash and, after a day, forgets uploads no file waits for. Without storage it idles.
+- Email stays with the api process.
+
+**Access** (section 6)
+- Seeing: one entity whose contents the actor reads, with the permissions of the file's visibility and kind there. A guest sees a file only on a guest-visible entity, and only if the file is for guests; a place on the way shows no files.
+- Changing kind, name or visibility, removing and restoring need `entities.edit` on every entity the file is attached to, those the actor cannot see included. Attaching needs seeing the file and editing the target; detaching needs seeing the file and editing that entity, even if other entities are hidden from the actor.
+- Nobody adds a file, or changes one, so that they could no longer see it: receipts and warranties need `documents.view_financial`, `private` needs `entities.view_private`.
+- A change of kind away from `photo` turns `guests` into `normal`; no change of kind shows a file to more people.
+- `documents.view_financial` implies `entities.view` and nothing implies it. A migration adds it to the family role of existing homes; roles cannot be edited yet.
+- An archived entity keeps its files and takes no new ones.
+
+**Covers**
+- The cover shown is the chosen one if the reader sees it, otherwise the entity's first photo the reader sees. Choosing is therefore never required.
+
+**The trash** (section 8)
+- A removed file keeps its attachments (detaching from the last entity included), so restoring puts it back where it was; it stops being a chosen cover.
+- The home's trash (`GET /api/v1/homes/{id}/files/trash`) shows a file to those who may restore it. After 30 days it is gone for everyone, whether or not the worker has deleted it yet.
+- A deleted entity takes its attachments with it; a file nothing holds any more goes to the trash, where nobody sees it, and is deleted after 30 days.
+
+**Journal and history**
+- `file.added`, `file.changed`, `file.attached`, `file.detached`, `file.cover_set`, `file.removed` and `file.restored`, each in the history of the entity it is about (one per entity for a change, removal or restore). The payload names the file: its id, name, kind and visibility.
+- As with places, history names a file only to those who may see it as it is now; for others the event's payload values are `null`. A file deleted for good is named only to those with `entities.view_private` and `documents.view_financial`.
+
+**Serving** (section 7)
+- `Cache-Control: private, no-cache` with a strong `ETag`: the browser keeps a copy and asks each time, so access is checked on every request.
+- Ranges are served for originals; previews are small. Responses of files are not compressed.
+- A PDF's policy is `default-src 'none'; object-src 'self'; style-src 'unsafe-inline'`, without `sandbox`, so that the browser's viewer opens.
+
+**Tables**
+- `documents_files` also has `previews` (whether previews exist); `media_type` is never null.

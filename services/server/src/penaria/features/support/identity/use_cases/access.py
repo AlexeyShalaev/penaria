@@ -24,3 +24,9 @@ class GrantAccessPolicy:
         async with self._uow.query() as tx:
             roles = await tx.grants.applicable(principal_type, principal_id, home_id, path, datetime.now(UTC))
         return access_of(roles)
+
+    async def accesses(self, actor: Actor, home_id: UUID, paths: Sequence[Sequence[UUID]]) -> list[Access]:
+        principal_type, principal_id = principal_of(actor)
+        async with self._uow.query() as tx:
+            scoped = await tx.grants.scoped_roles(principal_type, principal_id, home_id, datetime.now(UTC))
+        return [access_of([role for scope, role in scoped if scope is None or scope in path]) for path in paths]

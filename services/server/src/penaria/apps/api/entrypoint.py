@@ -7,10 +7,11 @@ import logging
 from fastapi import Depends
 from servicewright import AppSpec
 from servicewright.adapters.dishka import DishkaContainer
-from servicewright.adapters.fastapi import FastApiEntrypoint
+from servicewright.adapters.fastapi import FastApiEntrypoint, GZipMiddlewareConfig, MiddlewareConfig
 from servicewright.adapters.health.postgres import PostgresHealthCheck
 from servicewright.core.contracts import AppScopeProtocol
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
 
 from penaria import __version__
 from penaria.apps.api.container import build_container
@@ -18,6 +19,10 @@ from penaria.apps.api.origin import origin_check
 from penaria.apps.api.settings import Settings
 from penaria.common.urls import is_loopback
 from penaria.features.core.registry.api.routes import router as registry_router
+from penaria.features.support.documents.api.routes import EXCEPTION_HANDLERS as DOCUMENTS_EXCEPTION_HANDLERS
+from penaria.features.support.documents.api.routes import router as documents_router
+from penaria.features.support.documents.domain.content import UNKNOWN
+from penaria.features.support.documents.domain.files import PDF
 from penaria.features.support.identity.api.account import router as account_router
 from penaria.features.support.identity.api.account import sign_in_router
 from penaria.features.support.identity.api.devices import router as devices_router
@@ -50,6 +55,7 @@ ROUTERS = (
     guest_router,
     install_router,
     registry_router,
+    documents_router,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,7 +102,29 @@ def build_http(settings: Settings) -> FastApiEntrypoint:
         config,
         fastapi_kwargs={**config.fastapi_kwargs, "dependencies": [Depends(origin_check(settings.public_origin))]},
     )
-    return FastApiEntrypoint(config=config, routers=ROUTERS)
+    return FastApiEntrypoint(
+        config=config,
+        routers=ROUTERS,
+        middlewares=_middlewares(),
+        exception_handlers=DOCUMENTS_EXCEPTION_HANDLERS,
+    )
+
+
+def _middlewares() -> MiddlewareConfig:
+    # Compressing a PDF or a download would break their ranges and ETags, and they are mostly
+    # compressed already; servicewright's own setting cannot say which types to leave alone.
+    return MiddlewareConfig(
+        gzip=GZipMiddlewareConfig(enabled=False),
+        custom=[
+            (
+                GZipMiddleware,
+                {
+                    "minimum_size": GZipMiddlewareConfig().minimum_size,
+                    "exclude_content_types": (*DEFAULT_EXCLUDED_CONTENT_TYPES, PDF, UNKNOWN),
+                },
+            )
+        ],
+    )
 
 
 def _names_an_ip_address(host: str) -> bool:

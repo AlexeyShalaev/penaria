@@ -630,6 +630,21 @@ class PostgresGrantRepository:
     ) -> list[Role]:
         return await self._roles_covering(principal_type, principal_id, home_id, path, now)
 
+    async def scoped_roles(
+        self, principal_type: PrincipalType, principal_id: UUID, home_id: UUID, now: datetime
+    ) -> list[tuple[UUID | None, Role]]:
+        rows = await self._session.execute(
+            select(GrantDB.scope_entity_id, RoleDB)
+            .join(RoleDB, RoleDB.id == GrantDB.role_id)
+            .where(
+                GrantDB.home_id == home_id,
+                GrantDB.principal_type == principal_type.value,
+                GrantDB.principal_id == principal_id,
+                *_active(now),
+            )
+        )
+        return [(scope, _role(role)) for scope, role in rows]
+
     async def lasting(
         self,
         principal_type: PrincipalType,

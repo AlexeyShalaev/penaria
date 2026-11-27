@@ -8,12 +8,14 @@ from pydantic_settings import NoDecode
 from servicewright.adapters.fastapi import HttpServerSettings
 
 from penaria.common.database import DatabaseSettings
+from penaria.common.files import FilesSettings
 from penaria.common.settings import PenariaSettings
 from penaria.common.urls import is_loopback, origin_of
 from penaria.features.shared.errors import InvalidError
 from penaria.features.support.identity.api.cookies import OIDC_CALLBACK_PATH
 from penaria.features.support.identity.domain.links import PublicLinks
 from penaria.features.support.identity.domain.mailbox import DEFAULT_PORTS, MailboxFields, MailSecurity
+from penaria.integrations.s3.settings import S3Settings
 
 # Stored secrets are encrypted with keys derived from it; shorter keys are too easy to guess.
 SECRET_KEY_MIN_LENGTH = 32
@@ -104,6 +106,9 @@ class Settings(PenariaSettings):
     # None: the install's admins connect the mailbox in the interface, if at all.
     mail: MailSettings | None = None
     auth: AuthSettings = AuthSettings()
+    # None: the install keeps no files.
+    s3: S3Settings | None = None
+    files: FilesSettings = FilesSettings()
 
     @field_validator("public_url")
     @classmethod

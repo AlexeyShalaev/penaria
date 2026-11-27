@@ -42,7 +42,7 @@ describe('InviteDialog', () => {
 
     expect(roleNames().map((radio) => radio.closest('label')?.textContent)).toEqual([
       'AdminEverything except owners: things, devices, tasks, people and settings.',
-      'Family memberAdds and changes things, uses devices and marks tasks done. Does not see private places.',
+      'Family memberAdds and changes things, sees receipts and warranties, uses devices and marks tasks done. Does not see private places.',
       'GuestSees only what is marked for guests and where it is, and uses devices. Access ends on its own.',
       'ContractorSees things and tasks and marks tasks done. Best limited to one place.',
     ])

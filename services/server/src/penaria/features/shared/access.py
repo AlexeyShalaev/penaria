@@ -14,6 +14,7 @@ class Permission(StrEnum):
     ENTITIES_VIEW = "entities.view"
     ENTITIES_VIEW_PRIVATE = "entities.view_private"
     ENTITIES_EDIT = "entities.edit"
+    DOCUMENTS_VIEW_FINANCIAL = "documents.view_financial"
     CHANGES_APPLY = "changes.apply"
     DEVICES_CONTROL = "devices.control"
     DEVICES_CONTROL_CRITICAL = "devices.control_critical"
@@ -57,4 +58,8 @@ class Access:
 class AccessPolicy(Protocol):
     async def access(self, actor: Actor, home_id: UUID, path: Sequence[UUID]) -> Access:
         """What ``actor`` may do at ``path`` (the ids from the root down); ``()`` is the whole home."""
+        ...
+
+    async def accesses(self, actor: Actor, home_id: UUID, paths: Sequence[Sequence[UUID]]) -> list[Access]:
+        """``access`` for each of the paths, in their order, read at once."""
         ...

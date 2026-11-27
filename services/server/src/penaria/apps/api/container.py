@@ -29,9 +29,32 @@ from penaria.features.core.registry.use_cases.commands import (
 )
 from penaria.features.core.registry.use_cases.places import RegistryPlaces
 from penaria.features.core.registry.use_cases.queries import EntityHistory, GetEntity, ListChildren
+from penaria.features.core.registry.use_cases.sights import RegistrySights
 from penaria.features.shared.access import AccessPolicy
 from penaria.features.shared.actor import Actor
+from penaria.features.shared.history import HistoryRedaction
 from penaria.features.shared.places import PlaceDirectory
+from penaria.features.shared.sights import EntitySights
+from penaria.features.support.documents.domain.repositories import DocumentsTransaction
+from penaria.features.support.documents.domain.storage import ObjectStorage
+from penaria.features.support.documents.use_cases.access import FileAccess
+from penaria.features.support.documents.use_cases.commands import (
+    AttachFile,
+    ChangeFile,
+    DetachFile,
+    RemoveFile,
+    RestoreFile,
+    SetCover,
+)
+from penaria.features.support.documents.use_cases.history import FileHistoryRedaction
+from penaria.features.support.documents.use_cases.queries import (
+    FindCovers,
+    GetFile,
+    ListEntityFiles,
+    ListTrash,
+    ReadContent,
+)
+from penaria.features.support.documents.use_cases.upload import FilesConfig, UploadFile
 from penaria.features.support.identity.api.account import client_of
 from penaria.features.support.identity.api.cookies import SESSION_COOKIE, SessionCookie
 from penaria.features.support.identity.api.devices import device_token_of
@@ -136,6 +159,8 @@ from penaria.features.support.identity.use_cases.totp import (
     TurnOffTotp,
 )
 from penaria.integrations.postgres.transaction import PenariaTransaction
+from penaria.integrations.s3.disabled import NoStorage
+from penaria.integrations.s3.storage import open_s3
 
 
 class SettingsProvider(Provider):
@@ -190,6 +215,18 @@ class SettingsProvider(Provider):
         return ExternalSignIn(provider=provider, name=oidc.display_name, allow_sign_up=oidc.allow_sign_up)
 
     @provide
+    def files_config(self) -> FilesConfig:
+        return FilesConfig(enabled=self._settings.s3 is not None, max_size=self._settings.files.max_size)
+
+    @provide
+    async def storage(self) -> AsyncIterator[ObjectStorage]:
+        if self._settings.s3 is None:
+            yield NoStorage()
+            return
+        async with open_s3(self._settings.s3) as storage:
+            yield storage
+
+    @provide
     def operator_mailbox(self) -> OperatorMailbox:
         mail = self._settings.mail
         if mail is None:
@@ -215,12 +252,18 @@ class UnitOfWorkProvider(Provider):
     def registry(self, uow: AsyncSQLAlchemyUnitOfWork[PenariaTransaction]) -> AsyncUnitOfWork[RegistryTransaction]:
         return uow
 
+    @provide
+    def documents(self, uow: AsyncSQLAlchemyUnitOfWork[PenariaTransaction]) -> AsyncUnitOfWork[DocumentsTransaction]:
+        return uow
+
 
 class UseCaseProvider(Provider):
     scope = Scope.APP
 
     access_policy = provide(GrantAccessPolicy, provides=AccessPolicy)
     place_directory = provide(RegistryPlaces, provides=PlaceDirectory)
+    entity_sights = provide(RegistrySights, provides=EntitySights)
+    history_redaction = provide(FileHistoryRedaction, provides=HistoryRedaction)
     password_hasher = provide(Argon2PasswordHasher, provides=PasswordHasher)
     mail_transport = provide(SmtpTransport, provides=MailTransport)
     use_cases = provide_all(
@@ -306,6 +349,19 @@ class UseCaseProvider(Provider):
         GetEntity,
         ListChildren,
         EntityHistory,
+        FileAccess,
+        UploadFile,
+        AttachFile,
+        DetachFile,
+        ChangeFile,
+        RemoveFile,
+        RestoreFile,
+        SetCover,
+        ListEntityFiles,
+        FindCovers,
+        GetFile,
+        ListTrash,
+        ReadContent,
     )
 
 

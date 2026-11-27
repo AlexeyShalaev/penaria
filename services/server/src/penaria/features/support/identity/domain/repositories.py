@@ -276,6 +276,12 @@ class GrantRepository(Protocol):
         """The roles of the principal's active grants whose scope is the whole home or an id in ``path``."""
         ...
 
+    async def scoped_roles(
+        self, principal_type: PrincipalType, principal_id: UUID, home_id: UUID, now: datetime
+    ) -> list[tuple[UUID | None, Role]]:
+        """The scope (None: the whole home) and the role of each of the principal's active grants in the home."""
+        ...
+
     async def lasting(
         self,
         principal_type: PrincipalType,

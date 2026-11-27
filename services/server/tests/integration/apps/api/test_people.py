@@ -377,6 +377,7 @@ async def test_a_role_beyond_your_own_permissions_is_refused(
     assert refused.json()["params"]["permissions"] == [
         "changes.apply",
         "devices.control",
+        "documents.view_financial",
         "entities.edit",
         "tasks.complete",
         "tasks.view",
