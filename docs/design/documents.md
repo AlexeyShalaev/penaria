@@ -1,12 +1,12 @@
 # Photos and documents
 
-- **Status:** proposed, waiting for the author's review.
+- **Status:** accepted on 2026-11-27.
 - **Date:** 2026-11-27.
 - **Scope:** files attached to things and places: photos, receipts, warranties, manuals and other documents. How they are uploaded, cleaned, previewed, stored, shown and removed, and who sees them.
 
 The tree, access and privacy are [core-model.md](core-model.md). This document adds files to them.
 
-The decisions follow v0.3 where they can. Each decision that changes v0.3 or goes beyond it is marked **Proposed** and listed in [Open questions](#13-open-questions).
+The decisions follow v0.3 where they can. Each decision that changes v0.3 or goes beyond it is marked **Decision** and listed in [Decisions](#13-decisions).
 
 Not covered, each with a design of its own later:
 - text recognition, recognising things on photos and reading receipts (the assistant);
@@ -38,7 +38,7 @@ Photos and receipts say more than the registry's text: where the home is, what i
 
 A **file** is the stored content with its facts. An **attachment** ties a file to an entity.
 
-**Proposed: one file, many attachments.** v0.3 gives an attachment one entity. A shop receipt often covers several things, and identical things share a manual.
+**Decision: one file, many attachments.** v0.3 gives an attachment one entity. A shop receipt often covers several things, and identical things share a manual.
 
 A file has: a kind (`photo`, `receipt`, `warranty`, `manual`, `other`), the original name, the media type, size and SHA-256, for images the width, height and the time taken, who added it and when, a visibility (section 6) and a status (`processing`, `ready`, `failed`).
 
@@ -46,7 +46,7 @@ An attachment has: the file, the entity, its place in the entity's list, and whe
 
 ## 4. Upload
 
-**Proposed: files go through the server, not straight to storage.** v0.3 has the browser upload to S3 by a signed link. That needs the storage reachable from every browser: a second address with its own certificate, CORS rules and an exposed storage service. For a home install this is most of the work of running the system, and the files are small. Through the server:
+**Decision: files go through the server, not straight to storage.** v0.3 has the browser upload to S3 by a signed link. That needs the storage reachable from every browser: a second address with its own certificate, CORS rules and an exposed storage service. For a home install this is most of the work of running the system, and the files are small. Through the server:
 
 - there is one address, and the storage stays inside the install;
 - access is checked in one place;
@@ -55,7 +55,7 @@ An attachment has: the file, the entity, its place in the entity's list, and whe
 The server streams an upload to storage without holding it in memory. Signed direct uploads can be added later behind the same interface, if large files ever need them.
 
 - `POST /api/v1/entities/{id}/files` takes one file and its kind.
-- **Proposed: any file type is accepted, up to 50 MB** (`PENARIA_FILES__MAX_SIZE`). Only images (JPEG, PNG, WebP, HEIC) and PDF are previewed and opened in the browser; everything else is only downloaded.
+- **Decision: any file type is accepted, up to 50 MB** (`PENARIA_FILES__MAX_SIZE`). Only images (JPEG, PNG, WebP, HEIC) and PDF are previewed and opened in the browser; everything else is only downloaded.
 - The type is read from the content, never taken from the name or from what the browser claims.
 
 ## 5. Processing
@@ -67,9 +67,9 @@ An upload lands in storage as an incoming object that nobody can read. A worker 
 3. makes previews: two WebP sizes (about 320 and 1600 pixels), and the first page of a PDF;
 4. stores the final original, deletes the incoming object and marks the file `ready`.
 
-**Proposed: all metadata of a photo is removed, not only the location** (v0.3 names the location). Cameras also write device serial numbers and owner names. The time a photo was taken is kept in the database, and the orientation is respected. JPEG, PNG and WebP are cleaned without recompression, so the pixels stay as they were. **HEIC is converted to JPEG** (browsers cannot show HEIC, and it cannot be cleaned in place). PDF and other documents are stored byte for byte.
+**Decision: all metadata of a photo is removed, not only the location** (v0.3 names the location). Cameras also write device serial numbers and owner names. The time a photo was taken is kept in the database, and the orientation is respected. JPEG, PNG and WebP are cleaned without recompression, so the pixels stay as they were. **HEIC is converted to JPEG** (browsers cannot show HEIC, and it cannot be cleaned in place). PDF and other documents are stored byte for byte.
 
-**Proposed: a new `worker` process with a queue in PostgreSQL.** It is the same image started with another command. v0.3 gives background work to Temporal. Requiring Temporal now, to make previews, would add a heavy service to every home. Temporal arrives with the first long workflow that needs it (imports, recognition). The worker is a separate process because decoding images takes CPU, and a broken file must not take the API down.
+**Decision: a new `worker` process with a queue in PostgreSQL.** It is the same image started with another command. v0.3 gives background work to Temporal. Requiring Temporal now, to make previews, would add a heavy service to every home. Temporal arrives with the first long workflow that needs it (imports, recognition). The worker is a separate process because decoding images takes CPU, and a broken file must not take the API down.
 
 A file that cannot be processed is marked `failed` with a reason, and can be removed.
 
@@ -83,8 +83,8 @@ A file is reached through its attachments: a person sees it when they see at lea
 | `private` | members with `entities.view_private` |
 | `guests` | members, and guests who see the entity |
 
-- **Proposed: new files are `guests` for photos and `normal` for everything else.** A guest sees a thing only if it is marked for guests, and then its photo is the useful part: "the towels are here". Documents are shown to guests only when someone says so.
-- **Proposed: a new permission, `documents.view_financial`, "See receipts and warranties".** Roles are checkboxes, so this is one more. Owner, admin and family have it; guest and contractor do not. Without it, files of the kinds `receipt` and `warranty` are not listed or served. Existing homes get it in their preset roles by migration.
+- **Decision: new files are `guests` for photos and `normal` for everything else.** A guest sees a thing only if it is marked for guests, and then its photo is the useful part: "the towels are here". Documents are shown to guests only when someone says so.
+- **Decision: a new permission, `documents.view_financial`, "See receipts and warranties".** Roles are checkboxes, so this is one more. Owner, admin and family have it; guest and contractor do not. Without it, files of the kinds `receipt` and `warranty` are not listed or served. Existing homes get it in their preset roles by migration.
 - Adding, changing or removing a file needs `entities.edit` on every entity it is attached to. Attaching an existing file to another thing needs seeing the file and editing that thing.
 - Device tokens read files as their role allows.
 
@@ -106,8 +106,8 @@ A file is reached through its attachments: a person sees it when they see at lea
 S3-compatible storage, as decided. Configuration: `PENARIA_S3__ENDPOINT`, `..._BUCKET`, `..._ACCESS_KEY_ID`, `..._SECRET_ACCESS_KEY`, `..._REGION`. The migrate step creates the bucket when it is missing.
 
 - Objects are named by ids, never by the original names.
-- **Proposed: storage is optional for the server.** Without `PENARIA_S3__*`, files are off and the interface says so, as with email. The Compose install adds a storage service (SILO), so a home gets files by default.
-- **Proposed: no encryption of files by Penaria in version one.** With its own encryption, a lost `PENARIA_SECRET_KEY` would lose every photo. Operators who need encryption at rest use the disk's or the storage's.
+- **Decision: storage is optional for the server.** Without `PENARIA_S3__*`, files are off and the interface says so, as with email. The Compose install adds a storage service (SILO), so a home gets files by default.
+- **Decision: no encryption of files by Penaria in version one.** With its own encryption, a lost `PENARIA_SECRET_KEY` would lose every photo. Operators who need encryption at rest use the disk's or the storage's.
 
 ## 10. Tables
 
@@ -148,9 +148,11 @@ The registry never reads these tables: the web app asks the documents API for th
 
 Then release 0.2.0.
 
-## 13. Open questions
+## 13. Decisions
 
-| # | Question | Recommendation |
+The author accepted every decision below on 2026-11-27.
+
+| # | Decision | Answer |
 |---|---|---|
 | 1 | Upload through the server instead of signed links to storage (section 4) | Yes: one address, nothing exposed |
 | 2 | A `worker` process with a PostgreSQL queue; Temporal later (5) | Yes |
