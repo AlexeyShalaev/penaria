@@ -4,6 +4,12 @@ All notable changes to Penaria, newest first. This file is generated from `relea
 `scripts/release/notes.py`: do not edit it by hand. A change gets here through a fragment in
 `changes/` (see `changes/README.md`).
 
+## 0.1.1 (2026-11-27)
+
+### Security
+
+- Someone whose own access to a home ends can no longer give access that lasts longer: invitations, changes to people's access, guest links and password reset links stop at their own end. Invitations and guest links such a person made earlier may stop working.
+
 ## 0.1.0 (2026-11-26)
 
 ### Added
