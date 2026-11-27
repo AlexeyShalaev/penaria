@@ -333,6 +333,26 @@ async def test_an_admin_cannot_reset_someone_who_owns_another_home(
     assert (response.status_code, response.json()["code"]) == (403, "reset_not_allowed")
 
 
+async def test_an_admin_whose_access_ends_makes_no_link_for_someone_who_stays_longer(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    ends = (datetime.now(UTC) + timedelta(days=7)).isoformat()
+    sitter = await member(api, new_client, ids["home"], "admin", "sitter", grant_expires_at=ends)
+    await add_second_factor(sitter, PUBLIC_URL)
+    await member(api, new_client, ids["home"], "family", "maria")
+    await member(api, new_client, ids["home"], "family", "ivan", grant_expires_at=ends)
+    people = {
+        m["person"]["username"]: m["person"]["id"] for m in await ok(await api.get(f"/homes/{ids['home']}/members"))
+    }
+
+    # A new password would be the sitter's way into Maria's account long after they left.
+    response = await sitter.post(f"/homes/{ids['home']}/members/{people['maria']}:reset-link")
+
+    assert (response.status_code, response.json()["code"]) == (403, "reset_not_allowed")
+    await ok(await sitter.post(f"/homes/{ids['home']}/members/{people['ivan']}:reset-link"), 201)
+
+
 async def test_a_member_who_does_not_manage_people_makes_no_reset_links(
     api: httpx.AsyncClient, new_client: NewClient
 ) -> None:

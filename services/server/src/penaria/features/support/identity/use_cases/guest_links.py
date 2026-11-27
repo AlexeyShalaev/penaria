@@ -14,7 +14,6 @@ from penaria.features.support.identity.domain.members import (
     GuestLinkEndedError,
     GuestLinkNotFoundError,
     Token,
-    check_can_give,
     grant_payload,
 )
 from penaria.features.support.identity.domain.models import Grant, Home, PrincipalType, Role, User
@@ -22,7 +21,7 @@ from penaria.features.support.identity.domain.repositories import IdentityTransa
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, GuestSession, Session, hash_token
 from penaria.features.support.identity.use_cases.attempts import find_by_secret
 from penaria.features.support.identity.use_cases.members import (
-    access_in,
+    check_can_give_until,
     check_place,
     place_for,
     place_of,
@@ -90,7 +89,7 @@ class CreateGuestLink:
         async with self._uow.transaction() as tx:
             # Under the lock that taking the creator's access back takes, so their links end with it.
             await tx.homes.lock(home_id)
-            check_can_give(await access_in(tx, actor, home_id, scope, now), role)
+            await check_can_give_until(tx, actor, home_id, scope, role, link.grant.expires_at, now)
             await tx.grants.add(link.grant)
             await tx.tokens.add(link.token)
             await tx.journal.append(

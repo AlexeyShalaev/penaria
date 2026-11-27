@@ -27,6 +27,13 @@ class EscalationError(ForbiddenError):
     code = "escalation"
 
 
+class OutlastsGiverError(ForbiddenError):
+    """The access would end later than the access that lets the person give it; ``params.ends_at`` is
+    the latest end they may give."""
+
+    code = "outlasts_giver"
+
+
 class InvalidGrantError(InvalidError):
     code = "invalid_grant"
 
