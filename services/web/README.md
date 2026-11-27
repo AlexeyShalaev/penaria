@@ -19,7 +19,7 @@ make api                    # regenerate the types
 
 `make check` (and CI) fails when the generated types do not match the document.
 
-The app calls the API on its own origin (`/api`). The dev server proxies it to the server on :8000. The image does the same: its nginx passes `/api/` on to `PENARIA_API_UPSTREAM` (`http://penaria-server:8000` by default, the server's name in the Compose install), with the visitor's address in `X-Forwarded-For`. Behind another reverse proxy, `PENARIA_TRUSTED_PROXIES` lists that proxy's addresses or networks, comma-separated, so the address is the visitor's and not the proxy's (`nginx.conf.template`, `trusted-proxies.sh`).
+The app calls the API on its own origin (`/api`). The dev server proxies it to the server on :8000. The image does the same: its nginx passes `/api/` on to `PENARIA_API_UPSTREAM` (`http://penaria-server:8000` by default, the server's name in the Compose install), with the visitor's address in `X-Forwarded-For`. Behind another reverse proxy, `PENARIA_TRUSTED_PROXIES` lists that proxy's addresses or networks, comma-separated, so the address is the visitor's and not the proxy's (`nginx.conf.template`, `trusted-proxies.sh`). Uploads of files may be as large as `PENARIA_FILES__MAX_SIZE` (bytes, 50 MB by default), which must be the same as the server's (`upload-limit.envsh`); every other request keeps nginx's 1 MB.
 
 ## Signing in
 

@@ -8,6 +8,9 @@ services:
   penaria-server:
     image: penaria-server:source
     build: ../../services/server
+  penaria-worker:
+    image: penaria-server:source
+    build: ../../services/server
   penaria-web:
     image: penaria-web:source
     build: ../../services/web
