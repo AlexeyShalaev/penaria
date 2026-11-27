@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from penaria.features.support.documents.domain.files import File
+from penaria.features.support.documents.domain.files import File, FileKind
 from penaria.features.support.documents.use_cases.access import SeenFile, may_edit
 
 
@@ -19,7 +19,7 @@ class FileView:
 
 
 @dataclass(frozen=True, slots=True)
-class Place:
+class FilePlace:
     """An entity that holds a file, as far as the actor reads it."""
 
     entity_id: UUID
@@ -32,12 +32,12 @@ class Place:
 class FileDetail:
     view: FileView
     # Only the entities whose contents the actor reads.
-    places: list[Place]
+    places: list[FilePlace]
 
     @classmethod
     def of(cls, seen: SeenFile) -> FileDetail:
         places = [
-            Place(
+            FilePlace(
                 entity_id=attachment.entity_id,
                 names=sight.names,
                 is_cover=attachment.is_cover,
@@ -63,4 +63,4 @@ class EntityFile:
 class EntityFiles:
     files: list[EntityFile]
     # The kinds the actor may add here; empty when it may add nothing.
-    add_kinds: list[str]
+    add_kinds: list[FileKind]

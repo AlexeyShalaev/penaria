@@ -13,6 +13,7 @@ from penaria.features.shared.errors import ConflictError, InvalidError, NotFound
 from penaria.features.shared.ids import new_id
 
 NAME_MAX_LENGTH = 255
+EXTENSION_MAX_LENGTH = 16
 # A removed file can be restored this long, and is then deleted from storage.
 TRASH_RETENTION = timedelta(days=30)
 
@@ -133,7 +134,7 @@ class File:
     id: UUID = field(default_factory=new_id)
 
     @classmethod
-    def new(
+    def create(
         cls,
         *,
         file_id: UUID,
@@ -159,7 +160,7 @@ class File:
         )
 
     @property
-    def is_image(self) -> bool:
+    def is_ready_image(self) -> bool:
         """Whether it is a cleaned image: what can be a cover."""
         return self.status is FileStatus.READY and self.media_type in STORED_IMAGES
 
@@ -174,6 +175,13 @@ class File:
     def expired(self, now: datetime) -> bool:
         """Past its time in the trash: gone for everyone, whether the worker has deleted it yet or not."""
         return self.purge_at is not None and self.purge_at <= now
+
+    def ensure_ready(self) -> None:
+        """Its content is there to be read only once the worker has cleaned it."""
+        if self.status is FileStatus.PROCESSING:
+            raise FileNotReadyError(params={"file_id": str(self.id)})
+        if self.status is FileStatus.FAILED:
+            raise FileFailedError(params={"file_id": str(self.id)})
 
     def ensure_not_removed(self) -> None:
         if self.removed:
@@ -237,6 +245,11 @@ def permissions_to_see(kind: FileKind, visibility: Visibility) -> list[Permissio
     return needed
 
 
+def sees_every_file(access: Access) -> bool:
+    """Whether someone with ``access`` at an entity sees whatever file might be there."""
+    return all(shows_to(kind, visibility, access) for kind in FileKind for visibility in Visibility)
+
+
 def shows_to(kind: FileKind, visibility: Visibility, access: Access) -> bool:
     """Whether someone with ``access`` at an entity whose contents they read sees such a file there."""
     if access.guest_view and visibility is not Visibility.GUESTS:
@@ -248,7 +261,7 @@ def cover_of(attached: Sequence[tuple[Attachment, File]]) -> UUID | None:
     """The file that stands for an entity, among those its reader sees there: the one chosen as the
     cover, or else the first photo."""
     images = sorted(
-        ((attachment, file) for attachment, file in attached if file.is_image and not file.removed),
+        ((attachment, file) for attachment, file in attached if file.is_ready_image and not file.removed),
         key=lambda pair: (pair[0].position, pair[1].id),
     )
     chosen = [file.id for attachment, file in images if attachment.is_cover]
@@ -266,7 +279,8 @@ def clean_name(name: str) -> str:
     if len(cleaned) <= NAME_MAX_LENGTH:
         return cleaned
     stem, dot, extension = cleaned.rpartition(".")
-    if not dot or len(extension) > 16:
+    # A longer "extension" is a sentence with a dot in it, not worth keeping at the name's expense.
+    if not dot or len(extension) > EXTENSION_MAX_LENGTH:
         return cleaned[:NAME_MAX_LENGTH]
     return f"{stem[: NAME_MAX_LENGTH - len(extension) - 1]}.{extension}"
 

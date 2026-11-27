@@ -21,8 +21,7 @@ from penaria.common.urls import is_loopback
 from penaria.features.core.registry.api.routes import router as registry_router
 from penaria.features.support.documents.api.routes import EXCEPTION_HANDLERS as DOCUMENTS_EXCEPTION_HANDLERS
 from penaria.features.support.documents.api.routes import router as documents_router
-from penaria.features.support.documents.domain.content import UNKNOWN
-from penaria.features.support.documents.domain.files import PDF
+from penaria.features.support.documents.api.serving import UNCOMPRESSED_TYPES
 from penaria.features.support.identity.api.account import router as account_router
 from penaria.features.support.identity.api.account import sign_in_router
 from penaria.features.support.identity.api.devices import router as devices_router
@@ -111,8 +110,7 @@ def build_http(settings: Settings) -> FastApiEntrypoint:
 
 
 def _middlewares() -> MiddlewareConfig:
-    # Compressing a PDF or a download would break their ranges and ETags, and they are mostly
-    # compressed already; servicewright's own setting cannot say which types to leave alone.
+    # servicewright's own setting cannot say which types to leave alone (the files' served ones).
     return MiddlewareConfig(
         gzip=GZipMiddlewareConfig(enabled=False),
         custom=[
@@ -120,7 +118,7 @@ def _middlewares() -> MiddlewareConfig:
                 GZipMiddleware,
                 {
                     "minimum_size": GZipMiddlewareConfig().minimum_size,
-                    "exclude_content_types": (*DEFAULT_EXCLUDED_CONTENT_TYPES, PDF, UNKNOWN),
+                    "exclude_content_types": (*DEFAULT_EXCLUDED_CONTENT_TYPES, *UNCOMPRESSED_TYPES),
                 },
             )
         ],

@@ -40,11 +40,13 @@ def facts(data: bytes) -> tuple[dict[int, object], object, bytes | None]:
     [
         (images.jpeg(), JPEG),
         (images.progressive_jpeg(), JPEG),
+        (images.restart_jpeg(), JPEG),
+        (images.cmyk_jpeg(), JPEG),
         (images.png(), PNG),
         (images.webp(), WEBP),
         (images.webp(frames=3), WEBP),
     ],
-    ids=["jpeg", "progressive-jpeg", "png", "webp", "animated-webp"],
+    ids=["jpeg", "progressive-jpeg", "restart-markers", "adobe-cmyk", "png", "webp", "animated-webp"],
 )
 def test_nothing_but_the_picture_and_its_colours_survives(original: bytes, media_type: str) -> None:
     assert images.SECRET in original
@@ -119,3 +121,13 @@ def test_a_damaged_image_is_refused(data: bytes, media_type: str) -> None:
 def test_an_unknown_variant_is_refused_rather_than_guessed(data: bytes, media_type: str) -> None:
     with pytest.raises(UnknownVariantError):
         strip(data, media_type, 1)
+
+
+def test_the_markers_a_jpeg_needs_stay() -> None:
+    restarted = strip(images.restart_jpeg(), JPEG, 1)
+    cmyk = strip(images.cmyk_jpeg(), JPEG, 1)
+
+    # The restart interval and the markers it announces; Adobe's own.
+    assert b"\xff\xdd" in restarted
+    assert b"\xff\xd0" in restarted
+    assert b"\xff\xee\x00\x0eAdobe" in cmyk

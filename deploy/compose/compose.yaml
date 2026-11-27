@@ -3,22 +3,26 @@
 # README.md next to this file has the steps, HTTPS, backups and upgrades.
 name: penaria
 
+# Where the data is: all the worker is given.
+x-stores: &stores
+  PENARIA_DATABASE__CONNECTION__HOST: postgres
+  PENARIA_DATABASE__CONNECTION__USER: penaria
+  PENARIA_DATABASE__CONNECTION__PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env, see .env.example}
+  PENARIA_DATABASE__CONNECTION__DATABASE: penaria
+  # Photos and documents are kept in the s3 service below.
+  PENARIA_S3__ENDPOINT: http://s3:9000
+  PENARIA_S3__BUCKET: penaria
+  PENARIA_S3__ACCESS_KEY_ID: penaria
+  PENARIA_S3__SECRET_ACCESS_KEY: ${S3_PASSWORD:?set S3_PASSWORD in .env, see .env.example}
+
 x-server: &server
   image: ghcr.io/alexeyshalaev/penaria-server:0.1.0 # x-release-please-version
   environment:
+    <<: *stores
     PENARIA_PUBLIC_URL: ${PENARIA_PUBLIC_URL:?set PENARIA_PUBLIC_URL in .env, see .env.example}
     PENARIA_SECRET_KEY: ${PENARIA_SECRET_KEY:?set PENARIA_SECRET_KEY in .env, see .env.example}
-    PENARIA_DATABASE__CONNECTION__HOST: postgres
-    PENARIA_DATABASE__CONNECTION__USER: penaria
-    PENARIA_DATABASE__CONNECTION__PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env, see .env.example}
-    PENARIA_DATABASE__CONNECTION__DATABASE: penaria
     # Only penaria-web reaches the server, and it sends exactly one address per request.
     PENARIA_SERVER__UVICORN__FORWARDED_ALLOW_IPS: "*"
-    # Photos and documents are kept in the s3 service below.
-    PENARIA_S3__ENDPOINT: http://s3:9000
-    PENARIA_S3__BUCKET: penaria
-    PENARIA_S3__ACCESS_KEY_ID: penaria
-    PENARIA_S3__SECRET_ACCESS_KEY: ${S3_PASSWORD:?set S3_PASSWORD in .env, see .env.example}
     PENARIA_FILES__MAX_SIZE: ${PENARIA_FILES__MAX_SIZE:-52428800}
   # More settings of the server (sign-in with your identity provider, a mailbox as
   # configuration): one PENARIA_...=value per line. services/server/README.md lists them.
@@ -92,6 +96,9 @@ services:
   penaria-worker:
     <<: *server
     command: ["python", "-m", "penaria.apps.worker"]
+    # It opens what strangers made, so it gets no secret key and nothing of server.env.
+    environment: *stores
+    env_file: []
     restart: unless-stopped
     # Time to give back the file it is processing, which another start then takes at once.
     stop_grace_period: 45s
@@ -99,7 +106,8 @@ services:
       penaria-migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-m", "penaria.apps.worker.health"]
+      # Without the container's environment: the check needs none of it.
+      test: ["CMD", "env", "-i", "/app/.venv/bin/python", "-m", "penaria.apps.worker.health"]
       interval: 10s
       timeout: 5s
       retries: 6

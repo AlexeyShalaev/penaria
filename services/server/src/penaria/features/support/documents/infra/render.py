@@ -7,6 +7,7 @@ only by ``sandbox.py``, in a process of its own: Pillow, libheif and PDFium pars
 import io
 import json
 import resource
+import struct
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -24,9 +25,9 @@ from penaria.features.support.documents.domain.metadata import (
     UnknownVariantError,
     strip,
 )
-from penaria.features.support.documents.domain.processing import MAX_PIXELS
+from penaria.features.support.documents.domain.processing import MAX_PIXELS, UnrenderableError
 from penaria.features.support.documents.domain.storage import LARGE_PREVIEW, PREVIEW_SIZES
-from penaria.features.support.documents.infra.sandbox import RESULT_FILE
+from penaria.features.support.documents.infra.sandbox import ORIGINAL_NAME, RESULT_NAME, preview_name
 
 # Enough for an image of the largest size decoded, with room to spare; a file that takes more is a bomb.
 MEMORY_LIMIT_BYTES = 2 * 1024**3
@@ -41,12 +42,8 @@ DATE_TIME_ORIGINAL = 0x9003
 OFFSET_TIME_ORIGINAL = 0x9011
 # The orientations that swap width and height.
 SIDEWAYS = frozenset({5, 6, 7, 8})
-
-
-class _RenderError(Exception):
-    def __init__(self, reason: FileFailure, detail: str) -> None:
-        super().__init__(detail)
-        self.reason = reason
+# What Pillow raises on a damaged or nonsensical TIFF structure, which EXIF is.
+UNREADABLE_EXIF = (SyntaxError, ValueError, TypeError, KeyError, OSError, struct.error)
 
 
 def main() -> None:
@@ -54,23 +51,23 @@ def main() -> None:
     source, media_type, directory = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
     try:
         result = render_pdf(source, directory) if media_type == PDF else render_image(source, media_type, directory)
-    except _RenderError as exc:
+    except UnrenderableError as exc:
         result = {"failure": exc.reason.value, "detail": str(exc)}
     # A file rather than the output, where the libraries may write what they please.
-    (directory / RESULT_FILE).write_text(json.dumps(result), encoding="utf-8")
+    (directory / RESULT_NAME).write_text(json.dumps(result), encoding="utf-8")
 
 
 def render_image(source: Path, media_type: str, directory: Path) -> dict[str, Any]:
     data = source.read_bytes()
     clean, facts = _heic_to_jpeg(data) if media_type == HEIC else _cleaned(data, media_type)
-    (directory / "original").write_bytes(clean)
+    (directory / ORIGINAL_NAME).write_bytes(clean)
     stored_type = JPEG if media_type == HEIC else media_type
     # The previews come from the clean copy, which is also proof that it still reads as the picture.
     with _decoded(clean, stored_type) as image:
         # In place: a copy of the largest picture would take hundreds of megabytes more.
         ImageOps.exif_transpose(image, in_place=True)
-        previews = _previews(image, directory)
-    return {**facts, "original": "original", "media_type": stored_type, "previews": previews}
+        _write_previews(image, directory)
+    return {**facts, "original": True, "previews": True}
 
 
 def render_pdf(source: Path, directory: Path) -> dict[str, Any]:
@@ -81,33 +78,23 @@ def render_pdf(source: Path, directory: Path) -> dict[str, Any]:
         # Drawn at the size of the large preview, whatever size the page claims to be.
         picture = page.render(scale=LARGE_PREVIEW / max(width, height, 1)).to_pil()
     except (pypdfium2.PdfiumError, IndexError) as exc:
-        raise _RenderError(FileFailure.BROKEN, f"the PDF cannot be drawn: {exc}") from exc
-    return {
-        "original": None,
-        "media_type": PDF,
-        "width": None,
-        "height": None,
-        "taken_at": None,
-        "previews": _previews(picture, directory),
-    }
+        raise UnrenderableError(FileFailure.BROKEN, f"the PDF cannot be drawn: {exc}") from exc
+    _write_previews(picture, directory)
+    return {"original": False, "width": None, "height": None, "taken_at": None, "previews": True}
 
 
 def _cleaned(data: bytes, media_type: str) -> tuple[bytes, dict[str, Any]]:
     """The image without metadata, and the facts of it that are kept in the database."""
     with _decoded(data, media_type) as image:
         exif = Image.Exif()
-        exif.load(image.info.get("exif", b""))
-        orientation = exif.get(ORIENTATION_TAG, UPRIGHT)
-        if orientation not in ORIENTATIONS:
-            orientation = UPRIGHT
-        width, height = image.size
-        facts = _facts(width, height, orientation, exif)
+        orientation, taken_at = _from_exif(exif, image.info.get("exif", b""))
+        facts = _facts(image.width, image.height, orientation, taken_at)
     try:
         return strip(data, media_type, orientation), facts
     except UnknownVariantError as exc:
-        raise _RenderError(FileFailure.UNSUPPORTED, str(exc)) from exc
+        raise UnrenderableError(FileFailure.UNSUPPORTED, str(exc)) from exc
     except DamagedImageError as exc:
-        raise _RenderError(FileFailure.BROKEN, str(exc)) from exc
+        raise UnrenderableError(FileFailure.BROKEN, str(exc)) from exc
 
 
 def _heic_to_jpeg(data: bytes) -> tuple[bytes, dict[str, Any]]:
@@ -115,8 +102,9 @@ def _heic_to_jpeg(data: bytes) -> tuple[bytes, dict[str, Any]]:
     it decodes, and nothing but the pixels and the colour profile goes into the JPEG."""
     pillow_heif.register_heif_opener()
     with _decoded(data, HEIC) as image:
-        exif = image.getexif()
-        facts = _facts(image.width, image.height, UPRIGHT, exif)
+        # libheif has turned the picture already, whatever EXIF says.
+        _, taken_at = _from_exif(Image.Exif(), image.info.get("exif", b""))
+        facts = _facts(image.width, image.height, UPRIGHT, taken_at)
         profile = image.info.get("icc_profile")
         picture = _opaque(image)
         buffer = io.BytesIO()
@@ -130,23 +118,35 @@ def _decoded(data: bytes, media_type: str) -> Image.Image:
     try:
         image = Image.open(io.BytesIO(data))
         if image.format not in FORMATS[media_type]:
-            raise _RenderError(FileFailure.BROKEN, f"the content is {image.format}, not {media_type}")
+            raise UnrenderableError(FileFailure.BROKEN, f"the content is {image.format}, not {media_type}")
         # Checked before a pixel is decoded.
         if image.width * image.height > MAX_PIXELS:
-            raise _RenderError(FileFailure.TOO_MANY_PIXELS, f"{image.width} x {image.height} pixels")
+            raise UnrenderableError(FileFailure.TOO_MANY_PIXELS, f"{image.width} x {image.height} pixels")
         image.load()
     except Image.DecompressionBombError as exc:
-        raise _RenderError(FileFailure.TOO_MANY_PIXELS, str(exc)) from exc
+        raise UnrenderableError(FileFailure.TOO_MANY_PIXELS, str(exc)) from exc
     # What the decoders raise on damaged files; Pillow's UnidentifiedImageError is an OSError.
     except (OSError, SyntaxError, ValueError, EOFError) as exc:
-        raise _RenderError(FileFailure.BROKEN, f"the image cannot be read: {exc}") from exc
+        raise UnrenderableError(FileFailure.BROKEN, f"the image cannot be read: {exc}") from exc
     return image
 
 
-def _facts(width: int, height: int, orientation: int, exif: Image.Exif) -> dict[str, Any]:
+def _from_exif(exif: Image.Exif, raw: bytes) -> tuple[int, str | None]:
+    """The orientation and when the photo was taken. EXIF that cannot be read is no EXIF: it goes with the
+    rest of the metadata, and no viewer could have followed it either."""
+    try:
+        exif.load(raw)
+        orientation = exif.get(ORIENTATION_TAG, UPRIGHT)
+        taken_at = _taken_at(exif)
+    except UNREADABLE_EXIF:
+        return UPRIGHT, None
+    return (orientation if orientation in ORIENTATIONS else UPRIGHT), taken_at
+
+
+def _facts(width: int, height: int, orientation: int, taken_at: str | None) -> dict[str, Any]:
     if orientation in SIDEWAYS:
         width, height = height, width
-    return {"width": width, "height": height, "taken_at": _taken_at(exif)}
+    return {"width": width, "height": height, "taken_at": taken_at}
 
 
 def _taken_at(exif: Image.Exif) -> str | None:
@@ -171,7 +171,7 @@ def _taken_at(exif: Image.Exif) -> str | None:
     return taken.isoformat()
 
 
-def _previews(picture: Image.Image, directory: Path) -> dict[int, str]:
+def _write_previews(picture: Image.Image, directory: Path) -> None:
     """A WebP of each size, never larger than the picture; no metadata goes into them.
 
     Shrinks ``picture`` itself, the larger size first.
@@ -179,13 +179,12 @@ def _previews(picture: Image.Image, directory: Path) -> dict[int, str]:
     profile = picture.info.get("icc_profile") if picture.mode in ("RGB", "RGBA") else None
     if picture.mode not in ("RGB", "RGBA"):
         picture = picture.convert("RGBA" if picture.has_transparency_data else "RGB")
-    names = {}
     for size in sorted(PREVIEW_SIZES, reverse=True):
         picture.thumbnail((size, size), Image.Resampling.LANCZOS)
         picture.info = {}
-        names[size] = f"preview-{size}.webp"
-        picture.save(directory / names[size], "WEBP", quality=PREVIEW_QUALITY, icc_profile=profile, exif=b"", xmp=b"")
-    return names
+        picture.save(
+            directory / preview_name(size), "WEBP", quality=PREVIEW_QUALITY, icc_profile=profile, exif=b"", xmp=b""
+        )
 
 
 def _opaque(image: Image.Image) -> Image.Image:

@@ -11,6 +11,7 @@ from penaria.features.support.documents.domain.files import TRASH_RETENTION
 from penaria.features.support.documents.domain.repositories import DocumentsTransaction
 from penaria.features.support.documents.domain.storage import INCOMING_PREFIX, ObjectStorage, keys_of
 
+# Files deleted from storage per request and per transaction, so neither grows with the trash.
 PURGE_BATCH = 100
 # An upload older than this that no file waits for was left by an interrupted request.
 ABANDONED_UPLOAD_AGE = timedelta(days=1)
@@ -46,7 +47,7 @@ class SweepFiles:
             async with self._uow.transaction() as tx:
                 for file_id in expired:
                     await tx.files.delete(file_id)
-            logger.info("Deleted %d files that were in the trash for 30 days", len(expired))
+            logger.info("Deleted %d files that were in the trash for %d days", len(expired), TRASH_RETENTION.days)
 
     async def _forget_abandoned_uploads(self, before: datetime) -> None:
         keys = {}

@@ -25,7 +25,6 @@ from penaria.features.support.documents.use_cases.sweep import SweepFiles
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
 from penaria.features.support.identity.use_cases.homes import IdentityHomeTimezones
 from penaria.integrations.postgres.transaction import PenariaTransaction
-from penaria.integrations.s3.disabled import NoStorage
 from penaria.integrations.s3.storage import open_s3
 
 
@@ -49,8 +48,7 @@ class WorkerProvider(Provider):
     @provide
     async def storage(self) -> AsyncIterator[ObjectStorage]:
         if self._settings.s3 is None:
-            yield NoStorage()
-            return
+            raise RuntimeError("without PENARIA_S3__* the worker idles and never asks for the storage")
         async with open_s3(self._settings.s3) as storage:
             yield storage
 

@@ -36,11 +36,7 @@ async def load_readable(
     if not can_see(entity, ancestors, access):
         raise EntityNotFoundError(params={"entity_id": str(entity_id)})
     # A guest sees the places on the way to what is meant for guests (section 11.3).
-    if (
-        access.guest_view
-        and entity.privacy is not Privacy.GUEST_VISIBLE
-        and not await tx.entities.has_guest_visible_below(entity)
-    ):
+    if reads_by_name_only(entity, access) and not await tx.entities.has_guest_visible_below(entity):
         raise EntityNotFoundError(params={"entity_id": str(entity_id)})
     return entity, ancestors, access
 
@@ -60,10 +56,15 @@ def can_see(entity: Entity, ancestors: Sequence[Entity], access: Access) -> bool
     return access.can(Permission.ENTITIES_VIEW_PRIVATE) or all(e.privacy is not Privacy.PRIVATE for e in line)
 
 
+def reads_by_name_only(entity: Entity, access: Access) -> bool:
+    """Whether the actor, a guest, reads of the entity only its name and kind: it is not meant for guests."""
+    return access.guest_view and entity.privacy is not Privacy.GUEST_VISIBLE
+
+
 def as_seen(entity: Entity, access: Access) -> Entity:
     """The entity as the actor may read it: a guest learns only the name and kind of a place on the way
     to what is meant for guests (core-model.md, 11.3)."""
-    if not access.guest_view or entity.privacy is Privacy.GUEST_VISIBLE:
+    if not reads_by_name_only(entity, access):
         return entity
     return dataclasses.replace(entity, aliases=(), quantity=None, unit=None, verified_at=None, verified_by=None)
 

@@ -7,12 +7,11 @@ from pathlib import Path
 from penaria.features.support.documents.domain.storage import (
     ByteRange,
     FilesOffError,
-    ObjectStorage,
     StoredObject,
 )
 
 
-class NoStorage(ObjectStorage):
+class NoStorage:
     async def put(self, key: str, chunks: AsyncIterator[bytes], *, content_type: str) -> None:
         raise FilesOffError
 

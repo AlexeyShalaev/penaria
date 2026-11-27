@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import httpx
 import pytest
@@ -14,8 +15,14 @@ from sqlalchemy_foundation_kit import AsyncSQLAlchemyUnitOfWork
 from penaria.apps.worker.container import build_container
 from penaria.apps.worker.settings import Settings as WorkerSettings
 from penaria.features.shared.homes import HomeTimezones
-from penaria.features.support.documents.domain.processing import Rendered, Renderer, RendererCrashedError
+from penaria.features.support.documents.domain.processing import (
+    RETRY_DELAY,
+    Rendered,
+    Renderer,
+    RendererCrashedError,
+)
 from penaria.features.support.documents.domain.storage import ObjectStorage, StorageUnavailableError
+from penaria.features.support.documents.infra.sandbox import SandboxRenderer
 from penaria.features.support.documents.use_cases import processing
 from penaria.features.support.documents.use_cases.processing import ProcessNextFile
 from penaria.features.support.identity.use_cases.homes import IdentityHomeTimezones
@@ -23,9 +30,10 @@ from penaria.integrations.postgres.transaction import PenariaTransaction
 from penaria.integrations.s3.settings import S3Settings
 from penaria.integrations.s3.storage import S3Storage, open_s3
 from tests import images
-from tests.integration.apps.api.test_people import make_home
+from tests.integration.apps.api.test_people import make_home, ok
 from tests.integration.files.conftest import Run
 from tests.integration.files.helpers import detail, row, set_columns, upload
+from tests.integration.helpers import uow_of
 from tests.integration.storage import keys
 
 pytestmark = pytest.mark.integration
@@ -195,7 +203,10 @@ async def test_several_workers_never_take_the_same_file(
 
 
 async def test_a_worker_whose_lease_ran_out_writes_nothing(
-    api: httpx.AsyncClient, parts: tuple[Any, ObjectStorage, HomeTimezones], container: DishkaContainer
+    api: httpx.AsyncClient,
+    parts: tuple[Any, ObjectStorage, HomeTimezones],
+    container: DishkaContainer,
+    storage: S3Storage,
 ) -> None:
     file_id = await one_upload(api)
     uow, objects, zones = parts
@@ -209,7 +220,91 @@ async def test_a_worker_whose_lease_ran_out_writes_nothing(
     await ProcessNextFile(uow, objects, Overtaken(), zones).execute()
 
     assert (await row(container, file_id)).status == "processing"
+    # The other worker still needs the upload.
+    assert await keys(storage, f"incoming/{file_id}") == [f"incoming/{file_id}"]
+
+
+async def test_a_file_deleted_while_it_was_processed_leaves_nothing_in_storage(
+    api: httpx.AsyncClient,
+    parts: tuple[Any, ObjectStorage, HomeTimezones],
+    container: DishkaContainer,
+    storage: S3Storage,
+) -> None:
+    # A PDF, which the worker renders but does not require a clean copy of.
+    file_id = await one_upload(api, kind="manual", data=b"%PDF-1.7 soon gone")
+    uow, objects, zones = parts
+
+    class Deleting(Renderer):
+        async def render(self, source: Path, media_type: str, into: Path) -> Rendered:
+            async with (await uow_of(container)).transaction() as tx:
+                await tx.files.delete(UUID(file_id))
+            return Rendered()
+
+    await ProcessNextFile(uow, objects, Deleting(), zones).execute()
+
+    assert await keys(storage, f"files/{file_id}/") == []
+    assert await keys(storage, f"incoming/{file_id}") == []
+
+
+async def test_a_rename_made_while_the_file_is_processed_is_kept(
+    api: httpx.AsyncClient, parts: tuple[Any, ObjectStorage, HomeTimezones]
+) -> None:
+    ids = await make_home(api)
+    added = await upload(api, ids["towels"], "IMG_0001.HEIC", images.heic())
+    uow, objects, zones = parts
+
+    class Renaming(Renderer):
+        async def render(self, source: Path, media_type: str, into: Path) -> Rendered:
+            await ok(await api.patch(f"/files/{added['id']}", json={"name": "Kettle.heic"}))
+            return await SandboxRenderer().render(source, media_type, into)
+
+    await ProcessNextFile(uow, objects, Renaming(), zones).execute()
+
+    ready = await detail(api, added["id"])
+    # The new name, with the extension of what the file became.
+    assert (ready["status"], ready["name"]) == ("ready", "Kettle.jpg")
+
+
+async def test_a_retry_waits_from_the_crash_not_from_the_start(
+    api: httpx.AsyncClient, parts: tuple[Any, ObjectStorage, HomeTimezones], container: DishkaContainer
+) -> None:
+    file_id = await one_upload(api)
+    uow, objects, zones = parts
+    crashed_at: list[datetime] = []
+
+    class Slow(Renderer):
+        async def render(self, source: Path, media_type: str, into: Path) -> Rendered:
+            await asyncio.sleep(0.2)
+            crashed_at.append(datetime.now(UTC))
+            raise RendererCrashedError("rendering took longer than 120 s")
+
+    await ProcessNextFile(uow, objects, Slow(), zones).execute()
+
+    leased_until = (await row(container, file_id)).leased_until
+    assert leased_until is not None
+    assert leased_until >= crashed_at[0] + RETRY_DELAY
+
+
+async def test_an_image_without_a_clean_copy_is_never_stored_as_it_came(
+    api: httpx.AsyncClient, parts: tuple[Any, ObjectStorage, HomeTimezones], storage: S3Storage
+) -> None:
+    file_id = await one_upload(api)
+    uow, objects, zones = parts
+
+    # Counting answers as if there were nothing to clean.
+    await ProcessNextFile(uow, objects, Counting(), zones).execute()
+
     assert (await detail(api, file_id))["status"] == "processing"
+    assert await keys(storage, f"files/{file_id}/") == []
+
+
+async def test_a_damaged_pdf_is_kept_without_a_preview(api: httpx.AsyncClient, worker: Run) -> None:
+    file_id = await one_upload(api, kind="manual", data=b"%PDF-1.7 nothing a viewer could draw")
+
+    await worker()
+
+    ready = await detail(api, file_id)
+    assert (ready["status"], ready["has_preview"]) == ("ready", False)
 
 
 async def test_an_upload_missing_from_storage_fails_its_file(

@@ -6,9 +6,10 @@ from uuid import UUID
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
-from penaria.features.shared.access import Access, Permission
+from penaria.features.shared.access import Access
 from penaria.features.shared.actor import Actor
 from penaria.features.shared.journal import RecordedEvent
+from penaria.features.support.documents.domain.files import sees_every_file
 from penaria.features.support.documents.domain.repositories import DocumentsTransaction
 from penaria.features.support.documents.use_cases.access import FileAccess
 from penaria.features.support.documents.use_cases.events import FILE_EVENTS
@@ -27,10 +28,11 @@ class FileHistoryRedaction:
             return list(events)
         async with self._uow.query() as tx:
             files = await tx.files.get_many(named)
-            seen = await self._access.seen(tx, actor, list(files.values()))
+            attachments = await tx.files.attachments_of(files.keys())
+        seen = await self._access.see(actor, list(files.values()), attachments)
         shown = {one.file.id for one in seen if one.visible}
         # A file deleted for good has no rules left: it is named only to those who see every file here.
-        if access.can(Permission.ENTITIES_VIEW_PRIVATE) and access.can(Permission.DOCUMENTS_VIEW_FINANCIAL):
+        if sees_every_file(access):
             shown |= named - files.keys()
         return [
             replace(event, payload=_unnamed(event))

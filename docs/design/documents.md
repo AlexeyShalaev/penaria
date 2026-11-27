@@ -181,7 +181,7 @@ Step 1 (the server and the Compose install) settled what the sections above left
 - A PDF gets a preview of its first page when it can be drawn; a locked or damaged one is `ready` without.
 
 **The worker**
-- A file is taken under a lease of ten minutes and parsed in a child process with none of the server's environment, 2 GB of memory at most and two minutes. A crash is tried again after 30 seconds, three times in all, then the file is `failed` (`processing_failed`); a storage that is away costs no attempt.
+- A file is taken under a lease of ten minutes and parsed in a child process with none of the worker's environment, 2 GB of memory at most and two minutes. On Linux the worker is non-dumpable, so the child cannot read it through `/proc`, and takes from the child only facts and files of fixed names; Compose gives the worker no secret key. The child still runs as the worker's user on the worker's network: a separate user or sandbox is not part of this step. A crash is tried again after 30 seconds, three times in all, then the file is `failed` (`processing_failed`); a storage that is away costs no attempt.
 - The worker also empties the trash and, after a day, forgets uploads no file waits for. Without storage it idles.
 - Email stays with the api process.
 

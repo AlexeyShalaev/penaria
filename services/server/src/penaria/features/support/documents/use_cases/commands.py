@@ -8,11 +8,8 @@ from sqlalchemy_foundation_kit import AsyncUnitOfWork
 from penaria.features.shared.actor import Actor
 from penaria.features.support.documents.domain.files import (
     CoverNotAnImageError,
-    FileFailedError,
     FileKind,
     FileNotFoundInHomeError,
-    FileNotReadyError,
-    FileStatus,
     Visibility,
 )
 from penaria.features.support.documents.domain.repositories import DocumentsTransaction
@@ -159,11 +156,8 @@ class SetCover:
                 raise FileNotFoundInHomeError(params={"file_id": str(file_id)})
             require_edit(sight)
             require_not_archived(sight)
-            if seen.file.status is FileStatus.PROCESSING:
-                raise FileNotReadyError(params={"file_id": str(file_id)})
-            if seen.file.status is FileStatus.FAILED:
-                raise FileFailedError(params={"file_id": str(file_id)})
-            if not seen.file.is_image:
+            seen.file.ensure_ready()
+            if not seen.file.is_ready_image:
                 raise CoverNotAnImageError("only an image can be a cover")
             if not attachment.is_cover:
                 await tx.files.set_cover(file_id, entity_id)

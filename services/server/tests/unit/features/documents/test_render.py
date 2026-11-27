@@ -1,14 +1,18 @@
 """Rendering as the worker runs it: in a process of its own."""
 
+import asyncio
 import io
+import zlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PIL import Image
 
 from penaria.features.support.documents.domain.files import HEIC, JPEG, PDF, PNG, FileFailure
 from penaria.features.support.documents.domain.processing import Rendered, RendererCrashedError, UnrenderableError
+from penaria.features.support.documents.infra import sandbox
 from penaria.features.support.documents.infra.sandbox import SandboxRenderer
 from tests import images
 
@@ -139,7 +143,106 @@ async def test_rendering_that_takes_too_long_is_stopped(tmp_path: Path) -> None:
         await SandboxRenderer(timeout_seconds=0.001).render(source, JPEG, tmp_path)
 
 
-async def test_the_renderer_gets_none_of_the_servers_environment(tmp_path: Path) -> None:
-    # A child that dies is a crash, not an answer: here it is asked to read a file that is not there.
+async def test_the_renderer_gets_none_of_the_workers_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PENARIA_SECRET_KEY", "a-secret-of-the-tests-that-must-not-travel")
+    given: list[object] = []
+    start = asyncio.create_subprocess_exec
+
+    async def spying(*args: str, **kwargs: Any) -> asyncio.subprocess.Process:
+        given.append(kwargs.get("env"))
+        return await start(*args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spying)
+
+    await render(tmp_path, images.jpeg(), JPEG)
+
+    assert given == [{}]
+
+
+async def test_a_renderer_that_dies_is_a_crash(tmp_path: Path) -> None:
+    # Asked to read a file that is not there, the child ends with a traceback and no result.
     with pytest.raises(RendererCrashedError, match="code 1"):
         await SandboxRenderer().render(tmp_path / "missing", JPEG, tmp_path)
+
+
+@pytest.mark.parametrize("output", ["original", "result.json", "preview-320.webp"])
+async def test_a_link_the_renderer_leaves_is_not_followed(tmp_path: Path, output: str) -> None:
+    # What a renderer taken over by a crafted file might leave, to have the worker store what it reads.
+    secret = tmp_path / "secret"
+    secret.write_text('{"original": true, "previews": true, "width": 1, "height": 1, "taken_at": null}')
+    into = tmp_path / "work"
+    into.mkdir()
+    for name in ("original", "preview-320.webp", "preview-1600.webp"):
+        (into / name).write_bytes(b"x")
+    (into / "result.json").write_text(secret.read_text())
+    (into / output).unlink()
+    (into / output).symlink_to(secret)
+
+    with pytest.raises(RendererCrashedError, match="not a file of its own"):
+        sandbox._outcome(JPEG, into)
+
+
+def jpeg_with(exif: bytes) -> bytes:
+    out = io.BytesIO()
+    images.picture().save(out, "JPEG", exif=exif)
+    return out.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("exif", "taken_at"),
+    [
+        # Nothing a TIFF reader accepts.
+        (b"Exif\0\0garbage that is no TIFF", None),
+        (b"Exif\0\0MM\0*\xff\xff\xff\xff", None),
+        (b"Exif\0\0", None),
+    ],
+    ids=["no-tiff", "offset-past-the-end", "empty"],
+)
+async def test_a_photo_with_damaged_exif_is_cleaned_all_the_same(
+    tmp_path: Path, exif: bytes, taken_at: datetime | None
+) -> None:
+    rendered = await render(tmp_path, jpeg_with(exif), JPEG)
+
+    assert rendered.original is not None
+    assert b"Exif" not in rendered.original.read_bytes()
+    assert (rendered.width, rendered.height, rendered.taken_at) == (48, 32, taken_at)
+
+
+def dated(written: str, offset: str, orientation: int = 1) -> bytes:
+    exif = Image.Exif()
+    exif[images.ORIENTATION_TAG] = orientation
+    details = exif.get_ifd(images.EXIF_IFD)
+    details[0x9003] = written
+    details[0x9011] = offset
+    return exif.tobytes()
+
+
+@pytest.mark.parametrize(
+    ("exif", "taken_at"),
+    [
+        (dated("0000:00:00 00:00:00", "+03:00"), None),
+        (dated("2026:11:20 10:11:12", "bogus"), datetime(2026, 11, 20, 10, 11, 12)),
+        (
+            dated("2026:11:20 10:11:12", "+03:00", orientation=9),
+            datetime(2026, 11, 20, 10, 11, 12, tzinfo=MOSCOW_SUMMER),
+        ),
+    ],
+    ids=["zeros", "bad-offset", "orientation-out-of-range"],
+)
+async def test_what_a_camera_writes_wrong_is_left_out(tmp_path: Path, exif: bytes, taken_at: datetime | None) -> None:
+    rendered = await render(tmp_path, jpeg_with(exif), JPEG)
+
+    assert (rendered.width, rendered.height, rendered.taken_at) == (48, 32, taken_at)
+
+
+async def test_a_variant_that_cannot_be_cleaned_is_refused_as_unsupported(tmp_path: Path) -> None:
+    data = images.png()
+    # A critical chunk nobody knows, with its checksum, as a vendor's own format has.
+    unknown = b"\0\0\0\0CgBI" + zlib.crc32(b"CgBI").to_bytes(4, "big")
+
+    with pytest.raises(UnrenderableError) as raised:
+        await render(tmp_path, data[:33] + unknown + data[33:], PNG)
+
+    assert raised.value.reason is FileFailure.UNSUPPORTED

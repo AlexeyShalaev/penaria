@@ -81,6 +81,20 @@ def progressive_jpeg() -> bytes:
     return out.getvalue() + b"SECRET-TRAILER"
 
 
+def restart_jpeg() -> bytes:
+    """As cameras write them, with restart markers inside the compressed data."""
+    out = io.BytesIO()
+    picture(size=(160, 120)).save(out, "JPEG", restart_marker_blocks=1, exif=exif())
+    return out.getvalue() + b"SECRET-TRAILER"
+
+
+def cmyk_jpeg() -> bytes:
+    """With Adobe's marker, which says how its four colours are coded."""
+    out = io.BytesIO()
+    picture("CMYK").save(out, "JPEG", exif=exif())
+    return out.getvalue() + b"SECRET-TRAILER"
+
+
 def png(orientation: int | None = None) -> bytes:
     text = PngImagePlugin.PngInfo()
     text.add_text("Comment", "SECRET-TEXT")

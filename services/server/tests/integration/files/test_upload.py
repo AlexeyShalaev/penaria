@@ -13,6 +13,7 @@ from tests import images
 from tests.integration.apps.api.test_people import make_home, ok
 from tests.integration.files.conftest import Run
 from tests.integration.files.helpers import detail, listed, upload
+from tests.integration.helpers import NewClient
 from tests.integration.storage import keys, read
 
 pytestmark = pytest.mark.integration
@@ -99,8 +100,18 @@ async def test_every_image_format_ends_up_clean(
     assert images.SECRET not in original
     with Image.open(io.BytesIO(original)) as image:
         assert dict(image.getexif()) == {}
+    content = await api.get(f"/files/{added['id']}/content")
+    assert content.headers["content-type"] == stored_type
+    assert content.headers["content-disposition"].startswith(f'inline; filename="{stored_name}"')
+    assert content.headers["content-security-policy"] == (
+        "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'; sandbox"
+    )
+    assert content.headers["x-content-type-options"] == "nosniff"
     preview = await api.get(f"/files/{added['id']}/preview/320")
     assert (preview.status_code, preview.headers["content-type"]) == (200, "image/webp")
+    stem = stored_name.rsplit(".", 1)[0]
+    assert preview.headers["content-disposition"].startswith(f'inline; filename="{stem}.webp"')
+    assert "accept-ranges" not in preview.headers
     assert images.SECRET not in preview.content
 
 
@@ -291,8 +302,9 @@ async def test_a_request_that_says_it_is_too_long_is_refused_before_it_is_read(a
         (b'--edge\r\nContent-Disposition: form-data; name="other"\r\n\r\nx\r\n--edge--\r\n', "invalid_upload"),
         (multipart("empty.bin", b""), "empty_file"),
         (multipart("", b"data"), "invalid_file"),
+        (b'--edge\r\nContent-Disposition: form-data; name="file"\r\n\r\nx\r\n--edge--\r\n', "invalid_upload"),
     ],
-    ids=["cut-short", "two-files", "no-file", "empty", "no-name"],
+    ids=["cut-short", "two-files", "no-file", "empty", "no-name", "no-filename"],
 )
 async def test_an_upload_that_is_not_one_whole_file_is_refused(
     api: httpx.AsyncClient, storage: S3Storage, body: bytes, code: str
@@ -347,6 +359,37 @@ async def test_without_a_session_nothing_is_read_or_added(
     ]
 
     assert [answer.status_code for answer in answers] == [401, 401, 401, 401]
+
+
+async def test_an_upload_the_thing_no_longer_takes_when_it_ends_is_dropped(
+    api: httpx.AsyncClient, new_client: NewClient, storage: S3Storage
+) -> None:
+    ids = await make_home(api)
+    before = await keys(storage)
+    # A second browser of the owner's: the first one is busy uploading.
+    other = new_client(cookies=api.cookies)
+
+    async def slow() -> AsyncIterator[bytes]:
+        yield multipart("late.bin", b"", end=False)
+        await ok(await other.post(f"/entities/{ids['towels']}:archive", json={"reason": "sold", "version": 1}))
+        yield b"x" * 100 + b"\r\n--edge--\r\n"
+
+    response = await send(api, ids["towels"], slow())
+
+    assert (response.status_code, response.json()["code"]) == (409, "entity_archived")
+    assert await keys(storage) == before
+    assert await listed(api, ids["towels"]) == []
+
+
+async def test_a_file_the_storage_has_lost_says_so(api: httpx.AsyncClient, worker: Run, storage: S3Storage) -> None:
+    ids = await make_home(api)
+    added = await upload(api, ids["towels"], "a.jpg", images.jpeg())
+    await worker()
+    await storage.delete([f"files/{added['id']}/original"])
+
+    response = await api.get(f"/files/{added['id']}/content")
+
+    assert (response.status_code, response.json()["code"]) == (404, "content_missing")
 
 
 class TestWithoutStorage:

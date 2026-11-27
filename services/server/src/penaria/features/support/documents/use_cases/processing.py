@@ -74,14 +74,15 @@ class ProcessNextFile:
                 await self._process(file)
         except StorageUnavailableError:
             logger.warning("The storage failed while processing file %s; it is tried again", file.id)
-            await self._give_back(file, now + RETRY_DELAY)
+            await self._give_back(file, datetime.now(UTC) + RETRY_DELAY)
         except RendererCrashedError as exc:
             logger.warning("Processing file %s crashed (attempt %d): %s", file.id, file.attempts, exc)
             if file.attempts >= MAX_ATTEMPTS:
                 await self._fail(file, FileFailure.PROCESSING_FAILED)
             else:
                 async with self._uow.transaction() as tx:
-                    await tx.files.postpone(file, now + RETRY_DELAY)
+                    # From now, not from when it was taken: a render may have used up its deadline.
+                    await tx.files.postpone(file, datetime.now(UTC) + RETRY_DELAY)
         except asyncio.CancelledError:
             # The worker is stopping: another one, or this one after its restart, takes the file at once.
             await asyncio.shield(self._give_back(file, None))
@@ -107,7 +108,11 @@ class ProcessNextFile:
 
     async def _render(self, file: File, source: Path, work: Path) -> Rendered:
         if file.media_type in UPLOADED_IMAGES:
-            return await self._renderer.render(source, file.media_type, work)
+            rendered = await self._renderer.render(source, file.media_type, work)
+            # Never the upload in place of the clean copy: it still says where the photo was taken.
+            if rendered.original is None:
+                raise RendererCrashedError("the renderer produced no cleaned original of an image")
+            return rendered
         if file.media_type == PDF:
             # A PDF is kept byte for byte whether or not its first page can be drawn.
             try:
@@ -117,9 +122,8 @@ class ProcessNextFile:
         return Rendered()
 
     async def _store(self, file: File, source: Path, rendered: Rendered) -> None:
-        original = rendered.original or source
-        if file.media_type == HEIC:
-            file.name = name_as_jpeg(file.name)
+        original = source if rendered.original is None else rendered.original
+        converted = file.media_type == HEIC
         file.media_type = rendered.media_type or file.media_type
         file.size = original.stat().st_size
         file.sha256 = await asyncio.to_thread(_sha256, original)
@@ -130,7 +134,7 @@ class ProcessNextFile:
         await self._storage.put_file(original_key(file.id), original, content_type=file.media_type)
         for size, preview in rendered.previews.items():
             await self._storage.put_file(preview_key(file.id, size), preview, content_type=PREVIEW_TYPE)
-        await self._finish(file)
+        await self._finish(file, converted=converted)
 
     async def _when_taken(self, file: File, taken_at: datetime | None) -> datetime | None:
         """A camera that notes no offset writes the time of where it is: the home's, for a home's photos."""
@@ -144,10 +148,14 @@ class ProcessNextFile:
         file.failure = reason
         await self._finish(file)
 
-    async def _finish(self, file: File) -> None:
+    async def _finish(self, file: File, *, converted: bool = False) -> None:
         async with self._uow.transaction() as tx:
-            written = await tx.files.finish(file)
-            gone = not written and await tx.files.get(file.id) is None
+            # The name as it is now: someone may have renamed the file while it was processed.
+            current = await tx.files.get(file.id, for_update=True)
+            if current is not None:
+                file.name = name_as_jpeg(current.name) if converted else current.name
+            written = current is not None and await tx.files.finish(file)
+            gone = current is None
         if written:
             # Nothing may read the upload again: the clean original stands for it, or nothing does.
             await self._storage.delete([incoming_key(file.id)])

@@ -118,6 +118,8 @@ async def test_a_removed_file_comes_back_where_it_was(
     again = await maria.post(f"/files/{photo}:restore")
 
     assert restored["removed_at"] is None
+    # It was the chosen cover of the towels; being removed, it stopped being one.
+    assert [place["is_cover"] for place in restored["entities"]] == [False, False]
     assert (again.status_code, again.json()["code"]) == (409, "file_not_removed")
     assert await listed(api, ids["towels"]) == ["towels.jpg"]
     assert await listed(api, ids["kitchen"]) == ["towels.jpg"]
@@ -232,6 +234,7 @@ async def test_history_names_a_file_only_to_those_who_may_see_it(
     receipt = (await upload(api, towels, "bill 120.pdf", images.pdf(), kind="receipt"))["id"]
     await ok(await api.patch(f"/files/{receipt}", json={"name": "bill 99.pdf"}))
     contractor = await member(api, new_client, ids["home"], "contractor", "electrician")
+    maria = await member(api, new_client, ids["home"], "family", "maria")
 
     seen = await history(contractor, towels)
     changes = await ok(await contractor.get(f"/entities/{towels}/history"))
@@ -251,4 +254,56 @@ async def test_history_names_a_file_only_to_those_who_may_see_it(
     await sweep()
 
     assert [name for _, name in await history(contractor, towels)] == [None] * 5
-    assert None not in [name for _, name in await history(api, towels)]
+    # She sees receipts but nothing private, so not every file there could have been hers to see.
+    assert [name for _, name in await history(maria, towels)] == [None] * 5
+    assert [name for _, name in await history(api, towels)] == [
+        "bill 99.pdf",
+        "manual.pdf",
+        "bill 99.pdf",
+        "bill 120.pdf",
+        "manual.pdf",
+    ]
+
+
+async def test_what_a_command_refuses(api: httpx.AsyncClient, worker: Run) -> None:
+    ids = await make_home(api)
+    towels, kitchen = ids["towels"], ids["kitchen"]
+    photo = (await upload(api, towels, "one.jpg", images.jpeg()))["id"]
+    manual = (await upload(api, towels, "manual.pdf", images.pdf(), kind="manual"))["id"]
+    broken = (await upload(api, towels, "broken.jpg", images.jpeg()[:300]))["id"]
+    gone = (await upload(api, towels, "gone.txt", b"text", kind="other"))["id"]
+    await worker()
+    await ok(await api.delete(f"/files/{gone}"), 204)
+
+    refused = [
+        await api.put(f"/entities/{kitchen}/files/{gone}"),
+        await api.delete(f"/entities/{kitchen}/files/{photo}"),
+        await api.put(f"/entities/{towels}/cover", json={"file_id": broken}),
+        await api.put(f"/entities/{kitchen}/cover", json={"file_id": photo}),
+        await api.patch(f"/files/{manual}", json={"kind": "photo"}),
+    ]
+    await ok(await api.post(f"/entities/{towels}:archive", json={"reason": "discarded", "version": 1}))
+    on_archived = await api.put(f"/entities/{towels}/cover", json={"file_id": photo})
+
+    assert [(r.status_code, r.json()["code"]) for r in [*refused, on_archived]] == [
+        (409, "file_removed"),
+        (404, "file_not_found"),
+        (409, "file_failed"),
+        (404, "file_not_found"),
+        (400, "not_a_photo"),
+        (409, "entity_archived"),
+    ]
+
+
+async def test_a_change_that_changes_nothing_is_not_journalled(
+    api: httpx.AsyncClient, worker: Run, container: DishkaContainer
+) -> None:
+    ids = await make_home(api)
+    photo = (await upload(api, ids["towels"], "one.jpg", images.jpeg()))["id"]
+    await worker()
+
+    await ok(await api.patch(f"/files/{photo}", json={"name": "one.jpg", "kind": "photo", "visibility": "guests"}))
+    for _ in range(2):
+        await ok(await api.put(f"/entities/{ids['towels']}/cover", json={"file_id": photo}), 204)
+
+    assert [type_ for type_, _ in await file_events(container)] == ["file.added", "file.cover_set"]

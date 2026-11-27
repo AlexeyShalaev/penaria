@@ -34,8 +34,9 @@ from penaria.features.support.documents.use_cases.queries import (
     ReadContent,
 )
 from penaria.features.support.documents.use_cases.upload import FilesConfig, FileTooLargeError, UploadFile
-from penaria.features.support.documents.use_cases.views import EntityFile, FileDetail, FileView, Place
+from penaria.features.support.documents.use_cases.views import EntityFile, FileDetail, FilePlace, FileView
 
+# One call covers a screen: a place with hundreds of things, not a whole home's inventory at once.
 COVERS_MAX = 500
 
 
@@ -125,7 +126,7 @@ class FilePlaceOut(BaseModel):
     can_detach: bool
 
     @classmethod
-    def of(cls, place: Place) -> FilePlaceOut:
+    def of(cls, place: FilePlace) -> FilePlaceOut:
         return cls(
             entity_id=place.entity_id, names=list(place.names), is_cover=place.is_cover, can_detach=place.can_detach
         )
@@ -169,7 +170,7 @@ async def list_entity_files(entity_id: UUID, scope: UnitScopeDep) -> EntityFiles
     found = await (await scope.get(ListEntityFiles)).execute(await scope.get(Actor), entity_id)
     return EntityFilesOut(
         files=[EntityFileOut.of_entry(entry) for entry in found.files],
-        add_kinds=[FileKind(kind) for kind in found.add_kinds],
+        add_kinds=found.add_kinds,
     )
 
 

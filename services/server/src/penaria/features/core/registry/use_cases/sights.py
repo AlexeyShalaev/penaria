@@ -6,9 +6,8 @@ from uuid import UUID
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
 from penaria.features.core.registry.domain.entity import Entity
-from penaria.features.core.registry.domain.kinds import Privacy
 from penaria.features.core.registry.domain.repositories import RegistryTransaction
-from penaria.features.core.registry.use_cases.access import can_see
+from penaria.features.core.registry.use_cases.access import can_see, reads_by_name_only
 from penaria.features.shared.access import Access, AccessPolicy
 from penaria.features.shared.actor import Actor
 from penaria.features.shared.sights import Sight
@@ -27,34 +26,30 @@ class RegistrySights:
             above = {step for entity in entities.values() for step in entity.path} - entities.keys()
             line = {**entities, **await tx.entities.get_many(above)}
         accesses = await self._accesses(actor, list(entities.values()))
-        seen = {
-            entity.id: (entity, [line[step] for step in entity.path[:-1]], accesses[entity.id])
-            for entity in entities.values()
-            if can_see(entity, [line[step] for step in entity.path[:-1]], accesses[entity.id])
-        }
-        # A guest reads a place that is not meant for guests only by name, and only on the way to what is.
-        by_name_only = {
-            entity_id
-            for entity_id, (entity, _, access) in seen.items()
-            if access.guest_view and entity.privacy is not Privacy.GUEST_VISIBLE
-        }
+        seen = []
+        for entity in entities.values():
+            ancestors = [line[step] for step in entity.path[:-1]]
+            if can_see(entity, ancestors, accesses[entity.id]):
+                seen.append((entity, ancestors, accesses[entity.id]))
+        by_name_only = [entity for entity, _, access in seen if reads_by_name_only(entity, access)]
+        # A place read by name only is read at all only on the way to what is meant for guests.
         on_the_way: set[UUID] = set()
         if by_name_only:
             async with self._uow.query() as tx:
-                for entity_id in by_name_only:
-                    if await tx.entities.has_guest_visible_below(seen[entity_id][0]):
-                        on_the_way.add(entity_id)
+                for entity in by_name_only:
+                    if await tx.entities.has_guest_visible_below(entity):
+                        on_the_way.add(entity.id)
         return {
             entity.id: Sight(
                 entity_id=entity.id,
                 home_id=entity.home_id,
                 names=(*(ancestor.name for ancestor in ancestors), entity.name),
                 access=access,
-                contents=entity.id not in by_name_only,
+                contents=not reads_by_name_only(entity, access),
                 archived=entity.archived,
             )
-            for entity, ancestors, access in seen.values()
-            if entity.id not in by_name_only or entity.id in on_the_way
+            for entity, ancestors, access in seen
+            if not reads_by_name_only(entity, access) or entity.id in on_the_way
         }
 
     async def _accesses(self, actor: Actor, entities: list[Entity]) -> dict[UUID, Access]:

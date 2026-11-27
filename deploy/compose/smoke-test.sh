@@ -130,6 +130,16 @@ check "http://localhost:$port"
 
 echo "== files"
 check_files
+# The worker opens what strangers made: it has no secret key, and a process beside it, as a renderer is,
+# cannot read what it does have.
+if "${project[@]}" exec -T penaria-worker printenv PENARIA_SECRET_KEY >/dev/null; then
+    echo "the worker has the secret key" >&2
+    exit 1
+fi
+if "${project[@]}" exec -T penaria-worker cat /proc/1/environ >/dev/null 2>&1; then
+    echo "the worker's environment can be read by another process" >&2
+    exit 1
+fi
 
 if [ "${1:-}" = "--https" ]; then
     echo "== the HTTPS overlay"

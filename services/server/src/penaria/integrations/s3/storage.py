@@ -14,7 +14,6 @@ from botocore.exceptions import BotoCoreError, ClientError
 from penaria.features.support.documents.domain.storage import (
     ByteRange,
     ObjectMissingError,
-    ObjectStorage,
     StorageUnavailableError,
     StoredObject,
 )
@@ -64,7 +63,7 @@ async def open_s3(settings: S3Settings) -> AsyncIterator[S3Storage]:
         yield S3Storage(client, settings.bucket, settings.region)
 
 
-class S3Storage(ObjectStorage):
+class S3Storage:
     def __init__(self, client: S3Client, bucket: str, region: str) -> None:
         self._client = client
         self._bucket = bucket
@@ -86,6 +85,7 @@ class S3Storage(ObjectStorage):
             else:
                 await self._client.create_bucket(
                     Bucket=self._bucket,
+                    # The stubs list AWS's regions only; self-hosted storages have their own.
                     CreateBucketConfiguration={"LocationConstraint": self._region},  # type: ignore[typeddict-item]
                 )
         return True
@@ -148,6 +148,7 @@ class S3Storage(ObjectStorage):
         extra = {} if byte_range is None else {"Range": f"bytes={byte_range.first}-{byte_range.last}"}
         with _reported("get_object"):
             try:
+                # A dict, so that Range is only sent when asked for: the stubs cannot type that.
                 response = await self._client.get_object(Bucket=self._bucket, Key=key, **extra)  # type: ignore[arg-type]
             except ClientError as exc:
                 if exc.response["Error"]["Code"] in MISSING_CODES:

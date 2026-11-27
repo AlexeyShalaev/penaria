@@ -1,5 +1,6 @@
 """Reading files."""
 
+import logging
 from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -13,9 +14,6 @@ from penaria.features.support.documents.domain.files import (
     TRASH_RETENTION,
     Attachment,
     File,
-    FileFailedError,
-    FileNotReadyError,
-    FileStatus,
     cover_of,
 )
 from penaria.features.support.documents.domain.repositories import DocumentsTransaction
@@ -30,6 +28,8 @@ from penaria.features.support.documents.domain.storage import (
 )
 from penaria.features.support.documents.use_cases.access import FileAccess, kinds_to_add, may_edit
 from penaria.features.support.documents.use_cases.views import EntityFile, EntityFiles, FileDetail, FileView
+
+logger = logging.getLogger(__name__)
 
 
 class PreviewNotFoundError(NotFoundError):
@@ -48,7 +48,8 @@ class ListEntityFiles:
             return EntityFiles(files=[], add_kinds=[])
         async with self._uow.query() as tx:
             attached = await tx.files.attached_to([entity_id])
-            seen = await self._access.seen(tx, actor, [file for _, file in attached])
+            attachments = await tx.files.attachments_of([file.id for _, file in attached])
+        seen = await self._access.see(actor, [file for _, file in attached], attachments)
         visible = [(attachment, one) for (attachment, _), one in zip(attached, seen, strict=True) if one.visible]
         cover = cover_of([(attachment, one.file) for attachment, one in visible])
         files = [
@@ -56,11 +57,11 @@ class ListEntityFiles:
                 view=FileView.of(one),
                 is_cover=one.file.id == cover,
                 can_detach=may_edit(sight),
-                can_set_cover=may_edit(sight) and not sight.archived and one.file.is_image,
+                can_set_cover=may_edit(sight) and not sight.archived and one.file.is_ready_image,
             )
             for _, one in visible
         ]
-        return EntityFiles(files=files, add_kinds=[kind.value for kind in kinds_to_add(sight)])
+        return EntityFiles(files=files, add_kinds=kinds_to_add(sight))
 
 
 class FindCovers:
@@ -74,12 +75,12 @@ class FindCovers:
         """By entity id; an entity without a cover the actor sees, or not read by it, is left out."""
         async with self._uow.query() as tx:
             attached = await tx.files.attached_to(entity_ids)
-            files = {file.id: file for _, file in attached if file.is_image}
-            seen = {one.file.id: one for one in await self._access.seen(tx, actor, list(files.values()))}
+            files = {file.id: file for _, file in attached if file.is_ready_image}
+            attachments = await tx.files.attachments_of(files.keys())
+        seen = {one.file.id: one for one in await self._access.see(actor, list(files.values()), attachments)}
         by_entity: dict[UUID, list[tuple[Attachment, File]]] = {}
         for attachment, file in attached:
-            # What the actor does not see there, because the file or the entity's contents are not for it,
-            # cannot be a cover for it.
+            # A cover is a file the actor sees, on an entity whose contents it reads.
             one = seen.get(file.id)
             sight = None if one is None else one.sights.get(attachment.entity_id)
             if one is not None and one.visible and sight is not None and sight.contents:
@@ -92,14 +93,11 @@ class FindCovers:
 
 
 class GetFile:
-    def __init__(self, uow: AsyncUnitOfWork[DocumentsTransaction], access: FileAccess) -> None:
-        self._uow = uow
+    def __init__(self, access: FileAccess) -> None:
         self._access = access
 
     async def execute(self, actor: Actor, file_id: UUID) -> FileDetail:
-        async with self._uow.query() as tx:
-            seen = await self._access.load(tx, actor, file_id, datetime.now(UTC))
-        return FileDetail.of(seen)
+        return FileDetail.of(await self._access.read(actor, file_id, datetime.now(UTC)))
 
 
 class ListTrash:
@@ -113,7 +111,8 @@ class ListTrash:
         now = datetime.now(UTC)
         async with self._uow.query() as tx:
             files = await tx.files.trash_of(home_id, now - TRASH_RETENTION)
-            seen = await self._access.seen(tx, actor, files)
+            attachments = await tx.files.attachments_of([file.id for file in files])
+        seen = await self._access.see(actor, files, attachments)
         return [FileDetail.of(one) for one in seen if one.readable(now)]
 
 
@@ -138,7 +137,10 @@ class Content:
         try:
             return await self.storage.open(key, byte_range)
         except ObjectMissingError as exc:
-            raise ContentMissingError(f"file {self.file.id} has no object in storage", public=False) from exc
+            logger.error("The storage has lost the object %s of file %s", key, self.file.id)  # noqa: TRY400
+            raise ContentMissingError(
+                "the file is no longer in storage", params={"file_id": str(self.file.id)}
+            ) from exc
 
 
 class ContentMissingError(NotFoundError):
@@ -148,8 +150,7 @@ class ContentMissingError(NotFoundError):
 
 
 class ReadContent:
-    def __init__(self, uow: AsyncUnitOfWork[DocumentsTransaction], access: FileAccess, storage: ObjectStorage) -> None:
-        self._uow = uow
+    def __init__(self, access: FileAccess, storage: ObjectStorage) -> None:
         self._access = access
         self._storage = storage
 
@@ -164,10 +165,6 @@ class ReadContent:
         return Content(file=file, media_type=PREVIEW_TYPE, preview=size, storage=self._storage)
 
     async def _ready(self, actor: Actor, file_id: UUID) -> File:
-        async with self._uow.query() as tx:
-            file = (await self._access.load(tx, actor, file_id, datetime.now(UTC))).file
-        if file.status is FileStatus.PROCESSING:
-            raise FileNotReadyError(params={"file_id": str(file_id)})
-        if file.status is FileStatus.FAILED:
-            raise FileFailedError(params={"file_id": str(file_id)})
+        file = (await self._access.read(actor, file_id, datetime.now(UTC))).file
+        file.ensure_ready()
         return file

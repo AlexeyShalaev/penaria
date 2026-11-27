@@ -151,10 +151,10 @@ class UploadFile:
         size: int,
     ) -> FileDetail:
         now = datetime.now(UTC)
+        # Again: a long upload leaves time for the access or the entity to change.
+        sight = await self._check_target(actor, entity_id, kind)
         async with self._uow.transaction() as tx:
-            # Again: a long upload leaves time for the access or the entity to change.
-            sight = await self._check_target(actor, entity_id, kind)
-            file = File.new(
+            file = File.create(
                 file_id=file_id,
                 home_id=sight.home_id,
                 kind=kind,
@@ -167,8 +167,7 @@ class UploadFile:
             await tx.files.add(file)
             await tx.files.attach(file.id, entity_id)
             await tx.journal.append([file_event("file.added", actor, file, entity_id)])
-            seen = await self._access.load(tx, actor, file.id, now)
-        return FileDetail.of(seen)
+        return FileDetail.of(await self._access.read(actor, file.id, now))
 
     def _too_large(self) -> FileTooLargeError:
         return FileTooLargeError(

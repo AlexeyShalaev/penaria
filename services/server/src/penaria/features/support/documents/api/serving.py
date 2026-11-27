@@ -18,6 +18,8 @@ IMAGE_CSP = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; fram
 # The viewer's own embed and styles, and no `sandbox`: some Chromium versions refuse to open their PDF
 # viewer in a sandboxed document, and `default-src 'none'` forbids script already.
 PDF_CSP = "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
+# What is answered as these is never compressed: it would break ranges and ETags, and mostly is already.
+UNCOMPRESSED_TYPES = (PDF, UNKNOWN)
 
 
 async def serve(request: Request, content: Content, filename: str) -> Response:
@@ -74,8 +76,13 @@ def _is_number(text: str) -> bool:
     return text.isascii() and text.isdigit()
 
 
+def _shown(media_type: str) -> bool:
+    """Whether the browser shows it; everything else it only downloads."""
+    return media_type in STORED_IMAGES or media_type == PDF
+
+
 def _headers(content: Content, filename: str) -> dict[str, str]:
-    shown = content.media_type in STORED_IMAGES or content.media_type == PDF
+    shown = _shown(content.media_type)
     if content.media_type == PDF:
         policy = PDF_CSP
     elif shown:
@@ -97,7 +104,7 @@ def _headers(content: Content, filename: str) -> dict[str, str]:
 
 def _served_type(media_type: str) -> str:
     # What is not shown is only ever downloaded, whatever it is.
-    return media_type if media_type in STORED_IMAGES or media_type == PDF else UNKNOWN
+    return media_type if _shown(media_type) else UNKNOWN
 
 
 def disposition(kind: str, filename: str) -> str:

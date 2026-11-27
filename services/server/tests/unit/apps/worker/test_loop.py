@@ -48,6 +48,20 @@ async def test_the_loop_survives_a_failed_pass_and_beats_after_a_good_one(
     assert (tmp_path / "alive").exists()
 
 
+async def test_a_worker_whose_passes_all_fail_does_not_beat(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(loop, "POLL_SECONDS", 0)
+    stop = asyncio.Event()
+
+    class Away:
+        async def execute(self) -> bool:
+            stop.set()
+            raise ConnectionError("the database is away")
+
+    await loop.process_files(Away(), Sweeper(), stop, tmp_path / "alive")  # type: ignore[arg-type]
+
+    assert not (tmp_path / "alive").exists()
+
+
 async def test_without_storage_the_worker_idles_until_it_is_stopped(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

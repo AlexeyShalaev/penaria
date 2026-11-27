@@ -68,7 +68,7 @@ A file is at most 50 MB. To change that, set `PENARIA_FILES__MAX_SIZE` (bytes) i
 
 ## More settings
 
-The server's other settings, such as sign-in with your identity provider, go into a file named `server.env` in this folder, one `PENARIA_...=value` per line; [the server's README](../../services/server/README.md) lists them. A mailbox for outgoing email is easier to connect in the web app: Settings, as the install's admin.
+The server's other settings, such as sign-in with your identity provider, go into a file named `server.env` in this folder, one `PENARIA_...=value` per line; [the server's README](../../services/server/README.md) lists them. The worker does not read it: it opens what strangers made, so it is given only where the database and the files are. A mailbox for outgoing email is easier to connect in the web app: Settings, as the install's admin.
 
 The server stops at start when it meets a `PENARIA_` setting it does not know, so a misspelt one never goes unnoticed: `docker compose logs penaria-server` names it.
 
@@ -105,13 +105,25 @@ docker compose pull
 docker compose up -d
 ```
 
-**From 0.1.0**, which kept no files, add the storage's password to `.env` before starting the new version (the backup of 0.1.0 is the database alone):
+**From 0.1.0**, which kept no files, two things differ. Back up before you check out the new version, and the database is all there is to back up:
+
+```sh
+docker compose exec -T postgres pg_dump -U penaria -Fc penaria > penaria-$(date +%F).dump
+```
+
+Then, before starting the new version, add the storage's password to `.env`:
 
 ```sh
 printf '\nS3_PASSWORD=%s\n' "$(openssl rand -hex 24)" >> .env
 ```
 
-To go back to the version you had, restore the backup you took before upgrading: an older server does not understand a newer database.
+To go back to the version you had: an older server does not understand a newer database, so restore the backup you took before upgrading into an empty database. Stop everything **while the new version's files are still checked out**, so that the containers the old version does not know are removed too, delete the data (have the backup first), then check out the old version and restore as its guide says:
+
+```sh
+docker compose down --remove-orphans
+docker volume rm penaria_postgres penaria_s3
+git checkout v<old version>
+```
 
 ## Day to day
 

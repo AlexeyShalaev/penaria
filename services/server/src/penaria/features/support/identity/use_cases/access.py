@@ -20,13 +20,12 @@ class GrantAccessPolicy:
         self._uow = uow
 
     async def access(self, actor: Actor, home_id: UUID, path: Sequence[UUID]) -> Access:
-        principal_type, principal_id = principal_of(actor)
-        async with self._uow.query() as tx:
-            roles = await tx.grants.applicable(principal_type, principal_id, home_id, path, datetime.now(UTC))
-        return access_of(roles)
+        [access] = await self.accesses(actor, home_id, [path])
+        return access
 
     async def accesses(self, actor: Actor, home_id: UUID, paths: Sequence[Sequence[UUID]]) -> list[Access]:
         principal_type, principal_id = principal_of(actor)
         async with self._uow.query() as tx:
             scoped = await tx.grants.scoped_roles(principal_type, principal_id, home_id, datetime.now(UTC))
+        # A grant covers a place when it is for the whole home or for the place or one above it.
         return [access_of([role for scope, role in scoped if scope is None or scope in path]) for path in paths]

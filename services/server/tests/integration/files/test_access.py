@@ -1,13 +1,18 @@
 """Who sees a file, and who may change it (docs/design/documents.md, 6)."""
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
 import httpx
 import pytest
+from servicewright import BootstrapContext, HealthRegistry, ServiceContext
 from servicewright.adapters.dishka import DishkaContainer
 
+from penaria.apps.api.container import build_container
+from penaria.apps.api.entrypoint import build_http
+from penaria.apps.api.settings import Settings
 from penaria.features.support.identity.domain.models import Role
 from tests import images
 from tests.integration.apps.api.test_devices import add_device, bearer
@@ -288,3 +293,58 @@ async def test_the_family_role_of_a_new_home_sees_receipts(api: httpx.AsyncClien
     assert presets.keys() == {"owner", "admin", "family", "guest", "contractor"}
     holding = {role["preset"] for role in listed_roles if "documents.view_financial" in role["permissions"]}
     assert holding == {"family"}
+
+
+async def test_access_over_one_place_reaches_only_the_files_inside_it(
+    api: httpx.AsyncClient, new_client: NewClient, shelf: Shelf
+) -> None:
+    ids = shelf.ids
+    kitchen_manual = (await upload(api, ids["kitchen"], "hob.pdf", images.pdf(), kind="manual"))["id"]
+    electrician = await member(api, new_client, ids["home"], "contractor", "ivan", scope_entity_id=ids["kitchen"])
+    tablet = await add_device(api, ids["home"], preset="family", name="Tablet", scope_entity_id=ids["kitchen"])
+    device = bearer(new_client, tablet["token"])
+
+    for client in (electrician, device):
+        assert await listed(client, ids["kitchen"]) == ["hob.pdf"]
+        assert (await client.get(f"/files/{kitchen_manual}")).status_code == 200
+        assert (await client.get(f"/files/{shelf.files['manual.pdf']}")).status_code == 404
+        elsewhere = await client.get(f"/entities/{ids['towels']}/files")
+        assert (elsewhere.status_code, elsewhere.json()["code"]) == (404, "entity_not_found")
+        found = await ok(await client.post("/covers:find", json={"entity_ids": [ids["towels"], ids["kitchen"]]}))
+        assert found == []
+
+
+@pytest.fixture
+async def one_connection(
+    settings: Settings, api: httpx.AsyncClient, new_client: NewClient
+) -> AsyncIterator[httpx.AsyncClient]:
+    """The owner's browser against a second api on the same data, whose pool holds a single connection."""
+    pool = settings.database.pool.model_copy(update={"size": 1, "max_overflow": 0, "timeout": 2.0})
+    small = settings.model_copy(update={"database": settings.database.model_copy(update={"pool": pool})})
+    container = build_container(small)
+    async with container.app_scope() as app_scope:
+        bootstrap = BootstrapContext(settings=small, service_name="penaria-api", container=container)
+        context = ServiceContext(bootstrap=bootstrap, app_scope=app_scope, health=HealthRegistry())
+        app = await build_http(small).build_app(context)
+        yield new_client(transport=httpx.ASGITransport(app=app), cookies=api.cookies)
+
+
+async def test_every_read_of_files_gets_by_with_one_connection(
+    api: httpx.AsyncClient, shelf: Shelf, one_connection: httpx.AsyncClient
+) -> None:
+    """Who may see what is asked with no connection of the reader's own held, so a page of thumbnails
+    never waits for itself."""
+    photo, towels = shelf.files["photo.jpg"], shelf.ids["towels"]
+    await ok(await api.delete(f"/files/{shelf.files['manual.pdf']}"), 204)
+
+    answers = [
+        await one_connection.get(f"/entities/{towels}/files"),
+        await one_connection.get(f"/files/{photo}"),
+        await one_connection.get(f"/files/{photo}/content"),
+        await one_connection.get(f"/files/{photo}/preview/320"),
+        await one_connection.post("/covers:find", json={"entity_ids": [towels]}),
+        await one_connection.get(f"/homes/{shelf.ids['home']}/files/trash"),
+        await one_connection.post(f"/entities/{towels}/files", params={"kind": "other"}, files={"file": ("a", b"x")}),
+    ]
+
+    assert [answer.status_code for answer in answers] == [200] * 6 + [201]
