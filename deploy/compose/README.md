@@ -105,7 +105,7 @@ docker compose pull
 docker compose up -d
 ```
 
-**From 0.1.0**, which kept no files, two things differ. Back up before you check out the new version, and the database is all there is to back up:
+**From 0.1.0 or any 0.1 release**, which kept no files, two things differ. Back up before you check out the new version, and the database is all there is to back up:
 
 ```sh
 docker compose exec -T postgres pg_dump -U penaria -Fc penaria > penaria-$(date +%F).dump
