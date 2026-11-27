@@ -134,6 +134,8 @@ class CreateInvitation:
         )
         url = self._links.invitation(token)
         async with self._uow.transaction() as tx:
+            # Under the lock that changing the inviter's access takes, so the check sees one state of it.
+            await tx.homes.lock(home_id)
             await check_can_give_until(tx, actor, home_id, scope, role, invitation.grant_expires_at, now)
             await tx.invitations.add(invitation)
             await tx.journal.append([Event("invitation.created", home_id, actor, _payload(invitation, role))])

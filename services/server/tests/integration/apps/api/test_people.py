@@ -1397,3 +1397,48 @@ async def test_a_guest_link_ends_when_its_makers_access_is_cut_short(
     await ok(await api.patch(f"/homes/{ids['home']}/grants/{grant['id']}", json={"expires_at": later(days=7)}), 204)
 
     assert [link["name"] for link in await ok(await api.get(url))] == ["Short"]
+
+
+async def test_an_admin_whose_access_ends_may_still_reduce_anyones_access(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    sitter, _ = await sitter_until(api, new_client, ids["home"], later(days=7))
+    presets = await roles(api, ids["home"])
+    await member(api, new_client, ids["home"], "family", "maria", grant_expires_at=later(days=30))
+    await member(api, new_client, ids["home"], "family", "ivan")
+    await member(api, new_client, ids["home"], "admin", "anna")
+    members = await ok(await api.get(f"/homes/{ids['home']}/members"))
+    grants = {m["person"]["username"]: m["grants"][0]["id"] for m in members}
+
+    async def change(username: str, **body: Any) -> httpx.Response:
+        return await sitter.patch(f"/homes/{ids['home']}/grants/{grants[username]}", json=body)
+
+    # Each of these gives nothing new, even though all of them still outlast the sitter.
+    await ok(await change("maria", expires_at=later(days=14)), 204)
+    await ok(await change("ivan", scope_entity_id=ids["kitchen"]), 204)
+    await ok(await change("anna", role_id=presets["contractor"]), 204)
+    # And each of these would give something for longer than the sitter stays.
+    for refused in (
+        await change("maria", expires_at=later(days=21)),
+        await change("ivan", scope_entity_id=None),
+        await change("anna", role_id=presets["family"]),
+    ):
+        assert (await ok(refused, 403))["code"] == "outlasts_giver"
+
+
+async def test_the_latest_end_offered_is_the_longest_of_the_grants_that_can_give(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    longer = later(days=7)
+    sitter, family = await sitter_until(api, new_client, ids["home"], later(days=3))
+    token = await invite(api, ids["home"], "admin", scope_entity_id=ids["house"], grant_expires_at=longer)
+    await ok(await sitter.post("/invitations:accept", json={"token": token}))
+
+    refused = await sitter.post(
+        f"/homes/{ids['home']}/invitations", json={"role_id": family, "scope_entity_id": ids["kitchen"]}
+    )
+
+    problem = await ok(refused, 403)
+    assert datetime.fromisoformat(problem["params"]["ends_at"]) == datetime.fromisoformat(longer)

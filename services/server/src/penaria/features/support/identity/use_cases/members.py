@@ -32,6 +32,7 @@ from penaria.features.support.identity.domain.members import (
     check_can_give,
     grant_expiry,
     grant_payload,
+    only_reduces,
 )
 from penaria.features.support.identity.domain.models import Grant, PrincipalType, Role, User, access_of
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
@@ -147,7 +148,11 @@ class ChangeGrant:
         async with self._uow.transaction() as tx:
             await lock_unchanged(tx, grant)
             check_can_give(await access_in(tx, actor, home_id, scope, now), role)
-            await check_can_give_until(tx, actor, home_id, new_scope, new_role, expires_at, now)
+            # Reducing someone's access needs no access of one's own that lasts as long as what stays.
+            if only_reduces((role, scope, grant.expires_at), (new_role, new_scope, expires_at)):
+                check_can_give(await access_in(tx, actor, home_id, new_scope, now), new_role)
+            else:
+                await check_can_give_until(tx, actor, home_id, new_scope, new_role, expires_at, now)
             grant.role_id = new_role.id
             grant.scope_entity_id = scope_id
             grant.expires_at = expires_at

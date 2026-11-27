@@ -220,6 +220,9 @@ async def _check_can_reset(
     active = [grant for grant in await tx.grants.for_principal(PrincipalType.USER, user.id) if grant.is_active(now)]
     if any(grant.scope_entity_id is not None and grant.scope_entity_id not in places for grant in active):
         raise StaleVersionError("this person's access changed meanwhile; try again")
+    if not active:
+        # Nothing left to compare the admin's access with: the link was for a member, who is one no more.
+        raise ResetNotAllowedError("this person no longer has access to any home: ask them to use their own email")
     roles = await tx.roles.get_many({grant.role_id for grant in active})
     actor = Actor.user(admin_id)
     for grant in active:

@@ -5,6 +5,7 @@ import pytest
 from penaria.features.shared.access import Access, Permission
 from penaria.features.shared.errors import ForbiddenError
 from penaria.features.shared.ids import new_id
+from penaria.features.shared.places import Place
 from penaria.features.support.identity.domain.members import (
     EscalationError,
     GuestLink,
@@ -19,6 +20,7 @@ from penaria.features.support.identity.domain.members import (
     check_token_name,
     grant_expiry,
     link_expiry,
+    only_reduces,
 )
 from penaria.features.support.identity.domain.models import PrincipalType, Role
 from penaria.features.support.identity.domain.permissions import Preset, with_implied
@@ -209,3 +211,51 @@ def test_a_guest_link_without_a_name_is_refused() -> None:
         check_token_name("   ")
 
     assert raised.value.params == {"field": "name", "max_length": 100}
+
+
+def place(*above: Place) -> Place:
+    place_id = new_id()
+    path = (*(above[-1].path if above else ()), place_id)
+    return Place(id=place_id, home_id=HOME, path=path, names=("x",) * len(path), archived=False)
+
+
+HOUSE = place()
+KITCHEN = place(HOUSE)
+SOON, LATER = NOW + timedelta(days=1), NOW + timedelta(days=9)
+EDITOR = role(None, Permission.ENTITIES_EDIT)
+VIEWER = role(None, Permission.ENTITIES_VIEW)
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ((EDITOR, None, None), (EDITOR, None, SOON)),
+        ((EDITOR, None, LATER), (EDITOR, None, SOON)),
+        ((EDITOR, HOUSE, LATER), (EDITOR, KITCHEN, LATER)),
+        ((EDITOR, None, None), (VIEWER, KITCHEN, None)),
+        ((role(Preset.ADMIN), None, None), (EDITOR, None, None)),
+    ],
+)
+def test_a_change_that_gives_nothing_new_only_reduces(
+    old: tuple[Role, Place | None, datetime | None], new: tuple[Role, Place | None, datetime | None]
+) -> None:
+    assert only_reduces(old, new)
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ((EDITOR, None, SOON), (EDITOR, None, LATER)),
+        ((EDITOR, None, SOON), (EDITOR, None, None)),
+        ((EDITOR, KITCHEN, None), (EDITOR, HOUSE, None)),
+        ((EDITOR, HOUSE, None), (EDITOR, None, None)),
+        ((VIEWER, None, None), (EDITOR, None, None)),
+        ((EDITOR, None, None), (role(Preset.ADMIN), None, None)),
+        # Fewer permissions, but a view of more than guest-visible things.
+        ((role(None, Permission.ENTITIES_VIEW, guest_view=True), None, None), (VIEWER, None, None)),
+    ],
+)
+def test_a_change_that_gives_something_new_does_not_only_reduce(
+    old: tuple[Role, Place | None, datetime | None], new: tuple[Role, Place | None, datetime | None]
+) -> None:
+    assert not only_reduces(old, new)
