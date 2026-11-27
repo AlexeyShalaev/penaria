@@ -12,13 +12,13 @@ from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
 from penaria.features.shared.homes import HomeTimezones
 from penaria.features.support.documents.domain.files import (
-    HEIC,
     PDF,
     UPLOADED_IMAGES,
     File,
     FileFailure,
     FileStatus,
     name_as_jpeg,
+    stored_type,
 )
 from penaria.features.support.documents.domain.processing import (
     LEASE,
@@ -123,7 +123,7 @@ class ProcessNextFile:
 
     async def _store(self, file: File, source: Path, rendered: Rendered) -> None:
         original = source if rendered.original is None else rendered.original
-        converted = file.media_type == HEIC
+        converted = stored_type(file.media_type) != file.media_type
         file.media_type = rendered.media_type or file.media_type
         file.size = original.stat().st_size
         file.sha256 = await asyncio.to_thread(_sha256, original)

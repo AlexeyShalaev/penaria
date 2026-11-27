@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from penaria.features.support.documents.domain.files import HEIC, JPEG, FileFailure
+from penaria.features.support.documents.domain.files import FileFailure, stored_type
 from penaria.features.support.documents.domain.processing import (
     Rendered,
     RendererCrashedError,
@@ -97,7 +97,7 @@ def _outcome(media_type: str, into: Path) -> Rendered:
         raise UnrenderableError(FileFailure(result["failure"]), str(result["detail"]))
     return Rendered(
         original=_produced(into / ORIGINAL_NAME) if result["original"] else None,
-        media_type=JPEG if media_type == HEIC else media_type,
+        media_type=stored_type(media_type),
         width=None if result["width"] is None else int(result["width"]),
         height=None if result["height"] is None else int(result["height"]),
         taken_at=None if result["taken_at"] is None else datetime.fromisoformat(result["taken_at"]),

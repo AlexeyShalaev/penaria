@@ -8,6 +8,7 @@ import httpx
 import pytest
 from PIL import Image
 
+from penaria.features.support.documents.use_cases.access import FileAccess
 from penaria.integrations.s3.storage import S3Storage
 from tests import images
 from tests.integration.apps.api.test_people import make_home, ok
@@ -379,6 +380,26 @@ async def test_an_upload_the_thing_no_longer_takes_when_it_ends_is_dropped(
     assert (response.status_code, response.json()["code"]) == (409, "entity_archived")
     assert await keys(storage) == before
     assert await listed(api, ids["towels"]) == []
+
+
+async def test_an_upload_already_recorded_survives_a_failure_to_answer(
+    api: httpx.AsyncClient, worker: Run, storage: S3Storage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ids = await make_home(api)
+
+    async def away(*_: object) -> None:
+        raise ConnectionError("the database dropped the connection after the commit")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(FileAccess, "read", away)
+        failed = await api.post(
+            f"/entities/{ids['towels']}/files", params={"kind": "photo"}, files={"file": ("a.jpg", images.jpeg())}
+        )
+    await worker()
+
+    assert failed.status_code == 500
+    [file] = (await ok(await api.get(f"/entities/{ids['towels']}/files")))["files"]
+    assert (file["name"], file["status"]) == ("a.jpg", "ready")
 
 
 async def test_a_file_the_storage_has_lost_says_so(api: httpx.AsyncClient, worker: Run, storage: S3Storage) -> None:

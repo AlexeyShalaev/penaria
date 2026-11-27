@@ -96,12 +96,14 @@ class UploadFile:
         file_id = new_id()
         media_type, size = await self._store(file_id, kind, incoming.chunks())
         try:
-            return await self._record(
+            await self._record(
                 actor, entity_id, file_id=file_id, kind=kind, name=name, media_type=media_type, size=size
             )
         except Exception:
             await self._storage.delete([incoming_key(file_id)])
             raise
+        # Outside the cleanup: the file is recorded now, and its upload stays whatever happens next.
+        return FileDetail.of(await self._access.read(actor, file_id, datetime.now(UTC)))
 
     async def _check_target(self, actor: Actor, entity_id: UUID, kind: FileKind) -> Sight:
         sight = await self._access.entity(actor, entity_id)
@@ -149,8 +151,7 @@ class UploadFile:
         name: str,
         media_type: str,
         size: int,
-    ) -> FileDetail:
-        now = datetime.now(UTC)
+    ) -> None:
         # Again: a long upload leaves time for the access or the entity to change.
         sight = await self._check_target(actor, entity_id, kind)
         async with self._uow.transaction() as tx:
@@ -162,12 +163,11 @@ class UploadFile:
                 media_type=media_type,
                 size=size,
                 added_by=actor.to_json(),
-                now=now,
+                now=datetime.now(UTC),
             )
             await tx.files.add(file)
             await tx.files.attach(file.id, entity_id)
             await tx.journal.append([file_event("file.added", actor, file, entity_id)])
-        return FileDetail.of(await self._access.read(actor, file.id, now))
 
     def _too_large(self) -> FileTooLargeError:
         return FileTooLargeError(

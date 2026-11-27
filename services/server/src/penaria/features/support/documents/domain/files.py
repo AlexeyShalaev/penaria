@@ -285,6 +285,11 @@ def clean_name(name: str) -> str:
     return f"{stem[: NAME_MAX_LENGTH - len(extension) - 1]}.{extension}"
 
 
+def stored_type(uploaded: str) -> str:
+    """What an upload is kept as: HEIC, which browsers cannot show, becomes JPEG."""
+    return JPEG if uploaded == HEIC else uploaded
+
+
 def name_as_jpeg(name: str) -> str:
     """The name of a HEIC file converted to JPEG."""
     stem, dot, extension = name.rpartition(".")

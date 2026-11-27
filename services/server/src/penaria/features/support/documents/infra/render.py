@@ -17,7 +17,15 @@ import pillow_heif
 import pypdfium2
 from PIL import Image, ImageOps
 
-from penaria.features.support.documents.domain.files import HEIC, JPEG, PDF, PNG, WEBP, FileFailure
+from penaria.features.support.documents.domain.files import (
+    HEIC,
+    JPEG,
+    PDF,
+    PNG,
+    WEBP,
+    FileFailure,
+    stored_type,
+)
 from penaria.features.support.documents.domain.metadata import (
     ORIENTATIONS,
     UPRIGHT,
@@ -61,9 +69,8 @@ def render_image(source: Path, media_type: str, directory: Path) -> dict[str, An
     data = source.read_bytes()
     clean, facts = _heic_to_jpeg(data) if media_type == HEIC else _cleaned(data, media_type)
     (directory / ORIGINAL_NAME).write_bytes(clean)
-    stored_type = JPEG if media_type == HEIC else media_type
     # The previews come from the clean copy, which is also proof that it still reads as the picture.
-    with _decoded(clean, stored_type) as image:
+    with _decoded(clean, stored_type(media_type)) as image:
         # In place: a copy of the largest picture would take hundreds of megabytes more.
         ImageOps.exif_transpose(image, in_place=True)
         _write_previews(image, directory)
