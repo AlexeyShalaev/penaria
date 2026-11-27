@@ -15,7 +15,7 @@ You need Docker Engine with Docker Compose 2.24 or newer.
 
 <!-- x-release-please-start-version -->
 ```sh
-git clone --depth 1 --branch v0.1.0 https://github.com/AlexeyShalaev/penaria.git
+git clone --depth 1 --branch v0.1.1 https://github.com/AlexeyShalaev/penaria.git
 cd penaria/deploy/compose
 cp .env.example .env
 ```
