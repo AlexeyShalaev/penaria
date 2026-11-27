@@ -637,10 +637,13 @@ class PostgresGrantRepository:
         home_id: UUID,
         path: Sequence[UUID],
         now: datetime,
+        *,
+        until: datetime | None,
     ) -> list[Role]:
-        return await self._roles_covering(
-            principal_type, principal_id, home_id, path, now, GrantDB.expires_at.is_(None)
-        )
+        lasts: ColumnElement[bool] = GrantDB.expires_at.is_(None)
+        if until is not None:
+            lasts = or_(lasts, GrantDB.expires_at >= until)
+        return await self._roles_covering(principal_type, principal_id, home_id, path, now, lasts)
 
     async def _roles_covering(
         self,

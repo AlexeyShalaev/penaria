@@ -22,6 +22,7 @@ from penaria.features.support.identity.domain.members import (
     GrantNotFoundError,
     InvalidGrantError,
     LastOwnerError,
+    OutlastsGiverError,
     OwnerGrantError,
     OwnGrantError,
     RevokeReason,
@@ -31,6 +32,7 @@ from penaria.features.support.identity.domain.members import (
     check_can_give,
     grant_expiry,
     grant_payload,
+    only_reduces,
 )
 from penaria.features.support.identity.domain.models import Grant, PrincipalType, Role, User, access_of
 from penaria.features.support.identity.domain.repositories import IdentityTransaction
@@ -146,7 +148,11 @@ class ChangeGrant:
         async with self._uow.transaction() as tx:
             await lock_unchanged(tx, grant)
             check_can_give(await access_in(tx, actor, home_id, scope, now), role)
-            check_can_give(await access_in(tx, actor, home_id, new_scope, now), new_role)
+            # Reducing someone's access needs no access of one's own that lasts as long as what stays.
+            if only_reduces((role, scope, grant.expires_at), (new_role, new_scope, expires_at)):
+                check_can_give(await access_in(tx, actor, home_id, new_scope, now), new_role)
+            else:
+                await check_can_give_until(tx, actor, home_id, new_scope, new_role, expires_at, now)
             grant.role_id = new_role.id
             grant.scope_entity_id = scope_id
             grant.expires_at = expires_at
@@ -239,13 +245,43 @@ async def access_in(tx: IdentityTransaction, actor: Actor, home_id: UUID, place:
 
 
 async def lasting_access_in(
-    tx: IdentityTransaction, actor: Actor, home_id: UUID, place: Place | None, now: datetime
+    tx: IdentityTransaction,
+    actor: Actor,
+    home_id: UUID,
+    place: Place | None,
+    now: datetime,
+    *,
+    until: datetime | None = None,
 ) -> Access:
-    """What the actor may do at the place through those of its grants that never end: what lets it give
-    access that never ends, a device's."""
+    """What the actor may do at the place through those of its grants that last at least until ``until``
+    (``None``: that never end): what lets it give access that ends then."""
     principal_type, principal_id = principal_of(actor)
     path = () if place is None else place.path
-    return access_of(await tx.grants.lasting(principal_type, principal_id, home_id, path, now))
+    return access_of(await tx.grants.lasting(principal_type, principal_id, home_id, path, now, until=until))
+
+
+async def check_can_give_until(
+    tx: IdentityTransaction,
+    actor: Actor,
+    home_id: UUID,
+    place: Place | None,
+    role: Role,
+    until: datetime | None,
+    now: datetime,
+) -> None:
+    """Refuse giving ``role`` until ``until`` (``None``: without end) by an actor who could not give it at
+    all, or only through access that ends sooner (sign-in.md, 14)."""
+    check_can_give(await access_in(tx, actor, home_id, place, now), role)
+    if can_give(await lasting_access_in(tx, actor, home_id, place, now, until=until), role):
+        return
+    principal_type, principal_id = principal_of(actor)
+    held = await tx.grants.active_of(home_id, principal_type, principal_id, now)
+    for end in sorted({grant.expires_at for grant in held if grant.expires_at is not None}, reverse=True):
+        if can_give(await lasting_access_in(tx, actor, home_id, place, now, until=end), role):
+            raise OutlastsGiverError(
+                "your own access ends sooner than this one would", params={"ends_at": end.isoformat()}
+            )
+    raise RuntimeError(f"the actor ({actor.id}) can give the role ({role.id}) through no grant that ends or lasts")
 
 
 async def lock_unchanged(tx: IdentityTransaction, grant: Grant) -> None:
@@ -302,8 +338,8 @@ async def revoke(
 async def disarm_given_by(
     tx: IdentityTransaction, places: PlaceDirectory, user_id: UUID, home_id: UUID, actor: Actor, now: datetime
 ) -> None:
-    """End the guest links and devices the user gave that they could no longer give, once their access shrank.
-    A device's grant never ends, so it needs access of the giver that never ends either.
+    """End the guest links and devices the user gave that they could no longer give, once their access shrank:
+    each needs access of the giver that lasts as long as it does, and a device's never ends.
 
     Pending invitations need no such sweep: accepting one checks its inviter again.
     """
@@ -321,10 +357,7 @@ async def disarm_given_by(
     for grant in given:
         role = roles[grant.role_id]
         place = place_of(found, grant.scope_entity_id)
-        if grant.principal_type is PrincipalType.DEVICE:
-            access = await lasting_access_in(tx, giver, home_id, place, now)
-        else:
-            access = await access_in(tx, giver, home_id, place, now)
+        access = await lasting_access_in(tx, giver, home_id, place, now, until=grant.expires_at)
         if not can_give(access, role):
             await revoke(tx, actor, grant, role, now, reason=RevokeReason.GIVER_LOST_ACCESS)
 

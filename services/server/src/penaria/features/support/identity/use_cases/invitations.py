@@ -40,8 +40,10 @@ from penaria.features.support.identity.domain.throttle import account_key, mail_
 from penaria.features.support.identity.use_cases.attempts import count_attempt, find_by_secret
 from penaria.features.support.identity.use_cases.members import (
     access_in,
+    check_can_give_until,
     check_place,
     disarm_given_by,
+    lasting_access_in,
     place_for,
     place_of,
     require_manager,
@@ -132,7 +134,9 @@ class CreateInvitation:
         )
         url = self._links.invitation(token)
         async with self._uow.transaction() as tx:
-            check_can_give(await access_in(tx, actor, home_id, scope, now), role)
+            # Under the lock that changing the inviter's access takes, so the check sees one state of it.
+            await tx.homes.lock(home_id)
+            await check_can_give_until(tx, actor, home_id, scope, role, invitation.grant_expires_at, now)
             await tx.invitations.add(invitation)
             await tx.journal.append([Event("invitation.created", home_id, actor, _payload(invitation, role))])
             if recipient is not None:
@@ -337,7 +341,7 @@ async def lock_invitation(
     tx: IdentityTransaction, token_hash: bytes, scope: Place | None, now: datetime
 ) -> tuple[Invitation, Home]:
     """The invitation, locked so it is accepted once, and its home, locked as every change to its people;
-    under the lock, the invitation gives only what its inviter may still give."""
+    under the lock, the invitation gives only what its inviter may still give, for as long as they may."""
     invitation = await tx.invitations.by_token_hash(token_hash, for_update=True)
     if invitation is None:
         raise RuntimeError("an invitation disappeared while it was accepted")
@@ -346,7 +350,9 @@ async def lock_invitation(
     if home is None:
         raise RuntimeError(f"the home ({invitation.home_id}) of an invitation does not exist")
     role = (await tx.roles.get_many({invitation.role_id}))[invitation.role_id]
-    inviter = await access_in(tx, Actor.user(invitation.created_by), invitation.home_id, scope, now)
+    inviter = await lasting_access_in(
+        tx, Actor.user(invitation.created_by), invitation.home_id, scope, now, until=invitation.grant_expires_at
+    )
     if not can_give(inviter, role):
         raise InviterLostAccessError(
             "the person who invited you can no longer give this access: ask them for a new invitation"

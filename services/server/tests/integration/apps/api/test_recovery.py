@@ -3,6 +3,7 @@
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 import httpx
 import pytest
@@ -13,7 +14,7 @@ from sqlalchemy import select, update
 from penaria.apps.api.settings import Settings
 from penaria.apps.cli.__main__ import reset_password as operator_reset
 from penaria.apps.cli.settings import Settings as CliSettings
-from penaria.features.support.identity.infra.orm import AccountLinkDB, UserDB
+from penaria.features.support.identity.infra.orm import AccountLinkDB, GrantDB, UserDB
 from penaria.features.support.identity.use_cases.postman import Postman
 from penaria.features.support.identity.use_cases.recovery import AccountNotFoundError
 from penaria.features.support.platform.infra.orm import JournalEventDB
@@ -329,6 +330,70 @@ async def test_an_admin_cannot_reset_someone_who_owns_another_home(
     await add_second_factor(admin, PUBLIC_URL)
 
     response = await admin.post(f"/homes/{dacha['home']}/members/{ivan_id}:reset-link")
+
+    assert (response.status_code, response.json()["code"]) == (403, "reset_not_allowed")
+
+
+async def test_an_admin_whose_access_ends_makes_no_link_for_someone_who_stays_longer(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    ends = (datetime.now(UTC) + timedelta(days=7)).isoformat()
+    sitter = await member(api, new_client, ids["home"], "admin", "sitter", grant_expires_at=ends)
+    await add_second_factor(sitter, PUBLIC_URL)
+    await member(api, new_client, ids["home"], "family", "maria")
+    await member(api, new_client, ids["home"], "family", "ivan", grant_expires_at=ends)
+    people = {
+        m["person"]["username"]: m["person"]["id"] for m in await ok(await api.get(f"/homes/{ids['home']}/members"))
+    }
+
+    # A new password would be the sitter's way into Maria's account long after they left.
+    response = await sitter.post(f"/homes/{ids['home']}/members/{people['maria']}:reset-link")
+
+    assert (response.status_code, response.json()["code"]) == (403, "reset_not_allowed")
+    await ok(await sitter.post(f"/homes/{ids['home']}/members/{people['ivan']}:reset-link"), 201)
+
+
+async def sitters_link_for_ivan(api: httpx.AsyncClient, new_client: NewClient) -> tuple[str, dict[str, str]]:
+    """The reset link a house-sitter makes for a member who leaves when they do, and the grants' ids."""
+    ids = await make_home(api)
+    ends = (datetime.now(UTC) + timedelta(days=7)).isoformat()
+    sitter = await member(api, new_client, ids["home"], "admin", "sitter", grant_expires_at=ends)
+    await add_second_factor(sitter, PUBLIC_URL)
+    await member(api, new_client, ids["home"], "family", "ivan", grant_expires_at=ends)
+    members = {m["person"]["username"]: m for m in await ok(await api.get(f"/homes/{ids['home']}/members"))}
+    made = await ok(
+        await sitter.post(f"/homes/{ids['home']}/members/{members['ivan']['person']['id']}:reset-link"), 201
+    )
+    grants = {name: m["grants"][0]["id"] for name, m in members.items()}
+    return token_of(made["url"]), {**grants, "home": ids["home"]}
+
+
+async def test_a_reset_link_stops_working_once_the_admins_access_is_cut_short(
+    api: httpx.AsyncClient, new_client: NewClient, anonymous: httpx.AsyncClient
+) -> None:
+    token, ids = await sitters_link_for_ivan(api, new_client)
+    url = f"/homes/{ids['home']}/grants/{ids['sitter']}"
+    await ok(await api.patch(url, json={"expires_at": (datetime.now(UTC) + timedelta(days=1)).isoformat()}), 204)
+
+    response = await anonymous.post("/password-reset", json={"token": token, "new_password": FRESH})
+
+    assert (response.status_code, response.json()["code"]) == (403, "reset_not_allowed")
+
+
+async def test_a_reset_link_stops_working_once_the_person_has_no_access_left(
+    api: httpx.AsyncClient, new_client: NewClient, anonymous: httpx.AsyncClient, container: DishkaContainer
+) -> None:
+    token, ids = await sitters_link_for_ivan(api, new_client)
+    # A week later: the sitter's access and Ivan's have both ended.
+    async with (await uow_of(container)).transaction() as tx:
+        await tx.session.execute(
+            update(GrantDB)
+            .where(GrantDB.id.in_([UUID(ids["sitter"]), UUID(ids["ivan"])]))
+            .values(expires_at=datetime.now(UTC) - timedelta(minutes=1))
+        )
+
+    response = await anonymous.post("/password-reset", json={"token": token, "new_password": FRESH})
 
     assert (response.status_code, response.json()["code"]) == (403, "reset_not_allowed")
 

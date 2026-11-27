@@ -365,7 +365,7 @@ The permissions refine v0.3's seven:
 
 - A role is saved with its implied permissions added, so the check is a plain lookup. The interface ticks the implied boxes as you tick the others.
 - **Modules add permissions** under their namespace, declared in the manifest, such as `knx.bus_monitor`. They appear as more checkboxes.
-- **No escalation.** A person can give a grant only with a role whose permissions they hold themselves over that scope, and can put into a role only permissions they hold over the whole home. Owners hold everything.
+- **No escalation.** A person can give a grant only with a role whose permissions they hold themselves over that scope, and can put into a role only permissions they hold over the whole home. Owners hold everything. Nor for longer: what they give ends no later than the access of theirs that lets them give it, and is without end only if that access is ([sign-in.md](sign-in.md), section 14).
 
 A role also has:
 

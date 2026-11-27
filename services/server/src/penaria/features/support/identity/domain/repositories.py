@@ -283,8 +283,11 @@ class GrantRepository(Protocol):
         home_id: UUID,
         path: Sequence[UUID],
         now: datetime,
+        *,
+        until: datetime | None,
     ) -> list[Role]:
-        """The roles of those of the ``applicable`` grants that have no end."""
+        """The roles of those of the ``applicable`` grants that last at least until ``until``; for ``None``,
+        those that have no end."""
         ...
 
 

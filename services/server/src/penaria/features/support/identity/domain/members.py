@@ -9,6 +9,7 @@ from uuid import UUID
 from penaria.features.shared.access import Access, Permission, PermissionDeniedError
 from penaria.features.shared.errors import ConflictError, ForbiddenError, InvalidError, NotFoundError
 from penaria.features.shared.ids import new_id
+from penaria.features.shared.places import Place
 from penaria.features.support.identity.domain.models import Grant, PrincipalType, Role
 from penaria.features.support.identity.domain.permissions import GUEST_GRANT_DURATION
 from penaria.features.support.identity.domain.sessions import new_secret
@@ -25,6 +26,13 @@ class EscalationError(ForbiddenError):
     """The role would give more than the person giving it holds over that place."""
 
     code = "escalation"
+
+
+class OutlastsGiverError(ForbiddenError):
+    """The access would end later than the access that lets the person give it; ``params.ends_at`` is
+    the latest end they may give."""
+
+    code = "outlasts_giver"
 
 
 class InvalidGrantError(InvalidError):
@@ -134,6 +142,22 @@ def _refusal(access: Access, role: Role) -> ForbiddenError | None:
     if access.guest_view and not role.guest_view:
         return EscalationError("this role sees more than guest-visible things, and you do not")
     return None
+
+
+def only_reduces(
+    old: tuple[Role, Place | None, datetime | None], new: tuple[Role, Place | None, datetime | None]
+) -> bool:
+    """Whether changing a grant from ``old`` to ``new`` (role, place, end) gives nothing it did not give:
+    no later end, no permission or wider view the old role lacked, no place outside the old one."""
+    old_role, old_place, old_end = old
+    new_role, new_place, new_end = new
+    ends_no_later = old_end is None or (new_end is not None and new_end <= old_end)
+    holds_no_more = old_role.all_permissions or (
+        not new_role.all_permissions and new_role.permissions <= old_role.permissions
+    )
+    sees_no_more = new_role.guest_view or not old_role.guest_view
+    reaches_no_further = old_place is None or (new_place is not None and old_place.id in new_place.path)
+    return ends_no_later and holds_no_more and sees_no_more and reaches_no_further
 
 
 def grant_payload(grant: Grant, role: Role) -> dict[str, Any]:

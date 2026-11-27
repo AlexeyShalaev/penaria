@@ -1,7 +1,7 @@
 import type {TFunction} from 'i18next'
 
 import {i18n} from '@/shared/i18n'
-import {formatWait} from '@/shared/lib/time'
+import {formatDateTime, formatWait} from '@/shared/lib/time'
 
 type Params = Record<string, unknown>
 
@@ -46,14 +46,16 @@ export function isApiError(error: unknown, code?: string): error is ApiError {
 /**
  * A translated message for any error a call can end with. The error's params fill the message; a
  * `reason` or `field` picks a more precise message (`errors.weak_password_common`) when there is one,
- * and `retry_after_seconds` becomes `{{wait}}`, such as "in 30 seconds".
+ * `retry_after_seconds` becomes `{{wait}}`, such as "in 30 seconds", and `ends_at` becomes `{{until}}`,
+ * a date and time in the reader's language.
  */
 export function describeError(error: unknown, t: TFunction): string {
   if (error instanceof ApiError) {
-    const {reason, field, retry_after_seconds: retryAfter} = error.params
+    const {reason, field, retry_after_seconds: retryAfter, ends_at: endsAt} = error.params
     const context = typeof reason === 'string' ? reason : typeof field === 'string' ? field : undefined
     const wait = typeof retryAfter === 'number' ? formatWait(retryAfter, i18n.language) : undefined
-    return t(`errors.${error.code}`, {...error.params, context, wait, defaultValue: t('errors.generic')})
+    const until = typeof endsAt === 'string' ? formatDateTime(new Date(endsAt), i18n.language) : undefined
+    return t(`errors.${error.code}`, {...error.params, context, wait, until, defaultValue: t('errors.generic')})
   }
   if (error instanceof TypeError) return t('errors.network')
   return t('errors.generic')

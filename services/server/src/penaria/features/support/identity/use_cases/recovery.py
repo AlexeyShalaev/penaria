@@ -36,7 +36,7 @@ from penaria.features.support.identity.domain.repositories import IdentityTransa
 from penaria.features.support.identity.domain.sessions import Client, CurrentSession, hash_token
 from penaria.features.support.identity.domain.throttle import account_key, recovery_keys
 from penaria.features.support.identity.use_cases.attempts import count_attempt, find_by_secret
-from penaria.features.support.identity.use_cases.members import access_in, place_of, require_manager
+from penaria.features.support.identity.use_cases.members import lasting_access_in, place_of, require_manager
 from penaria.features.support.identity.use_cases.postman import Postman
 from penaria.features.support.identity.use_cases.second_factor import require_second_factor
 
@@ -220,10 +220,15 @@ async def _check_can_reset(
     active = [grant for grant in await tx.grants.for_principal(PrincipalType.USER, user.id) if grant.is_active(now)]
     if any(grant.scope_entity_id is not None and grant.scope_entity_id not in places for grant in active):
         raise StaleVersionError("this person's access changed meanwhile; try again")
+    if not active:
+        # Nothing left to compare the admin's access with: the link was for a member, who is one no more.
+        raise ResetNotAllowedError("this person no longer has access to any home: ask them to use their own email")
     roles = await tx.roles.get_many({grant.role_id for grant in active})
     actor = Actor.user(admin_id)
     for grant in active:
-        access = await access_in(tx, actor, grant.home_id, place_of(places, grant.scope_entity_id), now)
+        # A new password is theirs for good, so the admin's access must last as long as what it opens.
+        place = place_of(places, grant.scope_entity_id)
+        access = await lasting_access_in(tx, actor, grant.home_id, place, now, until=grant.expires_at)
         if not can_give(access, roles[grant.role_id]):
             raise ResetNotAllowedError(
                 "this person has access you could not give, here or in another home: "

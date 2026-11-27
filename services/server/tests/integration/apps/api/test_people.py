@@ -1281,3 +1281,164 @@ async def test_handing_the_home_over_ends_the_old_owners_guest_links(
     assert [e[2]["reason"] for e in await last_events(container, 6) if e[0] == "guest_link.revoked"] == [
         "giver_lost_access"
     ]
+
+
+# Access given never outlasts the access that lets it be given (sign-in.md, 14)
+
+
+async def sitter_until(
+    api: httpx.AsyncClient, new_client: NewClient, home_id: str, ends: str
+) -> tuple[httpx.AsyncClient, str]:
+    """An admin whose access ends, and the family role's id."""
+    sitter = await member(api, new_client, home_id, "admin", "sitter", grant_expires_at=ends)
+    return sitter, (await roles(api, home_id))["family"]
+
+
+async def test_an_admin_whose_access_ends_cannot_invite_anyone_for_longer(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    ends = later(days=7)
+    sitter, family = await sitter_until(api, new_client, ids["home"], ends)
+    url = f"/homes/{ids['home']}/invitations"
+
+    for_ever = await sitter.post(url, json={"role_id": family})
+    longer = await sitter.post(url, json={"role_id": family, "grant_expires_at": later(days=8)})
+
+    for refused in (for_ever, longer):
+        problem = await ok(refused, 403)
+        assert problem["code"] == "outlasts_giver"
+        assert datetime.fromisoformat(problem["params"]["ends_at"]) == datetime.fromisoformat(ends)
+    await ok(await sitter.post(url, json={"role_id": family, "grant_expires_at": ends}), 201)
+    await ok(await sitter.post(url, json={"role_id": family, "grant_expires_at": later(days=2)}), 201)
+
+
+async def test_a_lasting_grant_that_cannot_give_does_not_extend_one_that_can(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    sitter, family = await sitter_until(api, new_client, ids["home"], later(days=7))
+    admin = (await roles(api, ids["home"]))["admin"]
+    # The same person also gets a family member's access without end, which cannot manage people.
+    token = await invite(api, ids["home"], "family")
+    await ok(await sitter.post("/invitations:accept", json={"token": token}))
+    url = f"/homes/{ids['home']}/invitations"
+
+    # Only the admin's grant lets them invite at all, so its end is still the limit.
+    refused = await ok(await sitter.post(url, json={"role_id": family}), 403)
+
+    assert refused["code"] == "outlasts_giver"
+    assert (await ok(await sitter.post(url, json={"role_id": admin}), 403))["code"] == "outlasts_giver"
+
+
+async def test_an_invitation_gives_nothing_longer_than_its_inviter_now_has(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    admin = await member(api, new_client, ids["home"], "admin", "anna")
+    token = await invite(admin, ids["home"], "family")
+    members = await ok(await api.get(f"/homes/{ids['home']}/members"))
+    [grant] = next(m["grants"] for m in members if m["person"]["username"] == "anna")
+    await ok(await api.patch(f"/homes/{ids['home']}/grants/{grant['id']}", json={"expires_at": later(days=7)}), 204)
+
+    refused = await new_client().post(
+        "/invitations:accept-new-account",
+        json={"token": token, "username": "late", "display_name": "Late", "password": CHOSEN, "locale": "en"},
+    )
+
+    assert (await ok(refused, 409))["code"] == "inviter_lost_access"
+
+
+async def test_an_admin_whose_access_ends_cannot_lift_or_clear_anyones_end(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    ends = later(days=7)
+    sitter, _ = await sitter_until(api, new_client, ids["home"], ends)
+    await member(api, new_client, ids["home"], "family", "maria", grant_expires_at=later(days=3))
+    members = await ok(await api.get(f"/homes/{ids['home']}/members"))
+    [grant] = next(m["grants"] for m in members if m["person"]["username"] == "maria")
+    url = f"/homes/{ids['home']}/grants/{grant['id']}"
+
+    cleared = await sitter.patch(url, json={"expires_at": None})
+    extended = await sitter.patch(url, json={"expires_at": later(days=30)})
+
+    assert (await ok(cleared, 403))["code"] == "outlasts_giver"
+    assert (await ok(extended, 403))["code"] == "outlasts_giver"
+    await ok(await sitter.patch(url, json={"expires_at": later(days=5)}), 204)
+    await ok(await sitter.delete(url), 204)
+
+
+async def test_a_guest_link_never_outlasts_its_maker(api: httpx.AsyncClient, new_client: NewClient) -> None:
+    ids = await make_home(api)
+    sitter, _ = await sitter_until(api, new_client, ids["home"], later(days=2))
+    guest = (await roles(api, ids["home"]))["guest"]
+    url = f"/homes/{ids['home']}/guest-links"
+
+    # The guest role's default is three days, longer than the sitter stays.
+    refused = await sitter.post(url, json={"role_id": guest, "name": "Weekend"})
+
+    assert (await ok(refused, 403))["code"] == "outlasts_giver"
+    await ok(await sitter.post(url, json={"role_id": guest, "name": "Weekend", "expires_at": later(days=1)}), 201)
+
+
+async def test_a_guest_link_ends_when_its_makers_access_is_cut_short(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    admin = await member(api, new_client, ids["home"], "admin", "anna")
+    guest = (await roles(api, ids["home"]))["guest"]
+    url = f"/homes/{ids['home']}/guest-links"
+    await ok(await admin.post(url, json={"role_id": guest, "name": "Short", "expires_at": later(days=1)}), 201)
+    await ok(await admin.post(url, json={"role_id": guest, "name": "Long", "expires_at": later(days=30)}), 201)
+    members = await ok(await api.get(f"/homes/{ids['home']}/members"))
+    [grant] = next(m["grants"] for m in members if m["person"]["username"] == "anna")
+
+    await ok(await api.patch(f"/homes/{ids['home']}/grants/{grant['id']}", json={"expires_at": later(days=7)}), 204)
+
+    assert [link["name"] for link in await ok(await api.get(url))] == ["Short"]
+
+
+async def test_an_admin_whose_access_ends_may_still_reduce_anyones_access(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    sitter, _ = await sitter_until(api, new_client, ids["home"], later(days=7))
+    presets = await roles(api, ids["home"])
+    await member(api, new_client, ids["home"], "family", "maria", grant_expires_at=later(days=30))
+    await member(api, new_client, ids["home"], "family", "ivan")
+    await member(api, new_client, ids["home"], "admin", "anna")
+    members = await ok(await api.get(f"/homes/{ids['home']}/members"))
+    grants = {m["person"]["username"]: m["grants"][0]["id"] for m in members}
+
+    async def change(username: str, **body: Any) -> httpx.Response:
+        return await sitter.patch(f"/homes/{ids['home']}/grants/{grants[username]}", json=body)
+
+    # Each of these gives nothing new, even though all of them still outlast the sitter.
+    await ok(await change("maria", expires_at=later(days=14)), 204)
+    await ok(await change("ivan", scope_entity_id=ids["kitchen"]), 204)
+    await ok(await change("anna", role_id=presets["contractor"]), 204)
+    # And each of these would give something for longer than the sitter stays.
+    for refused in (
+        await change("maria", expires_at=later(days=21)),
+        await change("ivan", scope_entity_id=None),
+        await change("anna", role_id=presets["family"]),
+    ):
+        assert (await ok(refused, 403))["code"] == "outlasts_giver"
+
+
+async def test_the_latest_end_offered_is_the_longest_of_the_grants_that_can_give(
+    api: httpx.AsyncClient, new_client: NewClient
+) -> None:
+    ids = await make_home(api)
+    longer = later(days=7)
+    sitter, family = await sitter_until(api, new_client, ids["home"], later(days=3))
+    token = await invite(api, ids["home"], "admin", scope_entity_id=ids["house"], grant_expires_at=longer)
+    await ok(await sitter.post("/invitations:accept", json={"token": token}))
+
+    refused = await sitter.post(
+        f"/homes/{ids['home']}/invitations", json={"role_id": family, "scope_entity_id": ids["kitchen"]}
+    )
+
+    problem = await ok(refused, 403)
+    assert datetime.fromisoformat(problem["params"]["ends_at"]) == datetime.fromisoformat(longer)

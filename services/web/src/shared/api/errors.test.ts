@@ -37,6 +37,15 @@ describe('unwrap', () => {
 })
 
 describe('describeError', () => {
+  it('says until when the person may give access', () => {
+    const error = new ApiError(403, 'outlasts_giver', '', {ends_at: '2026-12-04T20:59:59+00:00'})
+
+    // The test environment's time zone is Europe/Berlin (vite.config.ts).
+    expect(describeError(error, i18n.t)).toBe(
+      'Your own access ends on December 4, 2026 at 9:59 PM. Choose an end no later than that, or ask someone whose access lasts longer.',
+    )
+  })
+
   it.each([
     [new ApiError(409, 'stale_version', ''), i18n.t('errors.stale_version')],
     [new ApiError(400, 'something_new', ''), 'Something went wrong. Try again.'],
