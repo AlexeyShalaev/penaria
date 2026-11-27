@@ -1,0 +1,13 @@
+#!/bin/sh
+# Sourced when the container starts, before the templates are filled in. PENARIA_FILES__MAX_SIZE is
+# the largest file the server takes, in bytes, as the server reads it: give both the same value.
+# nginx refuses a longer upload, the multipart envelope aside, before the server sees it.
+penaria_max_file_size=${PENARIA_FILES__MAX_SIZE:-52428800}
+case "$penaria_max_file_size" in
+    *[!0-9]*)
+        echo "PENARIA_FILES__MAX_SIZE: \"$penaria_max_file_size\" is not a number of bytes" >&2
+        exit 1
+        ;;
+esac
+export PENARIA_MAX_FILE_SIZE="$penaria_max_file_size"
+export PENARIA_MAX_UPLOAD_SIZE=$((penaria_max_file_size + 1048576))

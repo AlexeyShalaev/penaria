@@ -17,6 +17,7 @@ from penaria.apps.api.container import build_container
 from penaria.apps.api.entrypoint import build_http
 from penaria.apps.api.settings import Settings
 from penaria.common.database import DatabaseSettings
+from penaria.common.files import DEFAULT_MAX_SIZE
 from penaria.features.support.identity.use_cases.setup import IssueSetupToken
 from penaria.migrations.runner import build_config, run_with_connection
 from tests.smtp import FakeSmtp
@@ -75,11 +76,25 @@ def operator_oidc() -> dict[str, Any] | None:
 
 
 @pytest.fixture
+def operator_s3() -> dict[str, Any] | None:
+    """``PENARIA_S3__*`` of the tests: none; the tests of files override it with a bucket of their own."""
+    return None
+
+
+@pytest.fixture
+def files_max_size() -> int:
+    """``PENARIA_FILES__MAX_SIZE`` of the tests; a test parametrizes it to try the limit."""
+    return DEFAULT_MAX_SIZE
+
+
+@pytest.fixture
 def settings(
     database_settings: DatabaseSettings,
     public_url: str,
     operator_mail: dict[str, Any] | None,
     operator_oidc: dict[str, Any] | None,
+    operator_s3: dict[str, Any] | None,
+    files_max_size: int,
 ) -> Settings:
     return Settings.model_validate(
         {
@@ -89,6 +104,8 @@ def settings(
             "secret_key": "test-secret-key-of-at-least-32-characters",
             "mail": operator_mail,
             "auth": {"oidc": operator_oidc},
+            "s3": operator_s3,
+            "files": {"max_size": files_max_size},
         }
     )
 

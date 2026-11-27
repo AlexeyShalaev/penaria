@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy_foundation_kit import AsyncSQLAlchemyUowTransaction
 
 from penaria.features.core.registry.infra.repository import PostgresEntityRepository
+from penaria.features.support.documents.infra.repository import PostgresFileRepository
 from penaria.features.support.identity.infra.mail_repositories import (
     PostgresAccountLinkRepository,
     PostgresInstallSettingsRepository,
@@ -53,6 +54,7 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
         self._external_identities = PostgresExternalIdentityRepository(session)
         self._oidc_flows = PostgresOidcFlowRepository(session)
         self._entities = PostgresEntityRepository(session)
+        self._files = PostgresFileRepository(session)
         self._journal = PostgresJournal(session)
 
     @property
@@ -134,6 +136,10 @@ class PenariaTransaction(AsyncSQLAlchemyUowTransaction):
     @property
     def entities(self) -> PostgresEntityRepository:
         return self._entities
+
+    @property
+    def files(self) -> PostgresFileRepository:
+        return self._files
 
     @property
     def journal(self) -> PostgresJournal:

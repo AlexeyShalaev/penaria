@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy_foundation_kit import AsyncUnitOfWork
 
@@ -21,6 +22,18 @@ class HomeNotFoundError(NotFoundError):
 
 def principal_of(actor: Actor) -> tuple[PrincipalType, UUID]:
     return PrincipalType(actor.kind.value), actor.id
+
+
+class IdentityHomeTimezones:
+    """Identity's side of the ``HomeTimezones`` port."""
+
+    def __init__(self, uow: AsyncUnitOfWork[IdentityTransaction]) -> None:
+        self._uow = uow
+
+    async def timezone(self, home_id: UUID) -> ZoneInfo | None:
+        async with self._uow.query() as tx:
+            home = await tx.homes.get(home_id)
+        return None if home is None else ZoneInfo(home.timezone)
 
 
 class CreateHome:

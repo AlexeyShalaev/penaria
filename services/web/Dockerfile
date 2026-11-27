@@ -19,6 +19,8 @@ ENV PENARIA_API_UPSTREAM=http://penaria-server:8000 \
     NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+# Sourced before the templates are filled in (20-envsubst-on-templates.sh).
+COPY --chmod=755 upload-limit.envsh /docker-entrypoint.d/16-penaria-upload-limit.envsh
 COPY --chmod=755 trusted-proxies.sh /docker-entrypoint.d/30-penaria-trusted-proxies.sh
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080

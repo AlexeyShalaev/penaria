@@ -6,10 +6,13 @@ from pydantic import SecretStr
 
 from penaria.common.database import DatabaseSettings
 from penaria.common.settings import PenariaSettings
+from penaria.integrations.s3.settings import S3Settings
 
 
 class Settings(PenariaSettings):
     database: DatabaseSettings
+    # With storage, an upgrade creates its bucket when it is missing.
+    s3: S3Settings | None = None
     # One environment serves every process of the image; migrate needs none of the api's own
     # settings, but must not refuse them as unknown.
     public_url: str | None = None
@@ -18,3 +21,4 @@ class Settings(PenariaSettings):
     mail: dict[str, Any] | None = None
     auth: dict[str, Any] | None = None
     server: dict[str, Any] | None = None
+    files: dict[str, Any] | None = None

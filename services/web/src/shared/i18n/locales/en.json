@@ -420,7 +420,7 @@
     },
     "family": {
       "name": "Family member",
-      "description": "Adds and changes things, uses devices and marks tasks done. Does not see private places."
+      "description": "Adds and changes things, sees receipts and warranties, uses devices and marks tasks done. Does not see private places."
     },
     "guest": {
       "name": "Guest",

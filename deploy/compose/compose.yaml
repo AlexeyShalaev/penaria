@@ -1,19 +1,29 @@
-# Penaria at home: PostgreSQL, the server and the web app on one machine.
+# Penaria at home: PostgreSQL, file storage, the server, its worker and the web app on one machine.
 # Copy this folder, fill in .env from .env.example, then run `docker compose up -d`.
 # README.md next to this file has the steps, HTTPS, backups and upgrades.
 name: penaria
 
+# Where the data is: all the worker is given.
+x-stores: &stores
+  PENARIA_DATABASE__CONNECTION__HOST: postgres
+  PENARIA_DATABASE__CONNECTION__USER: penaria
+  PENARIA_DATABASE__CONNECTION__PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env, see .env.example}
+  PENARIA_DATABASE__CONNECTION__DATABASE: penaria
+  # Photos and documents are kept in the s3 service below.
+  PENARIA_S3__ENDPOINT: http://s3:9000
+  PENARIA_S3__BUCKET: penaria
+  PENARIA_S3__ACCESS_KEY_ID: penaria
+  PENARIA_S3__SECRET_ACCESS_KEY: ${S3_PASSWORD:?set S3_PASSWORD in .env, see .env.example}
+
 x-server: &server
   image: ghcr.io/alexeyshalaev/penaria-server:0.1.0 # x-release-please-version
   environment:
+    <<: *stores
     PENARIA_PUBLIC_URL: ${PENARIA_PUBLIC_URL:?set PENARIA_PUBLIC_URL in .env, see .env.example}
     PENARIA_SECRET_KEY: ${PENARIA_SECRET_KEY:?set PENARIA_SECRET_KEY in .env, see .env.example}
-    PENARIA_DATABASE__CONNECTION__HOST: postgres
-    PENARIA_DATABASE__CONNECTION__USER: penaria
-    PENARIA_DATABASE__CONNECTION__PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env, see .env.example}
-    PENARIA_DATABASE__CONNECTION__DATABASE: penaria
     # Only penaria-web reaches the server, and it sends exactly one address per request.
     PENARIA_SERVER__UVICORN__FORWARDED_ALLOW_IPS: "*"
+    PENARIA_FILES__MAX_SIZE: ${PENARIA_FILES__MAX_SIZE:-52428800}
   # More settings of the server (sign-in with your identity provider, a mailbox as
   # configuration): one PENARIA_...=value per line. services/server/README.md lists them.
   env_file:
@@ -36,13 +46,33 @@ services:
       timeout: 3s
       retries: 30
 
-  # Brings the database to this version's schema, then exits; the server waits for it.
+  # The files: SILO, the maintained community fork of MinIO. Only Penaria reaches it, so it
+  # publishes no port.
+  s3:
+    image: pgsty/silo:RELEASE.2026-11-12T00-00-00Z
+    restart: unless-stopped
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: penaria
+      MINIO_ROOT_PASSWORD: ${S3_PASSWORD:?set S3_PASSWORD in .env, see .env.example}
+    volumes:
+      - s3:/data
+    healthcheck:
+      test: ["CMD", "mcli", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Brings the database to this version's schema and makes the files' bucket, then exits; the
+  # server and the worker wait for it.
   penaria-migrate:
     <<: *server
     command: ["python", "-m", "penaria.apps.migrate", "upgrade"]
     restart: "no"
     depends_on:
       postgres:
+        condition: service_healthy
+      s3:
         condition: service_healthy
 
   penaria-server:
@@ -62,6 +92,27 @@ services:
       retries: 6
       start_period: 30s
 
+  # Removes the metadata of uploaded photos, makes previews and empties the trash.
+  penaria-worker:
+    <<: *server
+    command: ["python", "-m", "penaria.apps.worker"]
+    # It opens what strangers made, so it gets no secret key and nothing of server.env.
+    environment: *stores
+    env_file: []
+    restart: unless-stopped
+    # Time to give back the file it is processing, which another start then takes at once.
+    stop_grace_period: 45s
+    depends_on:
+      penaria-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # Without the container's environment: the check needs none of it.
+      test: ["CMD", "env", "-i", "/app/.venv/bin/python", "-m", "penaria.apps.worker.health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
   # The web app; it also passes /api on to the server, so both live at one address.
   penaria-web:
     image: ghcr.io/alexeyshalaev/penaria-web:0.1.0 # x-release-please-version
@@ -69,6 +120,8 @@ services:
     depends_on:
       penaria-server:
         condition: service_healthy
+    environment:
+      PENARIA_FILES__MAX_SIZE: ${PENARIA_FILES__MAX_SIZE:-52428800}
     ports:
       - "${PENARIA_PORT:-8080}:8080"
     healthcheck:
@@ -79,3 +132,4 @@ services:
 
 volumes:
   postgres:
+  s3:

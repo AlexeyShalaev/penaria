@@ -5,10 +5,11 @@ The backend of Penaria: one Python package, `penaria`, run as several processes.
 | Process | Command | What it does |
 |---|---|---|
 | api | `python -m penaria.apps.api` | REST and WebSocket |
-| migrate | `python -m penaria.apps.migrate upgrade` | Applies the database migrations and exits; runs before a new version starts |
+| worker | `python -m penaria.apps.worker` | Cleans and previews uploaded files, empties the trash ("Files and the worker" below) |
+| migrate | `python -m penaria.apps.migrate upgrade` | Applies the database migrations, creates the storage's bucket if it is missing, and exits; runs before a new version starts |
 | cli | `python -m penaria.apps.cli users reset <username> [--disable-second-factor]` | The operator's tools: prints a one-time password reset link for an account, for an owner who is locked out; can also turn its authenticator app off |
 
-More processes join `src/penaria/apps/` as their first code lands: the worker (Temporal, the outbox publisher, event handlers), standalone (api and worker in one process for home installs), the Telegram bot and the on-site hub.
+More processes join `src/penaria/apps/` as their first code lands: standalone (api and worker in one process for home installs), the Telegram bot and the on-site hub. Temporal, the outbox publisher and event handlers join the worker when their first code lands.
 
 ## Configuration
 
@@ -16,13 +17,15 @@ Only environment variables, all named `PENARIA_*`; `__` reaches into a section: 
 
 The database: `PENARIA_DATABASE__CONNECTION__HOST`, `..._PORT`, `..._USER`, `..._PASSWORD` (required) and `..._DATABASE` (required); the pool under `PENARIA_DATABASE__POOL__*`. PostgreSQL 15 or newer, with the `ltree` and `pg_trgm` extensions available (the first migration creates them).
 
-The api process also needs these; the migrate and cli processes accept them too, so one environment serves every process of the image:
+The api process also needs these; every other process accepts them too, so one environment serves every process of the image:
 
 | Variable | Meaning |
 |---|---|
 | `PENARIA_PUBLIC_URL` | Required. The address people open, such as `https://home.example.org`: the root of a site, without a path. Requests that change something are refused when the browser says they come from another site (`Origin`), and the session cookie is `Secure` when it is `https`. Its host name is what passkeys belong to |
 | `PENARIA_SECRET_KEY` | Required, at least 32 characters, such as the output of `openssl rand -hex 32`. Stored secrets (the mailbox's password, queued email) are encrypted with a key derived from it: keep it, and back it up apart from the database |
 | `PENARIA_RETIRED_SECRET_KEYS` | Optional. Earlier values of `PENARIA_SECRET_KEY`, separated by commas, while you rotate it: what they encrypted still opens, and new secrets use the new key. Save the mailbox's password again in Settings, then drop the old key. With several api replicas, first add the new key here on every replica, and only then make it `PENARIA_SECRET_KEY` |
+| `PENARIA_S3__BUCKET`, `..._ACCESS_KEY_ID`, `..._SECRET_ACCESS_KEY`, `..._ENDPOINT`, `..._REGION`, `..._PATH_STYLE` | Optional storage for photos and documents ("Files and the worker" below); the api, worker and migrate processes use it. The worker needs only this and the database |
+| `PENARIA_FILES__MAX_SIZE` | Optional. The largest file, in bytes; 52428800 (50 MB) by default. Give the web image the same value |
 | `PENARIA_AUTH__OIDC__ISSUER`, `..._CLIENT_ID`, `..._CLIENT_SECRET`, `..._ALLOW_SIGN_UP`, `..._NAME`, `..._SCOPES` | Optional sign-in with your OpenID Connect provider, such as Authentik or Keycloak ("Sign-in with your identity provider" below) |
 | `PENARIA_MAIL__HOST`, `..._PORT`, `..._SECURITY` (`starttls`, `tls` or `none`), `..._USERNAME`, `..._PASSWORD`, `..._FROM_ADDRESS`, `..._FROM_NAME` | Optional outgoing email. Usually an install admin connects the mailbox in the web app (Settings); set these to manage it as configuration instead. With `PENARIA_MAIL__HOST` set, every mail setting comes from the environment (`..._FROM_ADDRESS` is then required, and the port defaults to 587, 465 or 25 by the security) and the web app shows them locked |
 
@@ -30,7 +33,22 @@ The Compose install (`deploy/compose`) sets this up by itself: only `penaria-web
 
 ## HTTP API
 
-REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. The same document is committed as `openapi.json` (`make openapi` exports it without a database), and the web app generates its API types from it; a unit test fails when the committed file no longer matches the code. So far: setup and signing in (`/setup`, `/sign-in`, `/sign-in/second-factor`, `/sign-in/passkey`, `/sign-out`), signing in with the operator's provider (`/auth/config`, `/auth/oidc:sign-in`, `:accept-invitation`, `/auth/oidc/callback`, `/me/sign-in-methods`, `/me/external-identities`, `:link`, `/me/reauthenticate/oidc`), recovery (`/mail`, `/password-reset:request`, `:preview`, `/password-reset`, `/email-verifications:confirm`), the signed-in account, its email, sessions, passkeys and second factor (`/me`, `/me/email`, `/me/password`, `/me/sessions`, `/me/passkeys`, `/me/second-factor`, `/me/totp`, `:confirm`, `/me/totp/recovery-codes`, `/me/reauthenticate`), the install's settings for its admins (`/install/mail`, `:test`, `/status`, `/messages`), the account's homes (`/homes`), a home's people (`/homes/{id}/roles`, `/members`, `/members/{id}:reset-link`, `/grants/{id}`, `:leave`, `/invitations`, `/guest-links`, `/devices`), accepting invitations (`/invitations:preview`, `:accept`, `:accept-new-account`), guest visits (`/guest-sessions`, `/guest`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`). Errors are `application/problem+json` with a stable `code`; a request without a session answers 401 with the code `unauthenticated`.
+REST under `/api/v1`; the OpenAPI document is at `/system/openapi.json`, Swagger UI at `/system/docs`. The same document is committed as `openapi.json` (`make openapi` exports it without a database), and the web app generates its API types from it; a unit test fails when the committed file no longer matches the code. So far: setup and signing in (`/setup`, `/sign-in`, `/sign-in/second-factor`, `/sign-in/passkey`, `/sign-out`), signing in with the operator's provider (`/auth/config`, `/auth/oidc:sign-in`, `:accept-invitation`, `/auth/oidc/callback`, `/me/sign-in-methods`, `/me/external-identities`, `:link`, `/me/reauthenticate/oidc`), recovery (`/mail`, `/password-reset:request`, `:preview`, `/password-reset`, `/email-verifications:confirm`), the signed-in account, its email, sessions, passkeys and second factor (`/me`, `/me/email`, `/me/password`, `/me/sessions`, `/me/passkeys`, `/me/second-factor`, `/me/totp`, `:confirm`, `/me/totp/recovery-codes`, `/me/reauthenticate`), the install's settings for its admins (`/install/mail`, `:test`, `/status`, `/messages`), the account's homes (`/homes`), a home's people (`/homes/{id}/roles`, `/members`, `/members/{id}:reset-link`, `/grants/{id}`, `:leave`, `/invitations`, `/guest-links`, `/devices`), accepting invitations (`/invitations:preview`, `:accept`, `:accept-new-account`), guest visits (`/guest-sessions`, `/guest`), the home tree (`/homes/{id}/entities`, `/entities/{id}`, with `:move`, `:archive`, `:restore`, `:verify` and `/history`), files (`/config/files`, `/entities/{id}/files`, `/entities/{id}/files/{file}`, `/entities/{id}/cover`, `/covers:find`, `/files/{file}`, `:restore`, `/content`, `/preview/320` and `/preview/1600`, `/homes/{id}/files/trash`). Errors are `application/problem+json` with a stable `code`; a request without a session answers 401 with the code `unauthenticated`.
+
+## Files and the worker
+
+Photos and documents are attached to things and places (`docs/design/documents.md`). They need S3-compatible storage; without `PENARIA_S3__*` the server runs, `/config/files` says files are off, an upload answers `409 files_off`, and the worker idles.
+
+| Variable | Meaning |
+|---|---|
+| `PENARIA_S3__BUCKET`, `..._ACCESS_KEY_ID`, `..._SECRET_ACCESS_KEY` | Required to keep files. The bucket is Penaria's own: `migrate upgrade` creates it when it is missing |
+| `PENARIA_S3__ENDPOINT` | The storage's address, such as `http://s3:9000`; without it, AWS S3 in the region |
+| `PENARIA_S3__REGION` | `us-east-1` by default |
+| `PENARIA_S3__PATH_STYLE` | `true` by default: the bucket in the path, as self-hosted storages expect. `false` puts it in the host name |
+
+An upload (`POST /api/v1/entities/{id}/files?kind=photo`, a multipart form with the file in `file`) streams into storage as an object nothing serves. The worker then takes it: it removes all metadata of JPEG, PNG and WebP images without recompressing them (the orientation and the colour profile stay), converts HEIC to JPEG, draws WebP previews of 320 and 1600 pixels (of a PDF's first page too), and marks the file `ready`, or `failed` with a reason. Each image and PDF is parsed in a child process with none of the worker's environment, a limit of memory and a deadline of two minutes, so a crafted file takes neither the worker nor the API down; a file that crashes it three times fails. On Linux the worker is non-dumpable, so the child cannot read its environment or memory either. The child is a process, not a boundary of users or networks, so give the worker only `PENARIA_DATABASE__*` and `PENARIA_S3__*`: it needs nothing else, the secret key least of all. Everything else is stored byte for byte and only ever downloaded.
+
+Run as many workers as you like: each file is taken under a ten-minute lease (`SELECT … FOR UPDATE SKIP LOCKED`). The worker also deletes what has been in the trash for 30 days, and uploads that no file waits for after a day. `python -m penaria.apps.worker.health` exits 0 while the worker makes its passes, for a container's health check. An interrupted multipart upload leaves parts behind: SILO and MinIO drop them after a day; on AWS S3 add a lifecycle rule that aborts incomplete multipart uploads.
 
 ## Sign-in and the first start
 
@@ -148,6 +166,7 @@ The dependency rules live in `pyproject.toml` (`[tool.importlinter]`) and are ch
 | Apply the migrations to the development database | `make migrate` |
 | Write a migration from the models | `make migration m="what changes"` |
 | Run the API against the development database | `make run-api` |
+| Run the worker against the development stack | `make run-worker` |
 | Export the OpenAPI document to `openapi.json` | `make openapi` |
 
-The Makefile points every command at the development stack (`scripts/dev/compose.yaml`); set the `PENARIA_DATABASE__*` variables, or `TEST_DATABASE_URL` for the tests, to use another server. Migrations run only through the migrate process, never through the bare `alembic` command, and every migration is tested to upgrade, downgrade and upgrade again, and to match the models (`tests/integration/test_migrations.py`).
+The Makefile points every command at the development stack (`scripts/dev/compose.yaml`); set the `PENARIA_DATABASE__*` and `PENARIA_S3__*` variables, or `TEST_DATABASE_URL` and `TEST_S3_URL` for the tests, to use other servers. The tests of files make a bucket of their own for each run and delete it. Migrations run only through the migrate process, never through the bare `alembic` command, and every migration is tested to upgrade, downgrade and upgrade again, and to match the models (`tests/integration/test_migrations.py`).

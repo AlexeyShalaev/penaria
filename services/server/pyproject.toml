@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.15"
 license = "AGPL-3.0-only"
 dependencies = [
+    "aiobotocore>=3.10.0",
     "aiosmtplib>=5.1.3",
     "alembic>=1.20.1",
     "argon2-cffi>=25.1.0",
@@ -14,6 +15,10 @@ dependencies = [
     "cryptography>=50.0.2",
     "httpx2>=2.16.2",
     "joserfc>=1.8.0",
+    "pillow>=13.0.0",
+    "pillow-heif>=1.9.0",
+    "pypdfium2>=5.15.2",
+    "python-multipart>=0.0.34",
     "servicewright[dishka,fastapi,settings]>=0.15.0",
     "sqlalchemy-foundation-kit[dishka,settings]>=0.5.2",
     "webauthn>=3.0.1",
@@ -21,6 +26,7 @@ dependencies = [
 
 [project.scripts]
 penaria-api = "penaria.apps.api.__main__:main"
+penaria-worker = "penaria.apps.worker.__main__:main"
 penaria-migrate = "penaria.apps.migrate.__main__:main"
 penaria-cli = "penaria.apps.cli.__main__:main"
 
@@ -35,6 +41,7 @@ dev = [
     "pytest-asyncio>=1.5.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.6",
+    "types-aiobotocore-s3>=3.10.0",
 ]
 
 [build-system]
@@ -70,9 +77,10 @@ mypy_path = ["src"]
 plugins = ["pydantic.mypy"]
 explicit_package_bases = true
 
-# authlib ships no type information, and its stubs package trails its releases.
+# authlib ships no type information, and its stubs package trails its releases; aiobotocore, botocore
+# and pypdfium2 ship none either (the S3 client is typed by types-aiobotocore-s3).
 [[tool.mypy.overrides]]
-module = ["authlib.*"]
+module = ["authlib.*", "aiobotocore.*", "botocore.*", "pypdfium2.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

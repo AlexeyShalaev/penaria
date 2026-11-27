@@ -1,5 +1,6 @@
 # Rendered when the container starts: the image's entrypoint substitutes
-# ${PENARIA_API_UPSTREAM} and ${NGINX_LOCAL_RESOLVERS} and writes the result to conf.d.
+# ${PENARIA_API_UPSTREAM}, ${NGINX_LOCAL_RESOLVERS}, ${PENARIA_MAX_UPLOAD_SIZE} and
+# ${PENARIA_MAX_FILE_SIZE} (upload-limit.envsh) and writes the result to conf.d.
 server {
     listen 8080;
     root /usr/share/nginx/html;
@@ -10,13 +11,32 @@ server {
     resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
     set $penaria_api ${PENARIA_API_UPSTREAM};
 
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    # One address, never the header the client sent: the server limits sign-in attempts
+    # by it. Behind another proxy, PENARIA_TRUSTED_PROXIES makes this the visitor's own.
+    proxy_set_header X-Forwarded-For $remote_addr;
+
     location /api/ {
         proxy_pass $penaria_api;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        # One address, never the header the client sent: the server limits sign-in attempts
-        # by it. Behind another proxy, PENARIA_TRUSTED_PROXIES makes this the visitor's own.
-        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+
+    # Adding a file is the one request with a large body. nginx takes the whole upload
+    # before it passes it on, so a phone on a slow network keeps nothing of the server's busy.
+    location ~ ^/api/v1/entities/[^/]+/files$ {
+        client_max_body_size ${PENARIA_MAX_UPLOAD_SIZE};
+        client_body_timeout 120s;
+        # The server stores the file before it answers.
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+        error_page 413 @file_too_large;
+        proxy_pass $penaria_api;
+    }
+
+    # The same answer as the server's own, so the app can say what is wrong.
+    location @file_too_large {
+        default_type application/problem+json;
+        return 413 '{"type":"about:blank","title":"Content Too Large","status":413,"code":"file_too_large","detail":"the file is too large","params":{"max_size":${PENARIA_MAX_FILE_SIZE}}}';
     }
 
     # Hashed assets never change: cache them for good.

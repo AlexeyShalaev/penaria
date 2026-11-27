@@ -352,6 +352,7 @@ The permissions refine v0.3's seven:
 | `entities.view` | See entities, their aspects, files and history; ask the assistant about them | |
 | `entities.view_private` | See private entities and their subtrees (section 11.3) | `entities.view` |
 | `entities.edit` | Create, change, move, archive and verify entities; propose changesets | `entities.view` |
+| `documents.view_financial` | See receipts and warranties ([documents.md](documents.md), 6) | `entities.view` |
 | `changes.apply` | Accept, reject and revert changesets | `entities.edit` |
 | `devices.control` | Use devices' ordinary capabilities | `entities.view` |
 | `devices.control_critical` | Heating, locks, gates, pumps | `devices.control` |
@@ -379,7 +380,7 @@ The presets:
 |---|---|---|
 | `owner` | All permissions, plus the owner's rights: owners and deleting the home (section 3) | Cannot be edited or deleted |
 | `admin` | All permissions | |
-| `family` | `entities.edit`, `changes.apply`, `devices.control`, `tasks.complete` | |
+| `family` | `entities.edit`, `documents.view_financial`, `changes.apply`, `devices.control`, `tasks.complete` | |
 | `guest` | `entities.view`, `devices.control` | Guest view; expiry required, three days by default |
 | `contractor` | `tasks.complete` | |
 

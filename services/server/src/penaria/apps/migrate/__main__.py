@@ -1,7 +1,8 @@
 """``python -m penaria.apps.migrate [upgrade|downgrade|current|revision|check]``.
 
 Every install runs ``upgrade`` before a new version of the other processes starts: the
-all-in-one Compose file as a one-off service, Kubernetes as a pre-upgrade hook.
+all-in-one Compose file as a one-off service, Kubernetes as a pre-upgrade hook. With storage
+set up, ``upgrade`` also creates its bucket when there is none.
 """
 
 import argparse
@@ -9,6 +10,7 @@ import asyncio
 import logging
 from collections.abc import Callable
 from functools import partial
+from typing import NamedTuple
 
 from alembic import command
 from alembic.config import Config
@@ -16,10 +18,20 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from penaria.apps.migrate.settings import Settings
+from penaria.integrations.s3.settings import S3Settings
+from penaria.integrations.s3.storage import open_s3
 from penaria.migrations.runner import build_config, run_with_connection
 
+logger = logging.getLogger(__name__)
 
-def parse_command(argv: list[str] | None = None) -> Callable[[Config], object]:
+
+class MigrateCommand(NamedTuple):
+    alembic: Callable[[Config], object]
+    # An upgrade also makes the storage ready: its bucket.
+    prepares_storage: bool = False
+
+
+def parse_command(argv: list[str] | None = None) -> MigrateCommand:
     parser = argparse.ArgumentParser(prog="python -m penaria.apps.migrate", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     upgrade = commands.add_parser("upgrade", help="apply migrations up to a revision (head by default)")
@@ -35,15 +47,15 @@ def parse_command(argv: list[str] | None = None) -> Callable[[Config], object]:
 
     match args.command:
         case "upgrade":
-            return partial(command.upgrade, revision=args.revision)
+            return MigrateCommand(partial(command.upgrade, revision=args.revision), prepares_storage=True)
         case "downgrade":
-            return partial(command.downgrade, revision=args.revision)
+            return MigrateCommand(partial(command.downgrade, revision=args.revision))
         case "current":
-            return command.current
+            return MigrateCommand(command.current)
         case "revision":
-            return partial(command.revision, message=args.message, autogenerate=not args.empty)
+            return MigrateCommand(partial(command.revision, message=args.message, autogenerate=not args.empty))
         case "check":
-            return command.check
+            return MigrateCommand(command.check)
         case _:
             raise AssertionError(args.command)
 
@@ -56,10 +68,19 @@ async def run(settings: Settings, alembic_command: Callable[[Config], object]) -
         await engine.dispose()
 
 
+async def ensure_bucket(settings: S3Settings) -> None:
+    async with open_s3(settings) as storage:
+        if await storage.ensure_bucket():
+            logger.info("Created the bucket %s", settings.bucket)
+
+
 def main() -> None:
-    alembic_command = parse_command()
+    parsed = parse_command()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    asyncio.run(run(Settings(), alembic_command))
+    settings = Settings()
+    asyncio.run(run(settings, parsed.alembic))
+    if parsed.prepares_storage and settings.s3 is not None:
+        asyncio.run(ensure_bucket(settings.s3))
 
 
 if __name__ == "__main__":

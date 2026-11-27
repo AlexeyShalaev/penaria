@@ -81,6 +81,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Files Config */
+        get: operations["files_config_api_v1_config_files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/covers:find": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find Covers
+         * @description The covers of the entities a screen shows; those without one the actor may see are left out.
+         */
+        post: operations["find_covers_api_v1_covers_find_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/email-verifications:confirm": {
         parameters: {
             query?: never;
@@ -117,6 +154,69 @@ export interface paths {
         head?: never;
         /** Update Entity */
         patch: operations["update_entity_api_v1_entities__entity_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/entities/{entity_id}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Cover */
+        put: operations["set_cover_api_v1_entities__entity_id__cover_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entity_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Entity Files */
+        get: operations["list_entity_files_api_v1_entities__entity_id__files_get"];
+        put?: never;
+        /**
+         * Upload File
+         * @description Add one file to a thing or place. It is stored as `processing`, and becomes `ready` or `failed`
+         *     once the worker has cleaned it. A file over the limit answers 413 `file_too_large`.
+         */
+        post: operations["upload_file_api_v1_entities__entity_id__files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/entities/{entity_id}/files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Attach File
+         * @description Attach an existing file to one more thing or place; attaching it twice changes nothing.
+         */
+        put: operations["attach_file_api_v1_entities__entity_id__files__file_id__put"];
+        post?: never;
+        /**
+         * Detach File
+         * @description Detach a file; detached from its last entity, it goes to the trash.
+         */
+        delete: operations["detach_file_api_v1_entities__entity_id__files__file_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/entities/{entity_id}/history": {
@@ -198,6 +298,85 @@ export interface paths {
         put?: never;
         /** Verify Entity */
         post: operations["verify_entity_api_v1_entities__entity_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get File */
+        get: operations["get_file_api_v1_files__file_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove File
+         * @description Move a file to the trash, from every entity it is attached to.
+         */
+        delete: operations["remove_file_api_v1_files__file_id__delete"];
+        options?: never;
+        head?: never;
+        /** Change File */
+        patch: operations["change_file_api_v1_files__file_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * File Content
+         * @description The file itself: an image or a PDF is shown, anything else is downloaded. Ranges are supported.
+         */
+        get: operations["file_content_api_v1_files__file_id__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}/preview/{size}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * File Preview
+         * @description A WebP of an image, or of a PDF's first page, whose longest side is at most `size` pixels.
+         */
+        get: operations["file_preview_api_v1_files__file_id__preview__size__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/{file_id}:restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore File */
+        post: operations["restore_file_api_v1_files__file_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -313,6 +492,26 @@ export interface paths {
         put?: never;
         /** Create Entity */
         post: operations["create_entity_api_v1_homes__home_id__entities_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/homes/{home_id}/files/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trash
+         * @description The home's removed files the actor may restore, the latest first.
+         */
+        get: operations["list_trash_api_v1_homes__home_id__files_trash_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1383,6 +1582,28 @@ export interface components {
             /** Email */
             email: string;
         };
+        /** CoverIn */
+        CoverIn: {
+            /**
+             * File Id
+             * Format: uuid
+             */
+            file_id: string;
+        };
+        /** CoverOut */
+        CoverOut: {
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            file: components["schemas"]["FileOut"];
+        };
+        /** CoversIn */
+        CoversIn: {
+            /** Entity Ids */
+            entity_ids: string[];
+        };
         /** CreatedDeviceOut */
         CreatedDeviceOut: {
             device: components["schemas"]["DeviceOut"];
@@ -1516,6 +1737,93 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** EntityFileOut */
+        EntityFileOut: {
+            /** Can Detach */
+            can_detach: boolean;
+            /**
+             * Can Edit
+             * @description Change its kind, name and visibility, remove it, restore it: needs editing every entity it is attached to
+             */
+            can_edit: boolean;
+            /** Can Set Cover */
+            can_set_cover: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** @description Why a failed file could not be processed */
+            failure: components["schemas"]["FileFailure"] | null;
+            /**
+             * Has Preview
+             * @description Whether /preview/320 and /preview/1600 answer
+             */
+            has_preview: boolean;
+            /** Height */
+            height: number | null;
+            /**
+             * Home Id
+             * Format: uuid
+             */
+            home_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Is Cover
+             * @description The file that stands for the entity: the chosen one, or the first photo
+             */
+            is_cover: boolean;
+            kind: components["schemas"]["FileKind"];
+            /**
+             * Media Type
+             * @description Told from the content; a HEIC photo becomes image/jpeg
+             */
+            media_type: string;
+            /** Name */
+            name: string;
+            /**
+             * Purge At
+             * @description When a removed file is deleted for good
+             */
+            purge_at: string | null;
+            /**
+             * Removed At
+             * @description In the trash since
+             */
+            removed_at: string | null;
+            /**
+             * Size
+             * @description Bytes of the stored file; of the upload while it is processing
+             */
+            size: number;
+            /** @description Content and previews are served only when ready */
+            status: components["schemas"]["FileStatus"];
+            /**
+             * Taken At
+             * @description When the photo was taken, as its camera wrote
+             */
+            taken_at: string | null;
+            visibility: components["schemas"]["Visibility"];
+            /**
+             * Width
+             * @description Of an image, as it is shown
+             */
+            width: number | null;
+        };
+        /** EntityFilesOut */
+        EntityFilesOut: {
+            /**
+             * Add Kinds
+             * @description The kinds the actor may upload here; empty when none
+             */
+            add_kinds: components["schemas"]["FileKind"][];
+            /** Files */
+            files: components["schemas"]["EntityFileOut"][];
+        };
         /** EntityIn */
         EntityIn: {
             /** Aliases */
@@ -1636,6 +1944,203 @@ export interface components {
          * @enum {string}
          */
         FailureReason: "auth" | "connect" | "timeout" | "tls" | "disconnected" | "recipient_refused" | "sender_refused" | "data_refused" | "other" | "mail_off" | "expired" | "unreadable";
+        /** FileDetailOut */
+        FileDetailOut: {
+            /**
+             * Can Edit
+             * @description Change its kind, name and visibility, remove it, restore it: needs editing every entity it is attached to
+             */
+            can_edit: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Entities
+             * @description Where it is attached, as far as the actor may see
+             */
+            entities: components["schemas"]["FilePlaceOut"][];
+            /** @description Why a failed file could not be processed */
+            failure: components["schemas"]["FileFailure"] | null;
+            /**
+             * Has Preview
+             * @description Whether /preview/320 and /preview/1600 answer
+             */
+            has_preview: boolean;
+            /** Height */
+            height: number | null;
+            /**
+             * Home Id
+             * Format: uuid
+             */
+            home_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["FileKind"];
+            /**
+             * Media Type
+             * @description Told from the content; a HEIC photo becomes image/jpeg
+             */
+            media_type: string;
+            /** Name */
+            name: string;
+            /**
+             * Purge At
+             * @description When a removed file is deleted for good
+             */
+            purge_at: string | null;
+            /**
+             * Removed At
+             * @description In the trash since
+             */
+            removed_at: string | null;
+            /**
+             * Size
+             * @description Bytes of the stored file; of the upload while it is processing
+             */
+            size: number;
+            /** @description Content and previews are served only when ready */
+            status: components["schemas"]["FileStatus"];
+            /**
+             * Taken At
+             * @description When the photo was taken, as its camera wrote
+             */
+            taken_at: string | null;
+            visibility: components["schemas"]["Visibility"];
+            /**
+             * Width
+             * @description Of an image, as it is shown
+             */
+            width: number | null;
+        };
+        /**
+         * FileFailure
+         * @description Why a file could not be processed.
+         * @enum {string}
+         */
+        FileFailure: "broken" | "too_many_pixels" | "unsupported" | "processing_failed" | "content_missing";
+        /**
+         * FileKind
+         * @enum {string}
+         */
+        FileKind: "photo" | "receipt" | "warranty" | "manual" | "other";
+        /** FileOut */
+        FileOut: {
+            /**
+             * Can Edit
+             * @description Change its kind, name and visibility, remove it, restore it: needs editing every entity it is attached to
+             */
+            can_edit: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** @description Why a failed file could not be processed */
+            failure: components["schemas"]["FileFailure"] | null;
+            /**
+             * Has Preview
+             * @description Whether /preview/320 and /preview/1600 answer
+             */
+            has_preview: boolean;
+            /** Height */
+            height: number | null;
+            /**
+             * Home Id
+             * Format: uuid
+             */
+            home_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["FileKind"];
+            /**
+             * Media Type
+             * @description Told from the content; a HEIC photo becomes image/jpeg
+             */
+            media_type: string;
+            /** Name */
+            name: string;
+            /**
+             * Purge At
+             * @description When a removed file is deleted for good
+             */
+            purge_at: string | null;
+            /**
+             * Removed At
+             * @description In the trash since
+             */
+            removed_at: string | null;
+            /**
+             * Size
+             * @description Bytes of the stored file; of the upload while it is processing
+             */
+            size: number;
+            /** @description Content and previews are served only when ready */
+            status: components["schemas"]["FileStatus"];
+            /**
+             * Taken At
+             * @description When the photo was taken, as its camera wrote
+             */
+            taken_at: string | null;
+            visibility: components["schemas"]["Visibility"];
+            /**
+             * Width
+             * @description Of an image, as it is shown
+             */
+            width: number | null;
+        };
+        /** FilePatch */
+        FilePatch: {
+            kind?: components["schemas"]["FileKind"] | null;
+            /** Name */
+            name?: string | null;
+            visibility?: components["schemas"]["Visibility"] | null;
+        };
+        /** FilePlaceOut */
+        FilePlaceOut: {
+            /** Can Detach */
+            can_detach: boolean;
+            /**
+             * Entity Id
+             * Format: uuid
+             */
+            entity_id: string;
+            /**
+             * Is Cover
+             * @description Chosen as the entity's cover
+             */
+            is_cover: boolean;
+            /**
+             * Names
+             * @description The names from the top of the home down to the entity itself
+             */
+            names: string[];
+        };
+        /**
+         * FileStatus
+         * @enum {string}
+         */
+        FileStatus: "processing" | "ready" | "failed";
+        /** FilesConfigOut */
+        FilesConfigOut: {
+            /**
+             * Enabled
+             * @description Whether this Penaria keeps files; without storage, uploads answer files_off
+             */
+            enabled: boolean;
+            /**
+             * Max Size
+             * @description The largest file, in bytes
+             */
+            max_size: number;
+        };
         /**
          * Freshness
          * @enum {string}
@@ -2258,6 +2763,11 @@ export interface components {
          */
         Preset: "owner" | "admin" | "family" | "guest" | "contractor";
         /**
+         * PreviewSize
+         * @enum {integer}
+         */
+        PreviewSize: 320 | 1600;
+        /**
          * Privacy
          * @enum {string}
          */
@@ -2606,6 +3116,11 @@ export interface components {
             /** Version */
             version: number;
         };
+        /**
+         * Visibility
+         * @enum {string}
+         */
+        Visibility: "normal" | "private" | "guests";
     };
     responses: never;
     parameters: never;
@@ -2732,6 +3247,59 @@ export interface operations {
             };
         };
     };
+    files_config_api_v1_config_files_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilesConfigOut"];
+                };
+            };
+        };
+    };
+    find_covers_api_v1_covers_find_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoversIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     confirm_email_api_v1_email_verifications_confirm_post: {
         parameters: {
             query?: never;
@@ -2819,6 +3387,172 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EntityDetailOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_cover_api_v1_entities__entity_id__cover_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_entity_files_api_v1_entities__entity_id__files_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityFilesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_file_api_v1_entities__entity_id__files_post: {
+        parameters: {
+            query: {
+                kind: components["schemas"]["FileKind"];
+            };
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_file_api_v1_entities__entity_id__files__file_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detach_file_api_v1_entities__entity_id__files__file_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -2987,6 +3721,195 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntityDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_file_api_v1_files__file_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_file_api_v1_files__file_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_file_api_v1_files__file_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FilePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    file_content_api_v1_files__file_id__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    file_preview_api_v1_files__file_id__preview__size__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+                size: components["schemas"]["PreviewSize"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_file_api_v1_files__file_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -3260,6 +4183,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EntityDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trash_api_v1_homes__home_id__files_trash_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                home_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDetailOut"][];
                 };
             };
             /** @description Validation Error */

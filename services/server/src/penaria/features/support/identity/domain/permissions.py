@@ -10,6 +10,7 @@ from penaria.features.shared.access import Permission
 IMPLIES: dict[str, frozenset[str]] = {
     Permission.ENTITIES_VIEW_PRIVATE: frozenset({Permission.ENTITIES_VIEW}),
     Permission.ENTITIES_EDIT: frozenset({Permission.ENTITIES_VIEW}),
+    Permission.DOCUMENTS_VIEW_FINANCIAL: frozenset({Permission.ENTITIES_VIEW}),
     Permission.CHANGES_APPLY: frozenset({Permission.ENTITIES_EDIT}),
     Permission.DEVICES_CONTROL: frozenset({Permission.ENTITIES_VIEW}),
     Permission.DEVICES_CONTROL_CRITICAL: frozenset({Permission.DEVICES_CONTROL}),
@@ -49,7 +50,13 @@ PRESET_PERMISSIONS: dict[Preset, frozenset[str]] = {
     Preset.OWNER: frozenset(),  # all permissions
     Preset.ADMIN: frozenset(),  # all permissions
     Preset.FAMILY: with_implied(
-        {Permission.ENTITIES_EDIT, Permission.CHANGES_APPLY, Permission.DEVICES_CONTROL, Permission.TASKS_COMPLETE}
+        {
+            Permission.ENTITIES_EDIT,
+            Permission.DOCUMENTS_VIEW_FINANCIAL,
+            Permission.CHANGES_APPLY,
+            Permission.DEVICES_CONTROL,
+            Permission.TASKS_COMPLETE,
+        }
     ),
     Preset.GUEST: with_implied({Permission.ENTITIES_VIEW, Permission.DEVICES_CONTROL}),
     Preset.CONTRACTOR: with_implied({Permission.TASKS_COMPLETE}),

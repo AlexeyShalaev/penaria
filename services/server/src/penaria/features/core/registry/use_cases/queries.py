@@ -20,6 +20,7 @@ from penaria.features.core.registry.use_cases.access import (
 from penaria.features.core.registry.use_cases.commands import PLACE_KEYS
 from penaria.features.shared.access import Access, Permission, PermissionDeniedError
 from penaria.features.shared.actor import Actor
+from penaria.features.shared.history import HistoryRedaction
 from penaria.features.shared.journal import RecordedEvent
 
 HISTORY_LIMIT_MAX = 200
@@ -77,12 +78,15 @@ class ListChildren:
 
 
 class EntityHistory:
-    def __init__(self, uow: AsyncUnitOfWork[RegistryTransaction], access: EntityAccess) -> None:
+    def __init__(
+        self, uow: AsyncUnitOfWork[RegistryTransaction], access: EntityAccess, redaction: HistoryRedaction
+    ) -> None:
         self._uow = uow
         self._access = access
+        self._redaction = redaction
 
     async def execute(self, actor: Actor, entity_id: UUID, *, limit: int = 50) -> list[RecordedEvent]:
-        """The entity's events, newest first; places the actor may not see are left out of them."""
+        """The entity's events, newest first; places and files the actor may not see are left out of them."""
         async with self._uow.query() as tx:
             _, _, access = await load_readable(tx, self._access, actor, entity_id)
             # A guest is shown what is there, not how it got there.
@@ -90,7 +94,8 @@ class EntityHistory:
                 raise PermissionDeniedError(Permission.ENTITIES_VIEW, where=" beyond what is meant for guests")
             events = await tx.journal.for_entity(entity_id, limit=min(limit, HISTORY_LIMIT_MAX))
             hidden = await self._unseen_places(tx, actor, events)
-        return [replace(event, payload=_without(event.payload, hidden)) for event in events]
+        events = [replace(event, payload=_without(event.payload, hidden)) for event in events]
+        return await self._redaction.redact(actor, access, events)
 
     async def _unseen_places(self, tx: RegistryTransaction, actor: Actor, events: list[RecordedEvent]) -> set[str]:
         """The ids of the places the events name that the actor may not see where they are now, or that are gone.
